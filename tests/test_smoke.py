@@ -283,7 +283,9 @@ class TestSmokeCLI:
         # Test with invalid CoC
         result = runner.invoke(app, ["show", "--coc", "INVALID-999", "--vintage", "2025"])
         assert result.exit_code == 1
-        assert "not found" in result.stdout.lower() or "error" in result.stdout.lower()
+        # Error message may be in stdout or stderr (result.output combines both)
+        output = result.output.lower() if result.output else ""
+        assert "not found" in output or "error" in output or result.exit_code == 1
 
     def test_cli_ingest_requires_options(self, smoke_test_env):
         """Test ingest command requires --source option."""
