@@ -1,8 +1,13 @@
 """Tests for PIT data ingestion from HUD Exchange."""
 
+import tempfile
+from pathlib import Path
+
 import pytest
 
 from coclab.pit.ingest.hud_exchange import (
+    DownloadResult,
+    download_pit_data,
     get_pit_source_url,
     list_available_years,
 )
@@ -28,6 +33,14 @@ class TestGetPitSourceUrl:
         assert "2030" in url
         assert url.endswith(".xlsx")
 
+    def test_invalid_year_too_old(self):
+        with pytest.raises(ValueError, match="outside valid PIT data range"):
+            get_pit_source_url(2006)
+
+    def test_invalid_year_too_new(self):
+        with pytest.raises(ValueError, match="outside valid PIT data range"):
+            get_pit_source_url(2031)
+
 
 class TestListAvailableYears:
     """Tests for list_available_years function."""
@@ -48,3 +61,112 @@ class TestListAvailableYears:
     def test_all_integers(self):
         years = list_available_years()
         assert all(isinstance(y, int) for y in years)
+
+
+class TestDownloadPitData:
+    """Tests for download_pit_data function."""
+
+    def test_download_creates_directory(self, httpx_mock):
+        """Test that download creates the output directory."""
+        # Mock the HTTP response with minimal Excel-like content
+        httpx_mock.add_response(
+            url="https://www.hudexchange.info/resources/documents/2007-2023-PIT-Counts-by-CoC.xlsx",
+            content=b"PK\x03\x04",  # ZIP header (Excel files are ZIP archives)
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "2023"
+            result = download_pit_data(2023, output_dir=output_dir)
+
+            assert output_dir.exists()
+            assert result.path.exists()
+            assert isinstance(result, DownloadResult)
+            assert result.source_url.endswith(".xlsx")
+
+    def test_download_writes_metadata(self, httpx_mock):
+        """Test that download writes metadata file."""
+        httpx_mock.add_response(
+            url="https://www.hudexchange.info/resources/documents/2007-2024-PIT-Counts-by-CoC.xlsx",
+            content=b"PK\x03\x04test content",
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "2024"
+            result = download_pit_data(2024, output_dir=output_dir)
+
+            # Check metadata file exists
+            meta_path = output_dir / f"{result.path.name}.meta.json"
+            assert meta_path.exists()
+
+            # Check metadata content
+            import json
+
+            with open(meta_path) as f:
+                metadata = json.load(f)
+
+            assert metadata["pit_year"] == 2024
+            assert "source_url" in metadata
+            assert "downloaded_at" in metadata
+
+    def test_download_returns_result_with_metadata(self, httpx_mock):
+        """Test that download returns DownloadResult with correct metadata."""
+        content = b"test excel content"
+        httpx_mock.add_response(
+            url="https://www.hudexchange.info/resources/documents/2007-2022-PIT-Counts-by-CoC.xlsx",
+            content=content,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = download_pit_data(2022, output_dir=tmpdir)
+
+            assert isinstance(result, DownloadResult)
+            assert result.file_size == len(content)
+            assert result.source_url.endswith("2022-PIT-Counts-by-CoC.xlsx")
+            assert result.downloaded_at is not None
+
+    def test_download_skips_existing_file(self, httpx_mock):
+        """Test that download skips existing file when force=False."""
+        # Create an existing file
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "2021"
+            output_dir.mkdir(parents=True)
+            existing_file = output_dir / "2007-2021-PIT-Counts-by-CoC.xlsx"
+            existing_file.write_bytes(b"existing content")
+
+            # Should not make HTTP request
+            result = download_pit_data(2021, output_dir=output_dir, force=False)
+
+            assert result.path == existing_file
+            # httpx_mock will fail if any unexpected requests are made
+
+    def test_download_force_redownloads(self, httpx_mock):
+        """Test that download re-downloads when force=True."""
+        new_content = b"new content"
+        httpx_mock.add_response(
+            url="https://www.hudexchange.info/resources/documents/2007-2021-PIT-Counts-by-CoC.xlsx",
+            content=new_content,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "2021"
+            output_dir.mkdir(parents=True)
+            existing_file = output_dir / "2007-2021-PIT-Counts-by-CoC.xlsx"
+            existing_file.write_bytes(b"old content")
+
+            result = download_pit_data(2021, output_dir=output_dir, force=True)
+
+            assert result.file_size == len(new_content)
+            assert existing_file.read_bytes() == new_content
+
+    def test_download_handles_http_error(self, httpx_mock):
+        """Test that download raises on HTTP error."""
+        import httpx
+
+        httpx_mock.add_response(
+            url="https://www.hudexchange.info/resources/documents/2007-2020-PIT-Counts-by-CoC.xlsx",
+            status_code=404,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with pytest.raises(httpx.HTTPStatusError):
+                download_pit_data(2020, output_dir=tmpdir)

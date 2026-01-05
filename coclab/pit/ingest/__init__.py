@@ -3,14 +3,46 @@
 This package provides:
 - hud_exchange: HUD Exchange specific download/parsing
 - parser: Core parsing logic for PIT files (CSV, Excel)
+
+WP-3B deliverables:
+- normalize_coc_id(): Normalize CoC IDs to ST-NNN format
+- parse_pit_file(): Parse PIT files into canonical schema
+- write_pit_parquet(): Write curated Parquet with provenance
 """
 
-from coclab.pit.ingest.hud_exchange import download_pit_data, get_pit_source_url
-from coclab.pit.ingest.parser import normalize_coc_id, parse_pit_file, write_pit_parquet
+from coclab.pit.ingest.hud_exchange import (
+    DownloadResult,
+    check_pit_availability,
+    discover_pit_urls,
+    download_pit_data,
+    download_pit_data_range,
+    get_pit_source_url,
+    list_available_years,
+)
+from coclab.pit.ingest.parser import (
+    CANONICAL_COLUMNS,
+    InvalidCoCIdError,
+    PITParseError,
+    get_canonical_output_path,
+    normalize_coc_id,
+    parse_pit_file,
+    write_pit_parquet,
+)
 
 __all__ = [
+    # HUD Exchange download functions
+    "DownloadResult",
+    "check_pit_availability",
+    "discover_pit_urls",
     "download_pit_data",
+    "download_pit_data_range",
     "get_pit_source_url",
+    "list_available_years",
+    # Parser functions and constants
+    "CANONICAL_COLUMNS",
+    "InvalidCoCIdError",
+    "PITParseError",
+    "get_canonical_output_path",
     "normalize_coc_id",
     "parse_pit_file",
     "write_pit_parquet",

@@ -240,9 +240,7 @@ def _write_metadata(
 def list_available_years() -> list[int]:
     """List years with known PIT data URLs.
 
-    Returns
-    -------
-    list[int]
+    Returns:
         List of years with known download URLs, sorted descending.
     """
     return sorted(PIT_DATA_URLS.keys(), reverse=True)
@@ -250,30 +248,28 @@ def list_available_years() -> list[int]:
 
 def discover_pit_urls(
     base_url: str = HUD_EXCHANGE_PIT_BASE,
+    timeout: float = 30.0,
 ) -> dict[int, str]:
     """Attempt to discover PIT data URLs from the HUD Exchange page.
 
     This function fetches the HUD Exchange resource page and attempts to
     extract download URLs for PIT data files.
 
-    Parameters
-    ----------
-    base_url : str
-        The HUD Exchange resource page URL.
+    Args:
+        base_url: The HUD Exchange resource page URL.
+        timeout: HTTP timeout in seconds.
 
-    Returns
-    -------
-    dict[int, str]
+    Returns:
         Mapping of year to download URL.
 
-    Notes
-    -----
-    This is a best-effort function that may not find all URLs depending
-    on page structure changes.
+    Note:
+        This is a best-effort function that may not find all URLs depending
+        on page structure changes.
     """
     try:
-        response = requests.get(base_url, timeout=30)
-        response.raise_for_status()
+        with httpx.Client(follow_redirects=True, timeout=timeout) as client:
+            response = client.get(base_url)
+            response.raise_for_status()
         content = response.text
 
         # Look for links to PIT count Excel files
@@ -298,3 +294,59 @@ def discover_pit_urls(
     except Exception as e:
         logger.warning(f"Failed to discover PIT URLs: {e}")
         return {}
+
+
+def check_pit_availability(year: int, timeout: float = 10.0) -> bool:
+    """Check if PIT data is available for a given year.
+
+    Performs a HEAD request to check if the URL is accessible.
+
+    Args:
+        year: Year to check.
+        timeout: HTTP timeout in seconds.
+
+    Returns:
+        True if data appears to be available, False otherwise.
+    """
+    try:
+        url = get_pit_source_url(year)
+        with httpx.Client(follow_redirects=True, timeout=timeout) as client:
+            response = client.head(url)
+            return response.status_code == 200
+    except Exception:
+        return False
+
+
+def download_pit_data_range(
+    start_year: int,
+    end_year: int,
+    output_dir: Path | str | None = None,
+    force: bool = False,
+) -> list[DownloadResult]:
+    """Download PIT data for a range of years.
+
+    Args:
+        start_year: First year to download (inclusive).
+        end_year: Last year to download (inclusive).
+        output_dir: Base directory for downloads.
+        force: If True, re-download even if files exist.
+
+    Returns:
+        List of DownloadResult objects for successful downloads.
+
+    Raises:
+        ValueError: If year range is invalid.
+    """
+    if start_year > end_year:
+        raise ValueError(f"Start year {start_year} must be <= end year {end_year}")
+
+    results = []
+    for year in range(start_year, end_year + 1):
+        try:
+            result = download_pit_data(year, output_dir=output_dir, force=force)
+            results.append(result)
+        except Exception as e:
+            logger.warning(f"Failed to download PIT data for year {year}: {e}")
+            # Continue with other years
+
+    return results
