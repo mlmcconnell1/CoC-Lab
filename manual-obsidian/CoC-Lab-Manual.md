@@ -235,6 +235,8 @@ coclab/
     ingest/     # Tract and county downloaders
   xwalks/       # CoC-to-census crosswalk builders
   measures/     # ACS measure aggregation and diagnostics
+  acs/          # ACS population ingest, rollup, and cross-check
+    ingest/     # Tract population fetcher
   pit/          # PIT count ingestion and QA (Phase 3)
     ingest/     # HUD Exchange PIT downloaders and parsers
   panel/        # CoC × year panel assembly (Phase 3)
@@ -244,6 +246,7 @@ data/
     census/     # TIGER tract/county geometries
     xwalks/     # CoC-tract and CoC-county crosswalks
     measures/   # CoC-level demographic measures
+    acs/        # ACS tract population and rollups
     pit/        # Canonical PIT count files
     panels/     # CoC × year analysis panels
 tests/          # Test suite including smoke tests
@@ -262,11 +265,15 @@ flowchart LR
     coclab --> ingest
     coclab --> ingest-census
     coclab --> ingest-pit
+    coclab --> ingest-acs-population
     coclab --> list-vintages
     coclab --> show
     coclab --> build-xwalks
     coclab --> build-measures
     coclab --> build-panel
+    coclab --> rollup-acs-population
+    coclab --> crosscheck-acs-population
+    coclab --> verify-acs-population
     coclab --> diagnostics
     coclab --> panel-diagnostics
     coclab --> list-xwalks
@@ -278,11 +285,15 @@ flowchart LR
     ingest --> |"--source hud_opendata"| HUD_OD[Fetch current snapshot]
     ingest-census --> TIGER[Download TIGER geometries]
     ingest-pit --> PIT[Download & parse PIT counts]
+    ingest-acs-population --> ACSPOP[Fetch tract population]
     list-vintages --> LIST[Display available vintages]
     show --> MAP[Render interactive map]
     build-xwalks --> XWALK[Create tract/county crosswalks]
     build-measures --> MEAS[Aggregate ACS data to CoC]
     build-panel --> PANEL[Assemble CoC × year panels]
+    rollup-acs-population --> ROLLUP[Aggregate tract pop to CoC]
+    crosscheck-acs-population --> XCHECK[Validate rollup vs measures]
+    verify-acs-population --> VERIFY[Full pipeline: ingest→rollup→check]
     diagnostics --> DIAG[Crosswalk quality checks]
     panel-diagnostics --> PDIAG[Panel quality & sensitivity]
     list-xwalks --> LXWALK[List crosswalk files]
@@ -600,6 +611,114 @@ coclab panel-diagnostics --panel panel.parquet --format text
 - Missingness summaries per column
 - Panel structure validation
 
+### `coclab ingest-acs-population`
+
+Ingest tract-level population data from ACS 5-year estimates (Census API table B01003).
+
+```bash
+# Ingest tract population for ACS 2019-2023 using 2023 tract geometries
+coclab ingest-acs-population --acs 2019-2023 --tracts 2023
+
+# Force re-fetch even if cached file exists
+coclab ingest-acs-population --acs 2019-2023 --tracts 2023 --force
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--acs`, `-a` | ACS 5-year vintage (e.g., `2019-2023` or `2023`) | Required |
+| `--tracts`, `-t` | Census tract vintage year | Required |
+| `--force` | Re-fetch even if cached file exists | False |
+
+**Output:**
+- `data/curated/acs/tract_population__{acs}__{tracts}.parquet`
+- Contains: tract_geoid, acs_vintage, tract_vintage, total_population, moe_total_population, data_source, source_ref, ingested_at
+
+### `coclab rollup-acs-population`
+
+Build CoC population rollup by aggregating tract population to CoC using existing crosswalks.
+
+```bash
+# Build rollup with area weighting
+coclab rollup-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting area
+
+# Use population_mass weighting
+coclab rollup-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting population_mass
+
+# Force rebuild even if cached
+coclab rollup-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting area --force
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--boundary`, `-b` | CoC boundary vintage | Required |
+| `--acs`, `-a` | ACS 5-year vintage | Required |
+| `--tracts`, `-t` | Census tract vintage year | Required |
+| `--weighting`, `-w` | `area` or `population_mass` | `area` |
+| `--force` | Rebuild even if cached file exists | False |
+
+**Output:**
+- `data/curated/acs/coc_population_rollup__{boundary}__{acs}__{tracts}__{weighting}.parquet`
+- Contains: coc_id, boundary_vintage, acs_vintage, tract_vintage, weighting_method, coc_population, coverage_ratio, max_tract_contribution, tract_count
+
+### `coclab crosscheck-acs-population`
+
+Cross-check population rollup against existing CoC measures (`total_population` from `coc_measures`).
+
+```bash
+# Basic crosscheck
+coclab crosscheck-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting area
+
+# With custom thresholds
+coclab crosscheck-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting area \
+    --warn-pct 0.02 --error-pct 0.10 --min-coverage 0.90
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--boundary`, `-b` | CoC boundary vintage | Required |
+| `--acs`, `-a` | ACS 5-year vintage | Required |
+| `--tracts`, `-t` | Census tract vintage year | Required |
+| `--weighting`, `-w` | `area` or `population_mass` | `area` |
+| `--warn-pct` | Warning threshold for percent delta | 0.01 (1%) |
+| `--error-pct` | Error threshold for percent delta | 0.05 (5%) |
+| `--min-coverage` | Minimum coverage ratio | 0.95 |
+
+**Exit Codes:**
+- `0` - No errors (warnings allowed)
+- `2` - Errors found (threshold exceeded)
+
+**Output:**
+- Console report with top 25 worst deltas
+- `data/curated/acs/acs_population_crosscheck__{boundary}__{acs}__{tracts}__{weighting}.parquet`
+
+### `coclab verify-acs-population`
+
+One-shot command that runs: ingest → rollup → crosscheck.
+
+```bash
+# Full verification pipeline
+coclab verify-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting area
+
+# With custom thresholds and force rebuild
+coclab verify-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting area \
+    --force --warn-pct 0.02 --error-pct 0.10 --min-coverage 0.90
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--boundary`, `-b` | CoC boundary vintage | Required |
+| `--acs`, `-a` | ACS 5-year vintage | Required |
+| `--tracts`, `-t` | Census tract vintage year | Required |
+| `--weighting`, `-w` | `area` or `population_mass` | `area` |
+| `--force` | Force re-ingest and rebuild all artifacts | False |
+| `--warn-pct` | Warning threshold for percent delta | 0.01 (1%) |
+| `--error-pct` | Error threshold for percent delta | 0.05 (5%) |
+| `--min-coverage` | Minimum coverage ratio | 0.95 |
+
+**Exit Codes:**
+- `0` - No errors (warnings allowed)
+- `2` - Errors found (threshold exceeded)
+
 ---
 
 ## Python API
@@ -828,6 +947,96 @@ problems = identify_problem_cocs(
 ) -> pd.DataFrame
 ```
 
+#### ACS Population Ingest Functions
+
+```python
+from coclab.acs import (
+    fetch_tract_population,
+    ingest_tract_population,
+)
+
+# Fetch tract population from Census API (all states)
+tract_df = fetch_tract_population(
+    acs_vintage: str,     # e.g., "2019-2023" or "2023"
+    tract_vintage: str,   # e.g., "2023"
+) -> pd.DataFrame
+# Returns: tract_geoid, acs_vintage, tract_vintage, total_population, moe_total_population, ...
+
+# Full pipeline: fetch, cache, save to parquet with provenance
+output_path = ingest_tract_population(
+    acs_vintage: str,
+    tract_vintage: str,
+    force: bool = False,  # Re-fetch even if cached
+) -> Path
+# Output: data/curated/acs/tract_population__{acs}__{tracts}.parquet
+```
+
+#### ACS Population Rollup Functions
+
+```python
+from coclab.acs import (
+    rollup_tract_population,
+    build_coc_population_rollup,
+)
+
+# Aggregate tract population to CoC using crosswalk
+rollup_df = rollup_tract_population(
+    tract_pop_df: pd.DataFrame,
+    crosswalk_df: pd.DataFrame,
+    weighting: str = "area",  # "area" or "population_mass"
+) -> pd.DataFrame
+# Returns: coc_id, weighting_method, coc_population, coverage_ratio, max_tract_contribution, tract_count
+
+# Full pipeline: load inputs, rollup, save with provenance
+output_path = build_coc_population_rollup(
+    boundary_vintage: str,
+    acs_vintage: str,
+    tract_vintage: str,
+    weighting: str = "area",
+    force: bool = False,
+) -> Path
+# Output: data/curated/acs/coc_population_rollup__{boundary}__{acs}__{tracts}__{weighting}.parquet
+```
+
+#### ACS Population Cross-check Functions
+
+```python
+from coclab.acs import (
+    CrosscheckResult,
+    crosscheck_population,
+    run_crosscheck,
+    print_crosscheck_report,
+)
+
+# Compare rollup vs measures
+result = crosscheck_population(
+    rollup_df: pd.DataFrame,
+    measures_df: pd.DataFrame,
+    warn_pct: float = 0.01,
+    error_pct: float = 0.05,
+    min_coverage: float = 0.95,
+) -> CrosscheckResult
+# CrosscheckResult contains: error_count, warning_count, report_df, missing_in_rollup, missing_in_measures
+
+# Full pipeline: load files, crosscheck, save report
+result = run_crosscheck(
+    boundary_vintage: str,
+    acs_vintage: str,
+    tract_vintage: str,
+    weighting: str = "area",
+    warn_pct: float = 0.01,
+    error_pct: float = 0.05,
+    min_coverage: float = 0.95,
+    save_report: bool = True,
+) -> CrosscheckResult
+
+# Print formatted console report
+exit_code = print_crosscheck_report(
+    result: CrosscheckResult,
+    top_n: int = 25,  # Number of worst deltas to show
+) -> int  # 0 = passed, 2 = errors found
+```
+
 ---
 
 ## Data Model
@@ -1035,6 +1244,9 @@ erDiagram
 | PIT counts | `data/curated/pit/pit_counts__{year}.parquet` | Canonical PIT data |
 | PIT registry | `data/curated/pit/pit_registry.parquet` | PIT year tracking |
 | CoC panels | `data/curated/panels/coc_panel__{start}_{end}.parquet` | Analysis-ready panels |
+| Tract population | `data/curated/acs/tract_population__{acs}__{tracts}.parquet` | ACS tract population |
+| CoC population rollup | `data/curated/acs/coc_population_rollup__{boundary}__{acs}__{tracts}__{weighting}.parquet` | Aggregated CoC population |
+| Population crosscheck | `data/curated/acs/acs_population_crosscheck__{boundary}__{acs}__{tracts}__{weighting}.parquet` | Validation report |
 
 ### Dataset Provenance
 
@@ -1611,6 +1823,83 @@ Attribution diagnostics and coverage reporting.
 - `max_tract_contribution` - Largest single-tract area share
 - `coverage_ratio_area` - Sum of area_share (ideally ~1.0)
 - `coverage_ratio_pop` - Sum of pop_share (when available)
+
+### acs/ingest/tract_population.py
+
+ACS tract-level population data ingestion from Census API.
+
+**Functions:**
+| Function | Purpose |
+|----------|---------|
+| `parse_acs_vintage()` | Parse ACS vintage string to API year |
+| `normalize_geoid()` | Normalize tract GEOID to 11-character format |
+| `fetch_state_tract_population()` | Fetch population for one state |
+| `fetch_tract_population()` | Fetch population for all US states/territories |
+| `ingest_tract_population()` | Full pipeline: fetch, cache, save with provenance |
+
+**Output Schema:**
+- `tract_geoid` - 11-digit Census tract GEOID
+- `acs_vintage` - ACS 5-year vintage (e.g., "2019-2023")
+- `tract_vintage` - Census tract vintage year
+- `total_population` - Population count (B01003_001E)
+- `moe_total_population` - Margin of error (B01003_001M)
+- `data_source` - Always "acs_5yr"
+- `source_ref` - API parameters used
+- `ingested_at` - UTC timestamp
+
+### acs/rollup.py
+
+Tract-to-CoC population aggregation.
+
+**Functions:**
+| Function | Purpose |
+|----------|---------|
+| `rollup_tract_population()` | Aggregate tract population to CoC using crosswalk |
+| `build_coc_population_rollup()` | Full pipeline: load, rollup, save |
+| `get_tract_population_path()` | Get path to tract population parquet |
+| `get_crosswalk_path()` | Get path to crosswalk parquet |
+| `get_output_path()` | Generate rollup output path |
+
+**Output Schema:**
+- `coc_id` - CoC identifier
+- `boundary_vintage`, `acs_vintage`, `tract_vintage` - Version identifiers
+- `weighting_method` - "area" or "population_mass"
+- `coc_population` - Aggregated population estimate
+- `coverage_ratio` - Sum of area_shares for matched tracts
+- `max_tract_contribution` - Maximum single tract contribution
+- `tract_count` - Number of contributing tracts
+
+### acs/crosscheck.py
+
+Population rollup validation against existing CoC measures.
+
+**Classes:**
+| Class | Purpose |
+|-------|---------|
+| `CrosscheckResult` | Validation results with error/warning counts and report DataFrame |
+
+**Functions:**
+| Function | Purpose |
+|----------|---------|
+| `crosscheck_population()` | Compare rollup vs measures, flag outliers |
+| `run_crosscheck()` | Full pipeline: load files, validate, save report |
+| `print_crosscheck_report()` | Format console output, return exit code |
+| `get_rollup_path()` | Get rollup input path |
+| `get_measures_path()` | Get measures input path |
+| `get_crosscheck_output_path()` | Generate report output path |
+
+**CrosscheckResult Fields:**
+- `error_count` - Number of CoCs with errors
+- `warning_count` - Number of CoCs with warnings
+- `report_df` - DataFrame with per-CoC comparison
+- `missing_in_rollup` - CoC IDs in measures but not rollup
+- `missing_in_measures` - CoC IDs in rollup but not measures
+- `summary` - Dict with min/median/max deltas
+- `passed` - Property: True if error_count == 0
+
+**Default Thresholds:**
+- Error: `abs(pct_delta) > 0.05` or `coverage_ratio > 1.01`
+- Warning: `abs(pct_delta) > 0.01` or `coverage_ratio < 0.95`
 
 ### provenance.py
 
