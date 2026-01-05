@@ -1,4 +1,10 @@
-"""ACS measure builder for CoC-level statistics."""
+"""ACS measure builder for CoC-level statistics.
+
+Builds CoC-level demographic measures from ACS 5-year estimates by:
+1. Fetching tract-level ACS data from Census API
+2. Joining with tract-to-CoC crosswalks
+3. Aggregating using area or population weighting
+"""
 
 from pathlib import Path
 from typing import Literal
@@ -9,6 +15,16 @@ import pandas as pd
 CENSUS_API = "https://api.census.gov/data/{year}/acs/acs5"
 
 # ACS variable mappings
+# B01003_001E: Total population
+# B19013_001E: Median household income
+# B25064_001E: Median gross rent
+# C17002_001E: Poverty universe (for whom poverty determined)
+# C17002_002E: Below 50% poverty
+# C17002_003E: 50-99% poverty
+# B01001_001E: Total population by age (sex by age table)
+# B01001_003E through B01001_025E: Male age groups
+# B01001_027E through B01001_049E: Female age groups
+# Adults (18+) are calculated by summing groups for ages 18+
 ACS_VARS = {
     "B01003_001E": "total_population",
     "B19013_001E": "median_household_income",
@@ -16,9 +32,14 @@ ACS_VARS = {
     "C17002_001E": "poverty_universe",
     "C17002_002E": "below_50pct_poverty",
     "C17002_003E": "50_to_99pct_poverty",
-    "B01001_001E": "total_pop_by_age",
-    "B09021_001E": "adult_population",
 }
+
+# Variables for deriving adult population (18+) from B01001 (Sex by Age)
+# Male 18+: B01001_007E through B01001_025E
+# Female 18+: B01001_031E through B01001_049E
+ADULT_MALE_VARS = [f"B01001_{i:03d}E" for i in range(7, 26)]  # 007 through 025
+ADULT_FEMALE_VARS = [f"B01001_{i:03d}E" for i in range(31, 50)]  # 031 through 049
+ADULT_VARS = ADULT_MALE_VARS + ADULT_FEMALE_VARS
 
 
 def fetch_acs_tract_data(year: int, state_fips: str) -> pd.DataFrame:
@@ -37,7 +58,9 @@ def fetch_acs_tract_data(year: int, state_fips: str) -> pd.DataFrame:
         DataFrame with tract GEOID and measure columns.
     """
     url = CENSUS_API.format(year=year)
-    variables = ",".join(ACS_VARS.keys())
+    # Include base variables plus all adult age variables
+    all_vars = list(ACS_VARS.keys()) + ADULT_VARS
+    variables = ",".join(all_vars)
 
     params = {
         "get": f"NAME,{variables}",
@@ -59,18 +82,28 @@ def fetch_acs_tract_data(year: int, state_fips: str) -> pd.DataFrame:
     # Build GEOID from state, county, tract
     df["GEOID"] = df["state"] + df["county"] + df["tract"]
 
-    # Rename ACS variables to friendly names
-    df = df.rename(columns=ACS_VARS)
-
-    # Convert numeric columns
-    numeric_cols = list(ACS_VARS.values())
+    # Convert all numeric columns
+    numeric_cols = list(ACS_VARS.keys()) + ADULT_VARS
     for col in numeric_cols:
         if col in df.columns:
             # Handle negative values (Census uses -666666666 for missing)
             df[col] = pd.to_numeric(df[col], errors="coerce")
             df.loc[df[col] < 0, col] = pd.NA
 
-    # Calculate derived measures
+    # Rename base ACS variables to friendly names
+    df = df.rename(columns=ACS_VARS)
+
+    # Calculate adult population (18+) by summing adult age groups
+    adult_cols_in_df = [c for c in ADULT_VARS if c in df.columns]
+    if adult_cols_in_df:
+        df["adult_population"] = df[adult_cols_in_df].fillna(0).sum(axis=1)
+        # Set to NA if all components were NA
+        all_na = df[adult_cols_in_df].isna().all(axis=1)
+        df.loc[all_na, "adult_population"] = pd.NA
+    else:
+        df["adult_population"] = pd.NA
+
+    # Calculate derived measures for poverty
     if "below_50pct_poverty" in df.columns and "50_to_99pct_poverty" in df.columns:
         df["population_below_poverty"] = (
             df["below_50pct_poverty"].fillna(0) + df["50_to_99pct_poverty"].fillna(0)
