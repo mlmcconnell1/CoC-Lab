@@ -210,17 +210,16 @@ def _map_arcgis_to_canonical_schema(
     """
     import geopandas as gpd
 
-    # Handle state field - ArcGIS uses STUSAB
-    state_field = None
+    # Handle state field - ArcGIS uses STUSAB, but values may be null
+    # In that case, extract state abbreviation from CoC ID (e.g., "AK-500" -> "AK")
+    state_values = None
     for field in ["STUSAB", "STATE", "ST"]:
-        if field in gdf.columns:
-            state_field = field
+        if field in gdf.columns and gdf[field].notna().any():
+            state_values = gdf[field].astype(str)
             break
 
-    if state_field:
-        state_values = gdf[state_field].astype(str)
-    else:
-        # Extract from CoC ID if state field not available
+    if state_values is None:
+        # Extract from CoC ID if state field not available or all null
         state_values = gdf["COCNUM"].apply(_extract_state_from_coc_id)
 
     result = gpd.GeoDataFrame(
