@@ -300,7 +300,7 @@ def parse_pit_file(
     logger.info(f"Parsing PIT file: {file_path} for year {year}")
 
     df = _read_file(file_path, sheet_name, year=year)
-    logger.info(f"Read {len(df)} rows, columns: {list(df.columns)}")
+    logger.info(f"Read {len(df)} rows with {len(df.columns)} columns")
 
     # Normalize column names for matching
     df.columns = [str(c).strip() for c in df.columns]
