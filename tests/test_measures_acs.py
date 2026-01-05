@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+import re
 from typing import Any
 
 import pandas as pd
@@ -77,7 +77,7 @@ class TestFetchACSTractData:
         ])
 
         httpx_mock.add_response(
-            url="https://api.census.gov/data/2022/acs/acs5",
+            url=re.compile(r"https://api\.census\.gov/data/2022/acs/acs5.*"),
             json=response_data,
         )
 
@@ -107,7 +107,7 @@ class TestFetchACSTractData:
         ])
 
         httpx_mock.add_response(
-            url="https://api.census.gov/data/2022/acs/acs5",
+            url=re.compile(r"https://api\.census\.gov/data/2022/acs/acs5.*"),
             json=response_data,
         )
 
@@ -138,7 +138,7 @@ class TestFetchACSTractData:
         response_data = make_census_response([tract_data])
 
         httpx_mock.add_response(
-            url="https://api.census.gov/data/2022/acs/acs5",
+            url=re.compile(r"https://api\.census\.gov/data/2022/acs/acs5.*"),
             json=response_data,
         )
 
