@@ -6,5 +6,8 @@ dist/
 wheels/
 *.egg-info
 
+# Pdf background documents
+*.pdf
+
 # Virtual environments
 .venv
