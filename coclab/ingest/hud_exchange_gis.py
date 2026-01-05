@@ -3,7 +3,11 @@
 Downloads and processes year-specific CoC boundary shapefiles from HUD Exchange
 and outputs canonicalized GeoParquet files.
 
-Source: https://www.hudexchange.info/programs/coc/gis-tools/
+Primary source: HUD ArcGIS Open Data (services.arcgis.com)
+Fallback source: https://www.hudexchange.info/programs/coc/gis-tools/
+
+Note: As of 2024, HUD Exchange no longer provides a single national shapefile.
+The ArcGIS FeatureServer is now the most reliable source for current data.
 """
 
 from __future__ import annotations
@@ -11,19 +15,37 @@ from __future__ import annotations
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import httpx
+from shapely.geometry import shape
 
 if TYPE_CHECKING:
     import geopandas as gpd
 
-# URL template for HUD Exchange CoC GIS geodatabase downloads
+# HUD ArcGIS feature service endpoint (primary source)
+ARCGIS_FEATURE_SERVICE_URL = (
+    "https://services.arcgis.com/VTyQ9soqVukalItT/ArcGIS/rest/services"
+    "/Continuum_of_Care_Grantee_Areas/FeatureServer/0/query"
+)
+
+# Source reference for ArcGIS data
+ARCGIS_SOURCE_REF = (
+    "https://hudgis-hud.opendata.arcgis.com/datasets"
+    "/HUD::continuum-of-care-coc-grantee-areas"
+)
+
+# URL template for HUD Exchange CoC GIS geodatabase downloads (legacy fallback)
 # Pattern observed from historical files: CoC_GIS_NatlTerrDC_Shapefile_{YEAR}.zip
 HUD_EXCHANGE_GDB_URL_TEMPLATE = (
     "https://files.hudexchange.info/resources/documents/"
     "CoC_GIS_NatlTerrDC_Shapefile_{vintage}.zip"
 )
+
+# Pagination settings for ArcGIS API
+# Smaller page size to avoid timeout on large geometry payloads
+ARCGIS_PAGE_SIZE = 250
+ARCGIS_REQUEST_TIMEOUT = 120.0
 
 # Known field name mappings across different vintage years
 # HUD has changed column names over time, so we map all known variants
@@ -49,6 +71,203 @@ def _extract_state_from_coc_id(coc_id: str) -> str:
     if coc_id and "-" in coc_id:
         return coc_id.split("-")[0]
     return ""
+
+
+# =============================================================================
+# ArcGIS FeatureServer Functions (Primary Source)
+# =============================================================================
+
+
+def _fetch_arcgis_page(
+    client: httpx.Client,
+    offset: int = 0,
+    page_size: int = ARCGIS_PAGE_SIZE,
+    max_retries: int = 3,
+) -> dict[str, Any]:
+    """Fetch a single page of features from the ArcGIS feature service.
+
+    Args:
+        client: HTTP client for making requests
+        offset: Record offset for pagination
+        page_size: Number of records to fetch
+        max_retries: Maximum retry attempts for transient errors
+
+    Returns:
+        JSON response containing features and metadata
+
+    Raises:
+        httpx.HTTPStatusError: If the request fails after retries
+    """
+    import time
+
+    params = {
+        "where": "1=1",  # All features
+        "outFields": "COCNUM,COCNAME,STUSAB,STATE_NAME",
+        "outSR": "4326",  # WGS84 lat/lon
+        "f": "geojson",
+        "resultOffset": offset,
+        "resultRecordCount": page_size,
+    }
+
+    last_error: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            response = client.get(
+                ARCGIS_FEATURE_SERVICE_URL, params=params, timeout=ARCGIS_REQUEST_TIMEOUT
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            last_error = e
+            # Retry on 5xx errors (server-side issues)
+            if e.response.status_code >= 500 and attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # Exponential backoff
+                continue
+            raise
+        except (httpx.TimeoutException, httpx.RemoteProtocolError) as e:
+            # Retry on timeout or connection reset errors
+            last_error = e
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+                continue
+            raise
+
+    raise last_error  # type: ignore[misc]
+
+
+def _fetch_all_arcgis_features(client: httpx.Client) -> list[dict[str, Any]]:
+    """Fetch all features from the ArcGIS service with pagination.
+
+    Args:
+        client: HTTP client for making requests
+
+    Returns:
+        List of all GeoJSON features
+    """
+    all_features: list[dict[str, Any]] = []
+    offset = 0
+
+    while True:
+        data = _fetch_arcgis_page(client, offset=offset)
+        features = data.get("features", [])
+
+        if not features:
+            break
+
+        all_features.extend(features)
+
+        # Check if we've received fewer than PAGE_SIZE, indicating last page
+        if len(features) < ARCGIS_PAGE_SIZE:
+            break
+
+        offset += ARCGIS_PAGE_SIZE
+
+    return all_features
+
+
+def _arcgis_features_to_geodataframe(
+    features: list[dict[str, Any]],
+) -> gpd.GeoDataFrame:
+    """Convert GeoJSON features from ArcGIS to a GeoDataFrame.
+
+    Args:
+        features: List of GeoJSON feature dictionaries
+
+    Returns:
+        GeoDataFrame with geometry and properties
+    """
+    import geopandas as gpd
+
+    if not features:
+        raise ValueError("No features to convert")
+
+    records = []
+    geometries = []
+
+    for feature in features:
+        props = feature.get("properties", {})
+        geom = feature.get("geometry")
+
+        if geom:
+            geometries.append(shape(geom))
+            records.append(props)
+
+    return gpd.GeoDataFrame(records, geometry=geometries, crs="EPSG:4326")
+
+
+def _map_arcgis_to_canonical_schema(
+    gdf: gpd.GeoDataFrame,
+    boundary_vintage: str,
+) -> gpd.GeoDataFrame:
+    """Map ArcGIS fields to the canonical boundary schema.
+
+    Args:
+        gdf: Input GeoDataFrame with ArcGIS field names
+        boundary_vintage: Version identifier for this ingestion
+
+    Returns:
+        GeoDataFrame with canonical column names
+    """
+    import geopandas as gpd
+
+    # Handle state field - ArcGIS uses STUSAB
+    state_field = None
+    for field in ["STUSAB", "STATE", "ST"]:
+        if field in gdf.columns:
+            state_field = field
+            break
+
+    if state_field:
+        state_values = gdf[state_field].astype(str)
+    else:
+        # Extract from CoC ID if state field not available
+        state_values = gdf["COCNUM"].apply(_extract_state_from_coc_id)
+
+    result = gpd.GeoDataFrame(
+        {
+            "coc_id": gdf["COCNUM"].astype(str),
+            "coc_name": gdf["COCNAME"].astype(str),
+            "state_abbrev": state_values,
+            "boundary_vintage": boundary_vintage,
+            "source": "hud_arcgis_featureserver",
+            "source_ref": ARCGIS_SOURCE_REF,
+            "ingested_at": datetime.now(UTC),
+        },
+        geometry=gdf.geometry,
+        crs="EPSG:4326",
+    )
+
+    return result
+
+
+def fetch_from_arcgis(boundary_vintage: str) -> gpd.GeoDataFrame:
+    """Fetch CoC boundaries from HUD ArcGIS FeatureServer.
+
+    This is the primary data source for current CoC boundary data.
+
+    Args:
+        boundary_vintage: Version identifier (e.g., "2025" or "FY2024")
+
+    Returns:
+        GeoDataFrame with canonical schema
+
+    Raises:
+        httpx.HTTPStatusError: If API request fails
+        ValueError: If no features are returned
+    """
+    with httpx.Client() as client:
+        features = _fetch_all_arcgis_features(client)
+
+    if not features:
+        raise ValueError("No features returned from HUD ArcGIS API")
+
+    gdf = _arcgis_features_to_geodataframe(features)
+    return _map_arcgis_to_canonical_schema(gdf, boundary_vintage)
+
+
+# =============================================================================
+# HUD Exchange ZIP Download Functions (Legacy Fallback)
+# =============================================================================
 
 
 def download_hud_exchange_gdb(
@@ -209,79 +428,82 @@ def ingest_hud_exchange(
     raw_dir: Path | str | None = None,
     curated_dir: Path | str | None = None,
     skip_download: bool = False,
+    use_legacy_source: bool = False,
 ) -> Path:
-    """Ingest CoC boundaries from HUD Exchange GIS Tools.
+    """Ingest CoC boundaries from HUD data sources.
 
-    Downloads the year-specific CoC shapefile/geodatabase, maps fields to the
-    canonical schema, normalizes geometries, validates the data, and writes
-    a curated GeoParquet file.
+    By default, fetches data from the HUD ArcGIS FeatureServer (most reliable).
+    Falls back to legacy HUD Exchange ZIP download if use_legacy_source=True
+    or if a specific URL is provided.
 
     Args:
-        boundary_vintage: Year of the boundary data (e.g., "2024")
-        url: Override URL for downloading. If not provided, uses the standard
-            HUD Exchange URL template.
-        raw_dir: Directory for raw downloads. Defaults to data/raw/hud_exchange/{vintage}/
-        curated_dir: Base directory for curated output. Defaults to data/curated/
-        skip_download: If True, assumes data is already downloaded to raw_dir
+        boundary_vintage: Year of the boundary data (e.g., "2024", "2025")
+        url: Override URL for downloading from HUD Exchange (implies legacy source)
+        raw_dir: Directory for raw downloads (legacy source only)
+        curated_dir: Base directory for curated output. Defaults to data/
+        skip_download: If True, reads from local files in raw_dir (legacy source)
+        use_legacy_source: Force use of HUD Exchange ZIP download instead of ArcGIS
 
     Returns:
         Path to the output GeoParquet file
 
     Raises:
-        httpx.HTTPStatusError: If download fails
+        httpx.HTTPStatusError: If API/download fails
         ValueError: If data cannot be parsed or validated
     """
     from coclab.geo import normalize_boundaries, validate_boundaries
     from coclab.geo.io import curated_boundary_path, write_geoparquet
-
-    # Set up paths
-    if raw_dir is None:
-        raw_dir = Path("data/raw/hud_exchange") / boundary_vintage
-    else:
-        raw_dir = Path(raw_dir)
 
     if curated_dir is None:
         curated_dir = Path("data")
     else:
         curated_dir = Path(curated_dir)
 
-    # Determine source URL
-    if url is None:
-        url = HUD_EXCHANGE_GDB_URL_TEMPLATE.format(vintage=boundary_vintage)
+    # Determine which source to use
+    use_arcgis = not use_legacy_source and url is None and not skip_download
 
-    # Step 1: Download if needed
-    if not skip_download:
-        data_path = download_hud_exchange_gdb(
-            boundary_vintage=boundary_vintage,
-            output_dir=raw_dir,
-            url=url,
-        )
+    if use_arcgis:
+        # Primary path: fetch from ArcGIS FeatureServer
+        gdf = fetch_from_arcgis(boundary_vintage)
     else:
-        # Find existing data in raw_dir
-        gdb_dirs = list(raw_dir.glob("*.gdb"))
-        shp_files = list(raw_dir.glob("*.shp"))
-        if gdb_dirs:
-            data_path = gdb_dirs[0]
-        elif shp_files:
-            data_path = shp_files[0]
+        # Legacy path: download ZIP from HUD Exchange
+        if raw_dir is None:
+            raw_dir = Path("data/raw/hud_exchange") / boundary_vintage
         else:
-            raise ValueError(f"No .gdb or .shp found in {raw_dir}")
+            raw_dir = Path(raw_dir)
 
-    # Step 2: Read the shapefile/geodatabase
-    gdf = read_coc_boundaries(data_path)
+        if url is None:
+            url = HUD_EXCHANGE_GDB_URL_TEMPLATE.format(vintage=boundary_vintage)
 
-    # Step 3: Map to canonical schema
-    gdf = map_to_canonical_schema(gdf, boundary_vintage, url)
+        if not skip_download:
+            data_path = download_hud_exchange_gdb(
+                boundary_vintage=boundary_vintage,
+                output_dir=raw_dir,
+                url=url,
+            )
+        else:
+            # Find existing data in raw_dir
+            gdb_dirs = list(raw_dir.glob("*.gdb"))
+            shp_files = list(raw_dir.glob("*.shp"))
+            if gdb_dirs:
+                data_path = gdb_dirs[0]
+            elif shp_files:
+                data_path = shp_files[0]
+            else:
+                raise ValueError(f"No .gdb or .shp found in {raw_dir}")
 
-    # Step 4: Normalize boundaries (CRS, fix geometries, compute geom_hash)
+        gdf = read_coc_boundaries(data_path)
+        gdf = map_to_canonical_schema(gdf, boundary_vintage, url)
+
+    # Normalize boundaries (CRS, fix geometries, compute geom_hash)
     gdf = normalize_boundaries(gdf)
 
-    # Step 5: Validate boundaries
+    # Validate boundaries
     validation_result = validate_boundaries(gdf)
     if not validation_result.is_valid:
         raise ValueError(f"Validation failed:\n{validation_result}")
 
-    # Step 6: Write curated GeoParquet
+    # Write curated GeoParquet
     output_path = curated_boundary_path(boundary_vintage, base_dir=curated_dir)
     write_geoparquet(gdf, output_path)
 
