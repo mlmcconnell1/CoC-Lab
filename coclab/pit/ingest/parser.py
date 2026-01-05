@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,29 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PITParseResult:
+    """Result of parsing a PIT data file.
+
+    Attributes
+    ----------
+    df : pd.DataFrame
+        Parsed data in canonical schema.
+    cross_state_mappings : dict[str, str]
+        CoC IDs that were mapped due to cross-state suffixes.
+        Keys are original IDs (e.g., "MO-604a"), values are normalized (e.g., "MO-604").
+    rows_read : int
+        Total rows read from source file.
+    rows_skipped : int
+        Rows skipped due to invalid CoC IDs or missing data.
+    """
+
+    df: pd.DataFrame
+    cross_state_mappings: dict[str, str] = field(default_factory=dict)
+    rows_read: int = 0
+    rows_skipped: int = 0
 
 # Standard column names in canonical schema
 CANONICAL_COLUMNS = [
@@ -358,30 +382,47 @@ def parse_pit_file(
         )
 
     # Filter by year if year column exists
+    rows_read = len(df)
     if year_col:
         df = df[df[year_col] == year].copy()
         logger.info(f"Filtered to {len(df)} rows for year {year}")
 
     # Build result DataFrame
     result_rows = []
+    cross_state_mappings: dict[str, str] = {}
+    rows_skipped = 0
     ingested_at = datetime.now(timezone.utc)
 
+    # Pattern to detect cross-state CoC IDs with letter suffix (e.g., MO-604a)
+    cross_state_pattern = re.compile(r"^([A-Z]{2})[-\s_]*(\d{1,3})([A-Z])$", re.IGNORECASE)
+
     for _, row in df.iterrows():
+        raw_coc_id = row[coc_col]
         try:
-            coc_id = normalize_coc_id(row[coc_col])
+            coc_id = normalize_coc_id(raw_coc_id)
         except ValueError as e:
             logger.warning(f"Skipping row with invalid CoC ID: {e}")
+            rows_skipped += 1
             continue
+
+        # Check if this was a cross-state mapping (letter suffix stripped)
+        if raw_coc_id and not pd.isna(raw_coc_id):
+            raw_cleaned = str(raw_coc_id).strip().upper()
+            match = cross_state_pattern.match(raw_cleaned)
+            if match and match.group(3):  # Had a letter suffix
+                cross_state_mappings[str(raw_coc_id).strip()] = coc_id
 
         pit_total = row[total_col]
         if pd.isna(pit_total):
             logger.warning(f"Skipping {coc_id}: missing total count")
+            rows_skipped += 1
             continue
 
         try:
             pit_total = int(pit_total)
         except (ValueError, TypeError):
             logger.warning(f"Skipping {coc_id}: invalid total count {pit_total!r}")
+            rows_skipped += 1
             continue
 
         pit_sheltered = None
@@ -423,13 +464,22 @@ def parse_pit_file(
         result = result.drop_duplicates(subset=["coc_id"], keep="first")
 
     logger.info(f"Parsed {len(result)} CoC records for year {year}")
-    return result
+
+    return PITParseResult(
+        df=result,
+        cross_state_mappings=cross_state_mappings,
+        rows_read=rows_read,
+        rows_skipped=rows_skipped,
+    )
 
 
 def write_pit_parquet(
     df: pd.DataFrame,
     output_path: Path | str,
     *,
+    cross_state_mappings: dict[str, str] | None = None,
+    rows_read: int | None = None,
+    rows_skipped: int | None = None,
     compression: str = "snappy",
 ) -> Path:
     """Write parsed PIT data to Parquet format with provenance metadata.
@@ -443,6 +493,13 @@ def write_pit_parquet(
         DataFrame in canonical PIT schema.
     output_path : Path or str
         Output file path.
+    cross_state_mappings : dict[str, str], optional
+        CoC IDs that were mapped due to cross-state suffixes.
+        Keys are original IDs (e.g., "MO-604a"), values are normalized (e.g., "MO-604").
+    rows_read : int, optional
+        Total rows read from source file.
+    rows_skipped : int, optional
+        Rows skipped due to invalid CoC IDs or missing data.
     compression : str, optional
         Parquet compression codec (default: snappy).
 
@@ -483,14 +540,27 @@ def write_pit_parquet(
 
     # Create provenance metadata
     pit_year = int(df["pit_year"].iloc[0]) if len(df) > 0 else None
-    provenance = ProvenanceBlock(
-        extra={
-            "pit_year": pit_year,
-            "row_count": len(df),
-            "data_source": df["data_source"].iloc[0] if len(df) > 0 else None,
-            "source_ref": df["source_ref"].iloc[0] if len(df) > 0 else None,
-        }
-    )
+    ingested_at = df["ingested_at"].iloc[0] if len(df) > 0 else datetime.now(timezone.utc)
+
+    extra: dict[str, Any] = {
+        "pit_year": pit_year,
+        "row_count": len(df),
+        "data_source": df["data_source"].iloc[0] if len(df) > 0 else None,
+        "source_ref": df["source_ref"].iloc[0] if len(df) > 0 else None,
+        "ingested_at": ingested_at.isoformat() if hasattr(ingested_at, "isoformat") else str(ingested_at),
+    }
+
+    # Add parse statistics if provided
+    if rows_read is not None:
+        extra["rows_read"] = rows_read
+    if rows_skipped is not None:
+        extra["rows_skipped"] = rows_skipped
+
+    # Add cross-state mappings if any were performed
+    if cross_state_mappings:
+        extra["cross_state_mappings"] = cross_state_mappings
+
+    provenance = ProvenanceBlock(extra=extra)
 
     # Convert to PyArrow table
     table = pa.Table.from_pandas(df, preserve_index=False)

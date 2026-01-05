@@ -172,25 +172,28 @@ TX-5,500
     def test_parse_csv_basic(self, sample_csv_file):
         """Test basic CSV parsing."""
         result = parse_pit_file(sample_csv_file, year=2024)
+        df = result.df
 
-        assert len(result) == 3
-        assert set(result.columns) >= {"pit_year", "coc_id", "pit_total"}
-        assert list(result["coc_id"]) == ["CO-500", "CA-600", "NY-501"]
-        assert list(result["pit_total"]) == [1234, 50000, 80000]
+        assert len(df) == 3
+        assert set(df.columns) >= {"pit_year", "coc_id", "pit_total"}
+        assert list(df["coc_id"]) == ["CO-500", "CA-600", "NY-501"]
+        assert list(df["pit_total"]) == [1234, 50000, 80000]
 
     def test_parse_csv_with_year_filter(self, sample_csv_with_year_column):
         """Test CSV parsing with year filtering."""
         result = parse_pit_file(sample_csv_with_year_column, year=2024)
+        df = result.df
 
         # Should only get 2024 data
-        assert len(result) == 2
-        assert all(result["pit_year"] == 2024)
+        assert len(df) == 2
+        assert all(df["pit_year"] == 2024)
 
     def test_parse_csv_normalizes_coc_ids(self, sample_csv_various_formats):
         """Test that CoC IDs are normalized."""
         result = parse_pit_file(sample_csv_various_formats, year=2024)
+        df = result.df
 
-        coc_ids = list(result["coc_id"])
+        coc_ids = list(df["coc_id"])
         assert "CO-500" in coc_ids
         assert "CA-600" in coc_ids
         assert "NY-501" in coc_ids
@@ -204,11 +207,12 @@ TX-5,500
             source="hud_exchange",
             source_ref="https://example.com/pit.csv",
         )
+        df = result.df
 
-        assert all(result["pit_year"] == 2024)
-        assert all(result["data_source"] == "hud_exchange")
-        assert all(result["source_ref"] == "https://example.com/pit.csv")
-        assert all(pd.notna(result["ingested_at"]))
+        assert all(df["pit_year"] == 2024)
+        assert all(df["data_source"] == "hud_exchange")
+        assert all(df["source_ref"] == "https://example.com/pit.csv")
+        assert all(pd.notna(df["ingested_at"]))
 
     def test_parse_unsupported_format(self, tmp_path):
         """Test error on unsupported file format."""

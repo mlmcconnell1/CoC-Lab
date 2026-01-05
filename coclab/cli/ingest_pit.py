@@ -88,22 +88,29 @@ def ingest_pit(
     # Step 2: Parse PIT file
     typer.echo("Parsing PIT file...")
     try:
-        df = parse_pit_file(
+        parse_result = parse_pit_file(
             file_path=raw_file,
             year=year,
             source="hud_exchange",
             source_ref=source_url,
         )
+        df = parse_result.df
         typer.echo(f"Parsed {len(df)} CoC records")
     except Exception as e:
         typer.echo(f"Error parsing PIT file: {e}", err=True)
         raise typer.Exit(1) from e
 
-    # Step 3: Write canonical Parquet
+    # Step 3: Write canonical Parquet with provenance
     output_path = get_canonical_output_path(year)
     typer.echo(f"Writing canonical Parquet to {output_path}...")
     try:
-        write_pit_parquet(df, output_path)
+        write_pit_parquet(
+            df,
+            output_path,
+            cross_state_mappings=parse_result.cross_state_mappings,
+            rows_read=parse_result.rows_read,
+            rows_skipped=parse_result.rows_skipped,
+        )
         typer.echo(f"Wrote: {output_path}")
     except Exception as e:
         typer.echo(f"Error writing Parquet: {e}", err=True)
@@ -149,4 +156,6 @@ def ingest_pit(
     typer.echo("PIT ingestion complete:")
     typer.echo(f"  Year: {year}")
     typer.echo(f"  CoCs: {len(df)}")
+    if parse_result.cross_state_mappings:
+        typer.echo(f"  Cross-state mappings: {parse_result.cross_state_mappings}")
     typer.echo(f"  Output: {output_path}")
