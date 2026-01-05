@@ -26,6 +26,8 @@ CoC Lab is a Python-based data and geospatial infrastructure for working with **
 - **Validate** geometry and data quality
 - **Version** boundary snapshots over time
 - **Visualize** boundaries as interactive maps
+- **Build crosswalks** linking CoCs to census tracts and counties
+- **Compute measures** aggregating ACS demographic data to CoC level
 
 ### What is a Continuum of Care?
 
@@ -201,14 +203,21 @@ graph LR
         GEO[geo/]
         REG[registry/]
         VIZ[viz/]
+        CENSUS[census/]
+        XWALK[xwalks/]
+        MEASURES[measures/]
     end
 
     CLI --> ING
     CLI --> REG
     CLI --> VIZ
+    CLI --> XWALK
+    CLI --> MEASURES
     ING --> GEO
     VIZ --> REG
     VIZ --> GEO
+    XWALK --> CENSUS
+    MEASURES --> XWALK
 ```
 
 ### Directory Layout
@@ -220,9 +229,16 @@ coclab/
   ingest/       # Data source ingesters
   registry/     # Vintage tracking and version selection
   viz/          # Map rendering (Folium)
+  census/       # Census geometry ingestion (TIGER/Line)
+    ingest/     # Tract and county downloaders
+  xwalks/       # CoC-to-census crosswalk builders
+  measures/     # ACS measure aggregation and diagnostics
 data/
   raw/          # Downloaded source files
   curated/      # Processed GeoParquet files
+    census/     # TIGER tract/county geometries
+    xwalks/     # CoC-tract and CoC-county crosswalks
+    measures/   # CoC-level demographic measures
 tests/          # Test suite including smoke tests
 ```
 
@@ -239,11 +255,15 @@ flowchart LR
     coclab --> ingest
     coclab --> list-vintages
     coclab --> show
+    coclab --> build-xwalks
+    coclab --> build-measures
 
     ingest --> |"--source hud_exchange"| HUD_EX[Download annual vintage]
     ingest --> |"--source hud_opendata"| HUD_OD[Fetch current snapshot]
     list-vintages --> LIST[Display available vintages]
     show --> MAP[Render interactive map]
+    build-xwalks --> XWALK[Create tract/county crosswalks]
+    build-measures --> MEAS[Aggregate ACS data to CoC]
 ```
 
 ### `coclab ingest`
@@ -304,6 +324,54 @@ coclab show --coc NY-600 --output my_map.html
 | `--coc` | CoC identifier (e.g., `CO-500`) | Required |
 | `--vintage` | Boundary vintage to use | Latest |
 | `--output` | Output HTML file path | Auto-generated |
+
+### `coclab build-xwalks`
+
+Build area-weighted crosswalks linking CoC boundaries to census tracts and counties.
+
+```bash
+# Build crosswalks for a specific boundary and tract vintage
+coclab build-xwalks --boundary 2025 --tracts 2023
+
+# Also build county crosswalk
+coclab build-xwalks --boundary 2025 --tracts 2023 --counties 2023
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--boundary`, `-b` | CoC boundary vintage | Latest |
+| `--tracts`, `-t` | Census tract vintage year | 2023 |
+| `--counties`, `-c` | Census county vintage year | Same as tracts |
+| `--output-dir`, `-o` | Output directory | `data/curated/xwalks` |
+
+**Output:**
+- `coc_tract_xwalk__{boundary}__{tracts}.parquet`
+- `coc_county_xwalk__{boundary}.parquet`
+- Diagnostic summary printed to console
+
+### `coclab build-measures`
+
+Aggregate ACS 5-year estimates to CoC level using tract crosswalks.
+
+```bash
+# Build measures with area weighting
+coclab build-measures --boundary 2025 --acs 2022
+
+# Use population weighting instead
+coclab build-measures --boundary 2025 --acs 2022 --weighting population
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--boundary`, `-b` | CoC boundary vintage | Latest |
+| `--acs`, `-a` | ACS 5-year estimate end year | 2022 |
+| `--tracts`, `-t` | Tract vintage for crosswalk | Same as ACS |
+| `--weighting`, `-w` | `area` or `population` | `area` |
+| `--output-dir`, `-o` | Output directory | `data/curated/measures` |
+
+**Output:**
+- `coc_measures__{boundary}__{acs}.parquet`
+- Summary statistics printed to console
 
 ---
 
@@ -408,6 +476,131 @@ print(result.warnings)  # List of warning messages
 print(result.is_valid)  # True if no errors
 ```
 
+#### Census Geometry Functions
+
+```python
+from coclab.census.ingest import (
+    download_tiger_tracts,
+    download_tiger_counties,
+    ingest_tiger_tracts,
+    ingest_tiger_counties,
+)
+
+# Download and normalize tract geometries
+tracts_gdf = download_tiger_tracts(year: int = 2023) -> gpd.GeoDataFrame
+
+# Download, normalize, and save to parquet
+output_path = ingest_tiger_tracts(year: int = 2023) -> Path
+
+# Same for counties
+counties_gdf = download_tiger_counties(year: int = 2023) -> gpd.GeoDataFrame
+output_path = ingest_tiger_counties(year: int = 2023) -> Path
+```
+
+#### Crosswalk Functions
+
+```python
+from coclab.xwalks import (
+    build_coc_tract_crosswalk,
+    build_coc_county_crosswalk,
+    add_population_weights,
+    validate_population_shares,
+    save_crosswalk,
+)
+
+# Build area-weighted tract crosswalk
+crosswalk = build_coc_tract_crosswalk(
+    coc_gdf: gpd.GeoDataFrame,      # CoC boundaries with 'coc_number' column
+    tract_gdf: gpd.GeoDataFrame,    # Tract geometries with 'GEOID' column
+    boundary_vintage: str,           # e.g., "2025"
+    tract_vintage: str,              # e.g., "2023"
+) -> pd.DataFrame
+
+# Add population weights to crosswalk
+crosswalk_with_pop = add_population_weights(
+    crosswalk: pd.DataFrame,
+    population_data: pd.DataFrame,   # Must have 'GEOID' and 'total_population'
+) -> pd.DataFrame
+
+# Validate population shares sum to ~1 per CoC
+validation = validate_population_shares(crosswalk: pd.DataFrame) -> pd.DataFrame
+
+# Save crosswalk to parquet
+output_path = save_crosswalk(
+    crosswalk: pd.DataFrame,
+    boundary_vintage: str,
+    tract_vintage: str,
+    output_dir: Path = Path("data/curated/xwalks"),
+) -> Path
+```
+
+#### ACS Measure Functions
+
+```python
+from coclab.measures import (
+    fetch_acs_tract_data,
+    fetch_all_states_tract_data,
+    aggregate_to_coc,
+    build_coc_measures,
+)
+
+# Fetch ACS data for a single state
+tract_data = fetch_acs_tract_data(
+    year: int,           # ACS 5-year estimate end year
+    state_fips: str,     # e.g., "06" for California
+) -> pd.DataFrame
+
+# Fetch for all states
+all_tract_data = fetch_all_states_tract_data(year: int) -> pd.DataFrame
+
+# Aggregate tract data to CoC level
+coc_measures = aggregate_to_coc(
+    acs_data: pd.DataFrame,
+    crosswalk: pd.DataFrame,
+    weighting: Literal["area", "population"] = "area",
+) -> pd.DataFrame
+
+# Full pipeline: fetch, aggregate, save
+coc_measures = build_coc_measures(
+    boundary_vintage: str,
+    acs_vintage: int,
+    crosswalk_path: Path,
+    weighting: Literal["area", "population"] = "area",
+    output_dir: Path | None = None,
+) -> pd.DataFrame
+```
+
+#### Diagnostics Functions
+
+```python
+from coclab.measures import (
+    compute_crosswalk_diagnostics,
+    compute_measure_diagnostics,
+    summarize_diagnostics,
+    identify_problem_cocs,
+)
+
+# Compute per-CoC crosswalk quality metrics
+diagnostics = compute_crosswalk_diagnostics(crosswalk: pd.DataFrame) -> pd.DataFrame
+# Returns: coc_id, num_tracts, max_tract_contribution, coverage_ratio_area, coverage_ratio_pop
+
+# Compare area vs population weighted measures
+comparison = compute_measure_diagnostics(
+    area_measures: pd.DataFrame,
+    pop_measures: pd.DataFrame,
+) -> pd.DataFrame
+
+# Generate CLI-readable summary
+summary_text = summarize_diagnostics(diagnostics: pd.DataFrame) -> str
+
+# Flag CoCs with potential issues
+problems = identify_problem_cocs(
+    diagnostics: pd.DataFrame,
+    coverage_threshold: float = 0.95,
+    max_contribution_threshold: float = 0.8,
+) -> pd.DataFrame
+```
+
 ---
 
 ## Data Model
@@ -459,6 +652,70 @@ erDiagram
     }
 ```
 
+### Crosswalk Schema
+
+Crosswalks link CoC boundaries to census geographies:
+
+```mermaid
+erDiagram
+    COC_TRACT_CROSSWALK {
+        string coc_id PK "CoC identifier"
+        string boundary_vintage PK "CoC boundary version"
+        string tract_geoid PK "Census tract GEOID"
+        string tract_vintage "Tract vintage year"
+        float area_share "Fraction of tract area in CoC"
+        float pop_share "Population-weighted share (nullable)"
+        float intersection_area "Area of overlap in sq meters"
+        float tract_area "Total tract area in sq meters"
+    }
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `coc_id` | string | CoC identifier (e.g., `CO-500`) |
+| `boundary_vintage` | string | CoC boundary version |
+| `tract_geoid` | string | 11-digit census tract GEOID |
+| `tract_vintage` | string | Census tract vintage year |
+| `area_share` | float | `intersection_area / tract_area` |
+| `pop_share` | float | Population-weighted share (nullable) |
+| `intersection_area` | float | Overlap area in square meters |
+| `tract_area` | float | Total tract area in square meters |
+
+### CoC Measures Schema
+
+Aggregated demographic measures at CoC level:
+
+```mermaid
+erDiagram
+    COC_MEASURES {
+        string coc_id PK "CoC identifier"
+        string boundary_vintage "CoC boundary version"
+        int acs_vintage "ACS 5-year estimate end year"
+        string weighting_method "area or population"
+        float total_population "Estimated total population"
+        float adult_population "Population 18+"
+        float population_below_poverty "Below 100% FPL"
+        float median_household_income "Weighted median income"
+        float median_gross_rent "Weighted median rent"
+        float coverage_ratio "Sum of weights (ideally ~1)"
+        string source "acs_5yr"
+    }
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `coc_id` | string | CoC identifier |
+| `boundary_vintage` | string | CoC boundary version used |
+| `acs_vintage` | int | ACS 5-year estimate end year |
+| `weighting_method` | string | `area` or `population` |
+| `total_population` | float | Weighted population estimate |
+| `adult_population` | float | Population 18 and older |
+| `population_below_poverty` | float | Below 100% federal poverty line |
+| `median_household_income` | float | Population-weighted median |
+| `median_gross_rent` | float | Population-weighted median |
+| `coverage_ratio` | float | Sum of weights (quality indicator) |
+| `source` | string | Always `acs_5yr` |
+
 ### Storage Locations
 
 | File | Path Pattern | Description |
@@ -467,6 +724,11 @@ erDiagram
 | Registry | `data/curated/boundary_registry.parquet` | Vintage tracking |
 | Maps | `data/curated/maps/{coc_id}__{vintage}.html` | Generated HTML maps |
 | Raw downloads | `data/raw/hud_exchange/{vintage}/` | Original source files |
+| Census tracts | `data/curated/census/tracts__{year}.parquet` | TIGER tract geometries |
+| Census counties | `data/curated/census/counties__{year}.parquet` | TIGER county geometries |
+| Tract crosswalks | `data/curated/xwalks/coc_tract_xwalk__{boundary}__{tracts}.parquet` | CoC-tract mapping |
+| County crosswalks | `data/curated/xwalks/coc_county_xwalk__{boundary}.parquet` | CoC-county mapping |
+| CoC measures | `data/curated/measures/coc_measures__{boundary}__{acs}.parquet` | Aggregated ACS data |
 
 ---
 
@@ -542,6 +804,47 @@ flowchart TD
     E --> H[Return vintage string]
     F --> H
     G --> H
+```
+
+### Crosswalk & Measures Workflow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI
+    participant Census
+    participant XwalkBuilder
+    participant ACS
+    participant Measures
+    participant Storage
+
+    Note over User,Storage: Phase 1: Build Crosswalks
+    User->>CLI: coclab build-xwalks --boundary 2025 --tracts 2023
+    CLI->>Census: ingest_tiger_tracts(2023)
+    Census->>Storage: Download TIGER shapefiles
+    Census->>Storage: Save tracts__2023.parquet
+    Census-->>CLI: Tract GeoDataFrame
+    CLI->>Storage: Load coc_boundaries__2025.parquet
+    CLI->>XwalkBuilder: build_coc_tract_crosswalk(...)
+    XwalkBuilder->>XwalkBuilder: Reproject to ESRI:102003 (Albers)
+    XwalkBuilder->>XwalkBuilder: Compute overlay intersections
+    XwalkBuilder->>XwalkBuilder: Calculate area_share per tract
+    XwalkBuilder-->>CLI: Crosswalk DataFrame
+    CLI->>Storage: Save coc_tract_xwalk__2025__2023.parquet
+    CLI-->>User: Crosswalk built (X tracts, Y CoCs)
+
+    Note over User,Storage: Phase 2: Build ACS Measures
+    User->>CLI: coclab build-measures --boundary 2025 --acs 2022
+    CLI->>Storage: Load crosswalk
+    CLI->>ACS: fetch_all_states_tract_data(2022)
+    ACS->>ACS: Census API for each state
+    ACS-->>CLI: Tract-level ACS data
+    CLI->>Measures: aggregate_to_coc(acs_data, crosswalk)
+    Measures->>Measures: Weight by area_share or pop_share
+    Measures->>Measures: Sum populations, weighted medians
+    Measures-->>CLI: CoC-level measures
+    CLI->>Storage: Save coc_measures__2025__2022.parquet
+    CLI-->>User: Measures built (N CoCs)
 ```
 
 ---
@@ -651,6 +954,105 @@ Interactive map generation with Folium.
 - Blue polygon overlay (30% opacity)
 - Interactive tooltip (ID, Name, Vintage, Source)
 - Auto-fitted bounds
+
+### census/ingest/tracts.py
+
+TIGER/Line census tract geometry ingestion.
+
+**Functions:**
+| Function | Purpose |
+|----------|---------|
+| `download_tiger_tracts()` | Download and parse national tract shapefiles |
+| `ingest_tiger_tracts()` | Full pipeline: download, normalize, save to GeoParquet |
+
+**Output Schema:**
+- `GEOID` - 11-digit tract identifier (state + county + tract)
+- `NAME` - Tract name
+- `ALAND` - Land area in square meters
+- `AWATER` - Water area in square meters
+- `geometry` - Polygon/MultiPolygon in EPSG:4326
+
+### census/ingest/counties.py
+
+TIGER/Line county geometry ingestion.
+
+**Functions:**
+| Function | Purpose |
+|----------|---------|
+| `download_tiger_counties()` | Download and parse national county shapefiles |
+| `ingest_tiger_counties()` | Full pipeline: download, normalize, save to GeoParquet |
+
+**Output Schema:**
+- `GEOID` - 5-digit county FIPS code
+- `NAME` - County name
+- `STATEFP` - State FIPS code
+- `geometry` - Polygon/MultiPolygon in EPSG:4326
+
+### xwalks/tract.py
+
+CoC-to-census-tract crosswalk builder.
+
+**Functions:**
+| Function | Purpose |
+|----------|---------|
+| `build_coc_tract_crosswalk()` | Compute area-weighted tract-to-CoC mappings |
+| `add_population_weights()` | Add population-weighted shares to crosswalk |
+| `validate_population_shares()` | Validate that pop_share sums to ~1 per CoC |
+| `save_crosswalk()` | Save crosswalk to GeoParquet |
+
+**Algorithm:**
+1. Reproject both layers to ESRI:102003 (Albers Equal Area)
+2. Compute geometric overlay (intersection)
+3. Calculate `area_share = intersection_area / tract_area`
+4. Filter to shares > 1e-9 (remove slivers)
+
+### xwalks/county.py
+
+CoC-to-county crosswalk builder.
+
+**Functions:**
+| Function | Purpose |
+|----------|---------|
+| `build_coc_county_crosswalk()` | Compute area-weighted county-to-CoC mappings |
+| `save_county_crosswalk()` | Save crosswalk to GeoParquet |
+
+### measures/acs.py
+
+ACS 5-year estimate aggregation to CoC level.
+
+**Constants:**
+- `ACS_VARS` - Dictionary of ACS variable codes (population, income, rent, poverty)
+- `ADULT_VARS` - Age-specific population variables for adults 18+
+
+**Functions:**
+| Function | Purpose |
+|----------|---------|
+| `fetch_acs_tract_data()` | Fetch ACS data for a single state via Census API |
+| `fetch_all_states_tract_data()` | Fetch ACS data for all states (parallelized) |
+| `aggregate_to_coc()` | Aggregate tract data to CoC using crosswalk weights |
+| `build_coc_measures()` | Full pipeline: fetch, aggregate, save |
+
+**Weighting Methods:**
+- `area` - Weight by `area_share` (fraction of tract area in CoC)
+- `population` - Weight by `pop_share` (population-proportional)
+
+### measures/diagnostics.py
+
+Attribution diagnostics and coverage reporting.
+
+**Functions:**
+| Function | Purpose |
+|----------|---------|
+| `compute_crosswalk_diagnostics()` | Per-CoC metrics: tract count, coverage ratio |
+| `compute_measure_diagnostics()` | Compare area vs population weighted results |
+| `summarize_diagnostics()` | Generate CLI-readable text summary |
+| `identify_problem_cocs()` | Flag CoCs with low coverage or high concentration |
+
+**Diagnostic Metrics:**
+- `num_tracts` - Number of tracts intersecting CoC
+- `max_tract_contribution` - Largest single-tract area share
+- `coverage_ratio_area` - Sum of area_share (ideally ~1.0)
+- `coverage_ratio_pop` - Sum of pop_share (when available)
 
 ---
 
