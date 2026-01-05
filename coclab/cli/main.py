@@ -1,6 +1,7 @@
 """CLI commands for CoC Lab using Typer.
 
-Provides commands for ingesting CoC boundary data and visualizing boundaries.
+Provides commands for ingesting CoC boundary data, building crosswalks,
+computing measures, and visualizing boundaries.
 """
 
 from pathlib import Path
@@ -8,11 +9,18 @@ from typing import Annotated
 
 import typer
 
+from coclab.cli.build_measures import build_measures
+from coclab.cli.build_xwalks import build_xwalks
+
 app = typer.Typer(
     name="coclab",
     help="CoC Lab - Continuum of Care boundary data infrastructure CLI",
     no_args_is_help=True,
 )
+
+# Register crosswalk and measures commands
+app.command("build-xwalks")(build_xwalks)
+app.command("build-measures")(build_measures)
 
 
 @app.command()
