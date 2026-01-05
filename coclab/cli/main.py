@@ -10,12 +10,15 @@ from typing import Annotated
 import typer
 
 from coclab.cli.build_measures import build_measures
+from coclab.cli.build_panel import build_panel_cmd
 from coclab.cli.build_xwalks import build_xwalks
 from coclab.cli.compare_vintages import compare_vintages
 from coclab.cli.diagnostics import diagnostics
 from coclab.cli.ingest_census import ingest_census
+from coclab.cli.ingest_pit import ingest_pit
 from coclab.cli.list_measures import list_measures
 from coclab.cli.list_xwalks import list_xwalks
+from coclab.cli.panel_diagnostics import panel_diagnostics
 from coclab.cli.show_measures import show_measures
 
 app = typer.Typer(
@@ -27,11 +30,14 @@ app = typer.Typer(
 # Register crosswalk, measures, and diagnostics commands
 app.command("build-xwalks")(build_xwalks)
 app.command("build-measures")(build_measures)
+app.command("build-panel")(build_panel_cmd)
 app.command("compare-vintages")(compare_vintages)
 app.command("diagnostics")(diagnostics)
 app.command("ingest-census")(ingest_census)
+app.command("ingest-pit")(ingest_pit)
 app.command("list-measures")(list_measures)
 app.command("list-xwalks")(list_xwalks)
+app.command("panel-diagnostics")(panel_diagnostics)
 app.command("show-measures")(show_measures)
 
 
