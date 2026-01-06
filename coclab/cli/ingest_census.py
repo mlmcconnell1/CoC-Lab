@@ -73,6 +73,8 @@ def ingest_census(
             typer.echo(f"Tracts file already exists: {tracts_path}")
             typer.echo("Use --force to re-download.")
         else:
+            if tracts_path.exists() and force:
+                typer.echo(f"Forcing rebuild: removing existing {tracts_path}")
             typer.echo(f"Downloading TIGER tracts for {year}...")
             try:
                 from coclab.census.ingest import ingest_tiger_tracts
@@ -93,6 +95,8 @@ def ingest_census(
             typer.echo(f"Counties file already exists: {counties_path}")
             typer.echo("Use --force to re-download.")
         else:
+            if counties_path.exists() and force:
+                typer.echo(f"Forcing rebuild: removing existing {counties_path}")
             typer.echo(f"Downloading TIGER counties for {year}...")
             try:
                 from coclab.census.ingest import ingest_tiger_counties

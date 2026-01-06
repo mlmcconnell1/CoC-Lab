@@ -75,6 +75,17 @@ def ingest_acs_population(
     # Load and summarize results
     df = pd.read_parquet(path)
 
+    # Validate required columns exist
+    required_columns = ["tract_geoid", "total_population"]
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        typer.echo(
+            f"Error: Output file is missing required columns: {missing_columns}. "
+            f"Available columns: {list(df.columns)}",
+            err=True,
+        )
+        raise typer.Exit(1)
+
     typer.echo("")
     typer.echo("=" * 60)
     typer.echo("INGEST SUMMARY")

@@ -89,7 +89,22 @@ def build_xwalks(
     typer.echo(f"Loading CoC boundaries (vintage: {boundary})...")
     vintages = list_vintages()
     boundary_entry = next(v for v in vintages if v.boundary_vintage == boundary)
-    coc_gdf = gpd.read_parquet(boundary_entry.path)
+    boundary_path = Path(boundary_entry.path)
+    if not boundary_path.exists():
+        typer.echo(
+            f"Error: Boundary file not found: {boundary_path}. "
+            f"Run 'coclab ingest --source hud_exchange --vintage {boundary}' first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    try:
+        coc_gdf = gpd.read_parquet(boundary_path)
+    except Exception as e:
+        typer.echo(
+            f"Error: Failed to read boundary file {boundary_path}: {e}",
+            err=True,
+        )
+        raise typer.Exit(1) from e
 
     # Load tract geometries
     tract_path = Path(f"data/curated/census/tracts__{tracts}.parquet")
@@ -102,7 +117,14 @@ def build_xwalks(
         raise typer.Exit(1)
 
     typer.echo(f"Loading census tracts (vintage: {tracts})...")
-    tract_gdf = gpd.read_parquet(tract_path)
+    try:
+        tract_gdf = gpd.read_parquet(tract_path)
+    except Exception as e:
+        typer.echo(
+            f"Error: Failed to read tract file {tract_path}: {e}",
+            err=True,
+        )
+        raise typer.Exit(1) from e
 
     # Standardize column names for tract crosswalk builder
     # The tract module expects 'GEOID', but tiger_tracts saves as 'geoid'
@@ -152,7 +174,14 @@ def build_xwalks(
         return
 
     typer.echo(f"\nLoading census counties (vintage: {county_vintage})...")
-    county_gdf = gpd.read_parquet(county_path)
+    try:
+        county_gdf = gpd.read_parquet(county_path)
+    except Exception as e:
+        typer.echo(
+            f"Error: Failed to read county file {county_path}: {e}",
+            err=True,
+        )
+        raise typer.Exit(1) from e
 
     # Standardize column names for county crosswalk builder
     if "geoid" in county_gdf.columns and "GEOID" not in county_gdf.columns:

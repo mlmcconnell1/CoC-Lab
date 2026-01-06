@@ -125,12 +125,29 @@ def ingest(
 
         from coclab.geo.io import curated_boundary_path
         from coclab.ingest.hud_exchange_gis import ingest_hud_exchange
+        from coclab.registry.registry import list_vintages
 
         output_path = curated_boundary_path(vintage)
-        if output_path.exists() and not force:
+        registered_vintages = [v.boundary_vintage for v in list_vintages()]
+        file_exists = output_path.exists()
+        in_registry = vintage in registered_vintages
+
+        if file_exists and in_registry and not force:
             typer.echo(f"Vintage {vintage} already exists at: {output_path}")
             typer.echo("Use --force to re-ingest.")
             raise typer.Exit(0)
+        if file_exists and not in_registry and not force:
+            typer.echo(
+                f"Warning: File exists at {output_path} but not in registry.",
+                err=True,
+            )
+            typer.echo("Re-ingesting to ensure proper registration...")
+        if not file_exists and in_registry:
+            typer.echo(
+                f"Warning: Vintage {vintage} is in registry but file is missing.",
+                err=True,
+            )
+            typer.echo("Re-ingesting...")
 
         typer.echo(f"Ingesting HUD Exchange CoC boundaries for vintage {vintage}...")
         try:
