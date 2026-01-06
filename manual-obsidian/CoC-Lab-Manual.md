@@ -149,6 +149,16 @@ coclab --help
 pytest tests/test_smoke.py -v
 ```
 
+### Working Directory
+
+The CLI expects to be run from the CoC-PIT project root directory. If run from a different directory, you'll see a warning:
+
+```
+Warning: Current directory may not be the CoC-PIT project root. Missing: pyproject.toml, coclab, data
+```
+
+This warning appears when the current directory is missing expected markers (`pyproject.toml`, `coclab/`, `data/`). While commands may still work, file paths assume the project root as the working directory.
+
 ---
 
 ## Architecture
@@ -321,6 +331,7 @@ coclab ingest --source hud_opendata --snapshot latest
 | `--source`   | Data source (`hud_exchange` or `hud_opendata`) | Required                    |
 | `--vintage`  | Year for HUD Exchange data                     | Required for `hud_exchange` |
 | `--snapshot` | Snapshot tag for Open Data                     | `latest`                    |
+| `--force`    | Re-ingest even if vintage already exists       | False                       |
 
 ### `coclab list-vintages`
 
@@ -391,18 +402,19 @@ Aggregate ACS 5-year estimates to CoC level using tract crosswalks.
 
 ```bash
 # Build measures with area weighting
-coclab build-measures --boundary 2025 --acs 2022
+coclab build-measures --boundary 2025 --acs 2019-2023
 
 # Use population weighting instead
-coclab build-measures --boundary 2025 --acs 2022 --weighting population
+coclab build-measures --boundary 2025 --acs 2019-2023 --weighting population
 ```
 
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--boundary`, `-b` | CoC boundary vintage | Latest |
-| `--acs`, `-a` | ACS 5-year estimate end year | 2022 |
-| `--tracts`, `-t` | Tract vintage for crosswalk | Same as ACS |
+| `--acs`, `-a` | ACS 5-year estimate vintage (e.g., `2019-2023`) | `2018-2022` |
+| `--tracts`, `-t` | Tract vintage for crosswalk | Same as ACS end year |
 | `--weighting`, `-w` | `area` or `population` | `area` |
+| `--xwalk-dir` | Directory containing crosswalk files | `data/curated/xwalks` |
 | `--output-dir`, `-o` | Output directory | `data/curated/measures` |
 
 **Output:**
@@ -1133,7 +1145,7 @@ erDiagram
         float population_below_poverty "Below 100% FPL"
         float median_household_income "Weighted median income"
         float median_gross_rent "Weighted median rent"
-        float coverage_ratio "Sum of weights (ideally ~1)"
+        float coverage_ratio "Fraction of CoC area with ACS data (ideally ~1)"
         string source "acs_5yr"
     }
 ```
@@ -1149,7 +1161,7 @@ erDiagram
 | `population_below_poverty` | float | Below 100% federal poverty line |
 | `median_household_income` | float | Population-weighted median |
 | `median_gross_rent` | float | Population-weighted median |
-| `coverage_ratio` | float | Sum of weights (quality indicator) |
+| `coverage_ratio` | float | Fraction of CoC area covered by tracts with data |
 | `source` | string | Always `acs_5yr` |
 
 ### PIT Counts Schema (Phase 3)
@@ -1203,7 +1215,7 @@ erDiagram
         float population_below_poverty "Below poverty line"
         float median_household_income "Weighted median income"
         float median_gross_rent "Weighted median rent"
-        float coverage_ratio "Sum of weights"
+        float coverage_ratio "Fraction of CoC area with data"
         bool boundary_changed "True if boundary changed from prior year"
         string source "Data source identifier"
     }
@@ -1224,7 +1236,7 @@ erDiagram
 | `population_below_poverty` | float | Below 100% federal poverty line |
 | `median_household_income` | float | Population-weighted median |
 | `median_gross_rent` | float | Population-weighted median |
-| `coverage_ratio` | float | Sum of crosswalk weights |
+| `coverage_ratio` | float | Fraction of CoC area covered by tracts with data |
 | `boundary_changed` | bool | True if CoC boundary changed from prior year |
 | `source` | string | Data source identifier |
 
@@ -1865,7 +1877,7 @@ Tract-to-CoC population aggregation.
 - `boundary_vintage`, `acs_vintage`, `tract_vintage` - Version identifiers
 - `weighting_method` - "area" or "population_mass"
 - `coc_population` - Aggregated population estimate
-- `coverage_ratio` - Sum of area_shares for matched tracts
+- `coverage_ratio` - Fraction of CoC area covered by tracts with data
 - `max_tract_contribution` - Maximum single tract contribution
 - `tract_count` - Number of contributing tracts
 
