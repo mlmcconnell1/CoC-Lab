@@ -25,11 +25,38 @@ from coclab.cli.rollup_acs_population import rollup_acs_population
 from coclab.cli.show_measures import show_measures
 from coclab.cli.verify_acs_population import verify_acs_population
 
+
+def _check_working_directory() -> None:
+    """Warn if the current directory doesn't look like the CoC-PIT project root."""
+    cwd = Path.cwd()
+    expected_markers = [
+        cwd / "pyproject.toml",
+        cwd / "coclab",
+        cwd / "data",
+    ]
+    missing = [p for p in expected_markers if not p.exists()]
+
+    if missing:
+        missing_names = ", ".join(p.name for p in missing)
+        typer.echo(
+            f"Warning: Current directory may not be the CoC-PIT project root. "
+            f"Missing: {missing_names}",
+            err=True,
+        )
+
+
 app = typer.Typer(
     name="coclab",
     help="CoC Lab - Continuum of Care boundary data infrastructure CLI",
     no_args_is_help=True,
 )
+
+
+@app.callback()
+def main_callback() -> None:
+    """Check working directory before running any command."""
+    _check_working_directory()
+
 
 # Register crosswalk, measures, and diagnostics commands
 app.command("build-xwalks")(build_xwalks)

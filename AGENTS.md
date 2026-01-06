@@ -5,12 +5,16 @@ This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get sta
 ## Quick Reference
 
 ```bash
+bd create             # Add a new bead to document a bug or other problem
 bd ready              # Find available work
 bd show <id>          # View issue details
 bd update <id> --status in_progress  # Claim work
 bd close <id>         # Complete work
 bd sync               # Sync with git
 ```
+
+## Adding Beads (Problem Noticed)
+If you identify a problem in the code, even incidentally while working on something else, add a bead to make sure it is addressed later
 
 ## Landing the Plane (Session Completion)
 
@@ -37,4 +41,3 @@ bd sync               # Sync with git
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
-
