@@ -327,7 +327,6 @@ def aggregate_to_coc(
 
         # Weighted averages for median values (weight by population)
         pop_weights = group["total_population"].fillna(0) * group[weight_col].fillna(0)
-        total_weight = pop_weights.sum()
 
         for col in avg_cols:
             if col in group.columns:
@@ -338,9 +337,17 @@ def aggregate_to_coc(
                 else:
                     row[col] = pd.NA
 
-        # Coverage ratio: sum of weights for tracts with data
-        has_data = group["total_population"].notna()
-        row["coverage_ratio"] = group.loc[has_data, weight_col].sum()
+        # Coverage ratio: fraction of CoC area covered by tracts with ACS data
+        # Computed as sum(intersection_area with data) / sum(intersection_area total)
+        if "intersection_area" in group.columns:
+            total_area = group["intersection_area"].sum()
+            has_data = group["total_population"].notna()
+            covered_area = group.loc[has_data, "intersection_area"].sum()
+            row["coverage_ratio"] = covered_area / total_area if total_area > 0 else 0.0
+        else:
+            # Fallback: fraction of tracts with data (less accurate)
+            has_data = group["total_population"].notna()
+            row["coverage_ratio"] = has_data.mean()
 
         results.append(row)
 

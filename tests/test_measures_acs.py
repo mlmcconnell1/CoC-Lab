@@ -214,7 +214,7 @@ class TestAggregateToCoC:
         assert co500["weighting_method"] == "population"
 
     def test_coverage_ratio_calculation(self):
-        """Test that coverage_ratio correctly sums weights for tracts with data."""
+        """Test that coverage_ratio correctly computes area-weighted coverage."""
         acs_data = pd.DataFrame({
             "GEOID": ["08001000100", "08001000200"],
             "total_population": [1000, pd.NA],  # Second tract has no data
@@ -229,11 +229,14 @@ class TestAggregateToCoC:
             "coc_id": ["CO-500", "CO-500"],
             "area_share": [0.6, 0.4],
             "pop_share": [0.6, 0.4],
+            "intersection_area": [600.0, 400.0],  # Areas in arbitrary units
         })
 
         result = aggregate_to_coc(acs_data, crosswalk, weighting="area")
 
-        # Only first tract has data, so coverage = 0.6
+        # Only first tract has data (intersection_area=600)
+        # Total area = 600 + 400 = 1000
+        # Coverage = 600 / 1000 = 0.6
         assert result.iloc[0]["coverage_ratio"] == 0.6
 
     def test_missing_weight_column_raises(self):
