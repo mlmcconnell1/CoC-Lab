@@ -92,6 +92,7 @@ References
 - Census Bureau ACS Handbook, Chapter 12: "Working with ACS Data."
 """
 
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Literal
 
@@ -213,19 +214,23 @@ def fetch_acs_tract_data(year: int, state_fips: str) -> pd.DataFrame:
     return df[keep_cols].copy()
 
 
-def fetch_all_states_tract_data(year: int) -> pd.DataFrame:
+def fetch_all_states_tract_data(year: int, show_progress: bool = False) -> pd.DataFrame:
     """Fetch ACS tract data for all US states and territories.
 
     Parameters
     ----------
     year : int
         The ACS 5-year estimate end year.
+    show_progress : bool
+        If True, display a progress bar. Default is False.
 
     Returns
     -------
     pd.DataFrame
         Combined DataFrame with tract data for all states.
     """
+    import click
+
     # State FIPS codes (50 states + DC + territories)
     state_fips_codes = [
         "01", "02", "04", "05", "06", "08", "09", "10", "11", "12",
@@ -237,13 +242,22 @@ def fetch_all_states_tract_data(year: int) -> pd.DataFrame:
     ]
 
     dfs = []
-    for fips in state_fips_codes:
-        try:
-            df = fetch_acs_tract_data(year, fips)
-            dfs.append(df)
-        except httpx.HTTPStatusError as e:
-            print(f"Warning: Failed to fetch data for state {fips}: {e}")
-            continue
+    states_iter = state_fips_codes
+    if show_progress:
+        states_iter = click.progressbar(
+            state_fips_codes,
+            label="Fetching ACS tract data",
+            show_pos=True,
+        )
+
+    with states_iter if show_progress else nullcontext(states_iter) as fips_codes:
+        for fips in fips_codes:
+            try:
+                df = fetch_acs_tract_data(year, fips)
+                dfs.append(df)
+            except httpx.HTTPStatusError as e:
+                print(f"Warning: Failed to fetch data for state {fips}: {e}")
+                continue
 
     if not dfs:
         raise ValueError("No tract data could be fetched")
@@ -345,6 +359,7 @@ def build_coc_measures(
     crosswalk_path: Path,
     weighting: Literal["area", "population"] = "area",
     output_dir: Path | None = None,
+    show_progress: bool = False,
 ) -> pd.DataFrame:
     """Build CoC-level measures from ACS data.
 
@@ -361,6 +376,8 @@ def build_coc_measures(
         Weighting method for aggregation.
     output_dir : Path, optional
         Output directory for parquet file.
+    show_progress : bool
+        If True, display a progress bar during ACS fetching. Default is False.
 
     Returns
     -------
@@ -379,8 +396,9 @@ def build_coc_measures(
     crosswalk = pd.read_parquet(crosswalk_path)
 
     # Fetch ACS data for all states
-    print(f"Fetching ACS {acs_vintage_str} 5-year estimates...")
-    acs_data = fetch_all_states_tract_data(api_year)
+    if not show_progress:
+        print(f"Fetching ACS {acs_vintage_str} 5-year estimates...")
+    acs_data = fetch_all_states_tract_data(api_year, show_progress=show_progress)
 
     # Aggregate to CoC level
     print(f"Aggregating to CoC level using {weighting} weighting...")

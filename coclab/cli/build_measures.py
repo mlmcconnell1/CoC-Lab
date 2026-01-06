@@ -129,6 +129,7 @@ def build_measures(
             crosswalk_path=xwalk_path,
             weighting=weighting_literal,
             output_dir=output_dir,
+            show_progress=True,
         )
     except Exception as e:
         typer.echo(f"Error building measures: {e}", err=True)
