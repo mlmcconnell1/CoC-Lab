@@ -33,16 +33,22 @@ def compute_crosswalk_diagnostics(crosswalk: pd.DataFrame) -> pd.DataFrame:
     """
     if "coc_id" not in crosswalk.columns:
         raise ValueError("Crosswalk must have 'coc_id' column")
-    if "area_share" not in crosswalk.columns:
-        raise ValueError("Crosswalk must have 'area_share' column")
+    if "intersection_area" not in crosswalk.columns:
+        raise ValueError("Crosswalk must have 'intersection_area' column")
+
+    # Compute CoC-normalized area shares
+    # (what fraction of the CoC's total intersected area does each tract represent)
+    xwalk = crosswalk.copy()
+    coc_total_area = xwalk.groupby("coc_id")["intersection_area"].transform("sum")
+    xwalk["coc_area_share"] = xwalk["intersection_area"] / coc_total_area
 
     # Group by CoC and compute diagnostics
-    grouped = crosswalk.groupby("coc_id")
+    grouped = xwalk.groupby("coc_id")
 
     diagnostics = pd.DataFrame({
         "num_tracts": grouped.size(),
-        "max_tract_contribution": grouped["area_share"].max(),
-        "coverage_ratio_area": grouped["area_share"].sum(),
+        "max_tract_contribution": grouped["coc_area_share"].max(),
+        "coverage_ratio_area": grouped["coc_area_share"].sum(),
     })
     diagnostics = diagnostics.reset_index()
 
