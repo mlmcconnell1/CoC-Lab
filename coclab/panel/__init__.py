@@ -3,9 +3,22 @@
 This module provides tools for constructing CoC x year panels by aligning
 PIT years with boundary vintages and ACS vintages according to explicit
 policies, plus diagnostics for validating panel integrity.
+
+ZORI Integration
+----------------
+When building panels with `include_zori=True`, the following columns are added:
+- zori_coc: CoC-level ZORI (yearly)
+- zori_coverage_ratio: Coverage of base geography weights
+- zori_is_eligible: Boolean eligibility flag
+- zori_excluded_reason: Reason for exclusion if ineligible
+- rent_to_income: ZORI / (median_household_income / 12)
+- rent_metric, rent_alignment, zori_min_coverage: Provenance fields
 """
 
 from coclab.panel.assemble import (
+    PANEL_COLUMNS,
+    ZORI_COLUMNS,
+    ZORI_PROVENANCE_COLUMNS,
     build_panel,
     save_panel,
 )
@@ -18,23 +31,54 @@ from coclab.panel.diagnostics import (
     weighting_sensitivity,
 )
 from coclab.panel.policies import (
-    AlignmentPolicy,
     DEFAULT_POLICY,
+    AlignmentPolicy,
     default_acs_vintage,
     default_boundary_vintage,
 )
+from coclab.panel.zori_eligibility import (
+    DEFAULT_ZORI_MIN_COVERAGE,
+    EXCLUDED_LOW_COVERAGE,
+    EXCLUDED_MISSING,
+    EXCLUDED_ZERO_COVERAGE,
+    ZoriProvenance,
+    add_provenance_columns,
+    apply_zori_eligibility,
+    compute_rent_to_income,
+    determine_exclusion_reason,
+    get_zori_panel_columns,
+    summarize_zori_eligibility,
+)
 
 __all__ = [
+    # Policies
     "AlignmentPolicy",
     "DEFAULT_POLICY",
-    "DiagnosticsReport",
-    "boundary_change_summary",
-    "build_panel",
-    "coverage_summary",
     "default_acs_vintage",
     "default_boundary_vintage",
+    # Panel building
+    "build_panel",
+    "save_panel",
+    "PANEL_COLUMNS",
+    "ZORI_COLUMNS",
+    "ZORI_PROVENANCE_COLUMNS",
+    # Diagnostics
+    "DiagnosticsReport",
+    "boundary_change_summary",
+    "coverage_summary",
     "generate_diagnostics_report",
     "missingness_report",
-    "save_panel",
     "weighting_sensitivity",
+    # ZORI eligibility
+    "DEFAULT_ZORI_MIN_COVERAGE",
+    "EXCLUDED_LOW_COVERAGE",
+    "EXCLUDED_MISSING",
+    "EXCLUDED_ZERO_COVERAGE",
+    "ZoriProvenance",
+    "add_provenance_columns",
+    "apply_zori_eligibility",
+    "compute_rent_to_income",
+    "determine_exclusion_reason",
+    "get_zori_panel_columns",
+    "summarize_zori_eligibility",
 ]

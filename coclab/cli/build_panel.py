@@ -5,6 +5,51 @@ from typing import Annotated
 
 import typer
 
+# Default ZORI coverage threshold
+DEFAULT_ZORI_MIN_COVERAGE = 0.90
+
+# Default ZORI rents directory
+DEFAULT_RENTS_DIR = Path("data/curated/rents")
+
+
+def _resolve_zori_yearly_path(explicit_path: Path | None) -> Path | None:
+    """Resolve the path to yearly ZORI data.
+
+    Parameters
+    ----------
+    explicit_path : Path or None
+        User-provided explicit path to yearly ZORI parquet.
+
+    Returns
+    -------
+    Path or None
+        Resolved path if found, None otherwise.
+
+    Notes
+    -----
+    If explicit_path is provided, validates it exists.
+    Otherwise, searches for coc_zori_yearly__*.parquet files in
+    the default rents directory and returns the most recent one.
+    """
+    if explicit_path is not None:
+        if explicit_path.exists():
+            return explicit_path
+        return None
+
+    # Search for yearly ZORI files in default location
+    rents_dir = DEFAULT_RENTS_DIR
+    if not rents_dir.exists():
+        return None
+
+    # Find all yearly ZORI files (pattern: coc_zori_yearly__*.parquet)
+    yearly_files = list(rents_dir.glob("coc_zori_yearly__*.parquet"))
+    if not yearly_files:
+        return None
+
+    # Return the most recently modified file
+    yearly_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return yearly_files[0]
+
 
 def build_panel_cmd(
     start: Annotated[
@@ -39,12 +84,51 @@ def build_panel_cmd(
             help="Custom output path for the panel Parquet file.",
         ),
     ] = None,
+    include_zori: Annotated[
+        bool,
+        typer.Option(
+            "--include-zori/--no-include-zori",
+            help="Include ZORI rent data and compute rent_to_income ratio.",
+        ),
+    ] = False,
+    zori_yearly_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--zori-yearly-path",
+            help="Explicit path to yearly ZORI parquet. If omitted, searches defaults.",
+        ),
+    ] = None,
+    zori_min_coverage: Annotated[
+        float,
+        typer.Option(
+            "--zori-min-coverage",
+            help="Minimum ZORI coverage ratio for eligibility (0.0-1.0).",
+        ),
+    ] = DEFAULT_ZORI_MIN_COVERAGE,
 ) -> None:
     """Build a CoC x year analysis panel.
 
     Constructs an analysis-ready panel by joining PIT counts with ACS measures
     for each year in the specified range, using alignment policies to determine
     which boundary and ACS vintages to use.
+
+    ZORI Integration (optional):
+
+    When --include-zori is specified, the panel will include ZORI rent data and
+    compute a rent_to_income affordability ratio. This adds four columns:
+
+    - zori_coc: CoC-level ZORI (yearly rent index)
+    - zori_coverage_ratio: Coverage of base geography weights (0-1)
+    - zori_is_eligible: Boolean eligibility flag based on coverage threshold
+    - rent_to_income: ZORI divided by monthly median household income
+
+    A CoC-year is ZORI-eligible if its coverage_ratio >= --zori-min-coverage
+    (default 0.90). Ineligible observations will have null zori_coc and
+    rent_to_income values.
+
+    Prerequisites for ZORI integration:
+    - Run 'coclab ingest-zori' to download ZORI data
+    - Run 'coclab aggregate-zori --to-yearly' to create yearly CoC-level ZORI
 
     Examples:
 
@@ -55,6 +139,13 @@ def build_panel_cmd(
         coclab build-panel --start 2018 --end 2024 --weighting area
 
         coclab build-panel --start 2020 --end 2024 --output custom_panel.parquet
+
+        coclab build-panel --start 2018 --end 2024 --include-zori
+
+        coclab build-panel --start 2018 --end 2024 --include-zori --zori-min-coverage 0.85
+
+        coclab build-panel --start 2018 --end 2024 --include-zori \\
+            --zori-yearly-path data/curated/rents/coc_zori_yearly.parquet
     """
     from coclab.panel import AlignmentPolicy, build_panel, save_panel
     from coclab.panel.policies import default_acs_vintage, default_boundary_vintage
@@ -77,7 +168,43 @@ def build_panel_cmd(
         )
         raise typer.Exit(1)
 
+    # Validate ZORI coverage threshold
+    if not 0.0 <= zori_min_coverage <= 1.0:
+        typer.echo(
+            f"Error: --zori-min-coverage must be between 0.0 and 1.0, got {zori_min_coverage}.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    # Validate ZORI data availability if --include-zori is set
+    resolved_zori_path: Path | None = None
+    if include_zori:
+        resolved_zori_path = _resolve_zori_yearly_path(zori_yearly_path)
+        if resolved_zori_path is None:
+            typer.echo(
+                "Error: --include-zori was specified but no ZORI yearly data is available.",
+                err=True,
+            )
+            typer.echo("")
+            typer.echo("To generate ZORI yearly data, run:")
+            typer.echo("  coclab ingest-zori --geography county")
+            typer.echo(
+                "  coclab aggregate-zori --boundary <VINTAGE> --counties <YEAR> "
+                "--acs <ACS_VINTAGE> --to-yearly"
+            )
+            typer.echo("")
+            if zori_yearly_path:
+                typer.echo(f"Specified path does not exist: {zori_yearly_path}")
+            else:
+                typer.echo(
+                    "No yearly ZORI file found in default location: data/curated/rents/"
+                )
+            raise typer.Exit(1)
+        typer.echo(f"ZORI yearly data: {resolved_zori_path}")
+
     typer.echo(f"Building panel for {start}-{end} with {weighting} weighting...")
+    if include_zori:
+        typer.echo(f"  ZORI integration enabled (min coverage: {zori_min_coverage:.2f})")
 
     # Create alignment policy
     policy = AlignmentPolicy(
@@ -108,7 +235,6 @@ def build_panel_cmd(
             output_dir = output.parent
             output_dir.mkdir(parents=True, exist_ok=True)
 
-            from coclab.panel.assemble import PANEL_COLUMNS
             from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
 
             provenance = ProvenanceBlock(
@@ -164,6 +290,40 @@ def build_panel_cmd(
         if changes > 0:
             typer.echo("")
             typer.echo(f"Boundary Changes: {int(changes)} observations had boundary changes")
+
+    # ZORI integration summary (if enabled)
+    if include_zori:
+        typer.echo("")
+        typer.echo("ZORI Integration:")
+        typer.echo(f"  Source file: {resolved_zori_path}")
+        typer.echo(f"  Coverage threshold: {zori_min_coverage:.2f}")
+
+        # Report ZORI statistics if columns are present
+        if "zori_coc" in panel_df.columns:
+            zori_with_data = panel_df["zori_coc"].notna().sum()
+            total_rows = len(panel_df)
+            typer.echo(f"  CoC-years with ZORI data: {zori_with_data} / {total_rows}")
+
+            # Count by unique CoCs
+            cocs_with_zori = panel_df.loc[panel_df["zori_coc"].notna(), "coc_id"].nunique()
+            total_cocs = panel_df["coc_id"].nunique()
+            typer.echo(f"  CoCs with any ZORI data: {cocs_with_zori} / {total_cocs}")
+        else:
+            typer.echo("  Note: ZORI columns not yet computed (Agent A integration pending)")
+
+        if "zori_is_eligible" in panel_df.columns:
+            eligible_count = panel_df["zori_is_eligible"].sum()
+            typer.echo(f"  ZORI-eligible observations: {int(eligible_count)}")
+
+        if "rent_to_income" in panel_df.columns:
+            rti_count = panel_df["rent_to_income"].notna().sum()
+            typer.echo(f"  Observations with rent_to_income: {rti_count}")
+
+            if rti_count > 0:
+                rti_mean = panel_df["rent_to_income"].mean()
+                rti_median = panel_df["rent_to_income"].median()
+                typer.echo(f"  Mean rent_to_income: {rti_mean:.3f}")
+                typer.echo(f"  Median rent_to_income: {rti_median:.3f}")
 
     typer.echo("")
     typer.echo(f"Output: {output_path}")

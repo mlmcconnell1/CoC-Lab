@@ -22,6 +22,13 @@ Panel Schema (Canonical Columns)
 - boundary_changed: bool - did boundary change from prior year?
 - source: = "coclab_panel"
 
+ZORI-Extended Columns (when --include-zori is enabled)
+------------------------------------------------------
+- zori_coc: CoC-level ZORI (yearly)
+- zori_coverage_ratio: Coverage of base geography weights
+- zori_is_eligible: Boolean eligibility flag (reserved for Agent C)
+- rent_to_income: ZORI divided by monthly median income
+
 Usage
 -----
     from coclab.panel.assemble import build_panel, save_panel
@@ -31,6 +38,9 @@ Usage
 
     # Save to curated output
     output_path = save_panel(panel_df, 2020, 2024)
+
+    # Build a panel with ZORI integration
+    panel_df = build_panel(2020, 2024, include_zori=True)
 """
 
 from __future__ import annotations
@@ -41,7 +51,15 @@ from typing import Literal
 
 import pandas as pd
 
-from coclab.panel.policies import AlignmentPolicy, DEFAULT_POLICY
+from coclab.panel.policies import DEFAULT_POLICY, AlignmentPolicy
+from coclab.panel.zori_eligibility import (
+    DEFAULT_ZORI_MIN_COVERAGE,
+    ZoriProvenance,
+    add_provenance_columns,
+    apply_zori_eligibility,
+    compute_rent_to_income,
+    summarize_zori_eligibility,
+)
 from coclab.pit.registry import get_pit_path
 from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
 
@@ -51,6 +69,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_PIT_DIR = Path("data/curated/pit")
 DEFAULT_MEASURES_DIR = Path("data/curated/measures")
 DEFAULT_PANEL_DIR = Path("data/curated/panel")
+DEFAULT_RENTS_DIR = Path("data/curated/rents")
 
 # Canonical panel columns in desired order
 PANEL_COLUMNS = [
@@ -70,6 +89,22 @@ PANEL_COLUMNS = [
     "coverage_ratio",
     "boundary_changed",
     "source",
+]
+
+# Additional columns added when ZORI is enabled
+ZORI_COLUMNS = [
+    "zori_coc",
+    "zori_coverage_ratio",
+    "zori_is_eligible",
+    "zori_excluded_reason",
+    "rent_to_income",
+]
+
+# Provenance columns added when ZORI is enabled
+ZORI_PROVENANCE_COLUMNS = [
+    "rent_metric",
+    "rent_alignment",
+    "zori_min_coverage",
 ]
 
 
@@ -127,7 +162,8 @@ def _load_pit_for_year(
                 df = pd.read_parquet(canonical_path)
             else:
                 logger.warning(f"No PIT data found for year {year}")
-                return pd.DataFrame(columns=["coc_id", "pit_total", "pit_sheltered", "pit_unsheltered"])
+                cols = ["coc_id", "pit_total", "pit_sheltered", "pit_unsheltered"]
+                return pd.DataFrame(columns=cols)
 
     # Standardize column names and select relevant columns
     if "pit_year" in df.columns:
@@ -187,7 +223,8 @@ def _load_acs_measures(
     measures_dir = measures_dir or DEFAULT_MEASURES_DIR
 
     # Try weighting-specific file first
-    weighting_path = measures_dir / f"coc_measures__{boundary_vintage}__{acs_vintage}__{weighting}.parquet"
+    weighting_fname = f"coc_measures__{boundary_vintage}__{acs_vintage}__{weighting}.parquet"
+    weighting_path = measures_dir / weighting_fname
     generic_path = measures_dir / f"coc_measures__{boundary_vintage}__{acs_vintage}.parquet"
 
     measures_path = None
@@ -240,6 +277,150 @@ def _load_acs_measures(
     return df
 
 
+def _load_zori_yearly(
+    zori_yearly_path: Path | str | None = None,
+    rents_dir: Path | None = None,
+) -> pd.DataFrame | None:
+    """Load yearly ZORI data for panel integration.
+
+    Attempts to load yearly ZORI data from the provided path or by
+    discovering the latest available file in the rents directory.
+
+    Parameters
+    ----------
+    zori_yearly_path : Path or str, optional
+        Explicit path to yearly ZORI parquet file.
+        If provided, this takes precedence over auto-discovery.
+    rents_dir : Path, optional
+        Directory to search for yearly ZORI files.
+        Defaults to 'data/curated/rents'.
+
+    Returns
+    -------
+    pd.DataFrame or None
+        ZORI yearly data with columns: coc_id, year, zori_coc, coverage_ratio.
+        Returns None if no data is found.
+
+    Notes
+    -----
+    When auto-discovering, looks for files matching pattern:
+    coc_zori_yearly__*.parquet
+
+    The coverage_ratio column from ZORI is renamed to zori_coverage_ratio
+    to avoid collision with the ACS coverage_ratio column.
+    """
+    rents_dir = rents_dir or DEFAULT_RENTS_DIR
+
+    if zori_yearly_path is not None:
+        path = Path(zori_yearly_path)
+        if not path.exists():
+            logger.warning(f"Specified ZORI yearly path not found: {path}")
+            return None
+        logger.info(f"Loading ZORI yearly from explicit path: {path}")
+    else:
+        # Auto-discover: look for coc_zori_yearly__* files
+        pattern = "coc_zori_yearly__*.parquet"
+        candidates = sorted(rents_dir.glob(pattern), reverse=True)
+        if not candidates:
+            logger.info(f"No yearly ZORI files found in {rents_dir}")
+            return None
+        # Use the most recent (alphabetically last, which is typically newest vintage)
+        path = candidates[0]
+        logger.info(f"Auto-discovered ZORI yearly file: {path}")
+
+    df = pd.read_parquet(path)
+
+    # Validate required columns
+    required_cols = {"coc_id", "year", "zori_coc", "coverage_ratio"}
+    missing_cols = required_cols - set(df.columns)
+    if missing_cols:
+        logger.warning(
+            f"ZORI yearly file missing required columns: {missing_cols}. "
+            f"Available columns: {list(df.columns)}"
+        )
+        return None
+
+    # Rename columns to avoid collision with ACS columns
+    rename_map = {"coverage_ratio": "zori_coverage_ratio"}
+    if "max_geo_contribution" in df.columns:
+        rename_map["max_geo_contribution"] = "zori_max_geo_contribution"
+    df = df.rename(columns=rename_map)
+
+    # Select relevant columns
+    result_cols = ["coc_id", "year", "zori_coc", "zori_coverage_ratio"]
+    # Include optional metadata columns if present
+    for col in ["method", "zori_max_geo_contribution", "geo_count"]:
+        if col in df.columns:
+            result_cols.append(col)
+
+    df = df[result_cols].copy()
+    df["coc_id"] = df["coc_id"].astype(str)
+    df["year"] = df["year"].astype(int)
+
+    logger.info(
+        f"Loaded ZORI yearly: {len(df)} rows, "
+        f"{df['coc_id'].nunique()} CoCs, "
+        f"{df['year'].nunique()} years"
+    )
+
+    return df
+
+
+def _compute_rent_to_income(
+    zori_coc: pd.Series,
+    median_household_income: pd.Series,
+) -> pd.Series:
+    """Compute rent-to-income ratio with proper null handling.
+
+    The rent-to-income ratio is computed as:
+        rent_to_income = zori_coc / (median_household_income / 12.0)
+
+    This represents the fraction of monthly income that would be spent on rent.
+
+    Parameters
+    ----------
+    zori_coc : pd.Series
+        CoC-level ZORI (monthly rent).
+    median_household_income : pd.Series
+        Annual median household income.
+
+    Returns
+    -------
+    pd.Series
+        Rent-to-income ratio with null values where:
+        - zori_coc is null
+        - median_household_income is null or zero
+
+    Notes
+    -----
+    A ratio of 0.30 means 30% of monthly income is spent on rent.
+    HUD considers >0.30 as "cost-burdened" and >0.50 as "severely cost-burdened".
+    """
+
+    # Compute monthly income
+    monthly_income = median_household_income / 12.0
+
+    # Initialize result with nulls
+    result = pd.Series(index=zori_coc.index, dtype=float)
+
+    # Mask for valid computation:
+    # - zori_coc must not be null
+    # - median_household_income must not be null
+    # - median_household_income must not be zero
+    valid_mask = (
+        zori_coc.notna() &
+        median_household_income.notna() &
+        (median_household_income != 0)
+    )
+
+    # Compute only for valid rows
+    result.loc[valid_mask] = (
+        zori_coc.loc[valid_mask] / monthly_income.loc[valid_mask]
+    )
+
+    return result
+
+
 def _detect_boundary_changes(df: pd.DataFrame) -> pd.Series:
     """Detect boundary changes between consecutive years for each CoC.
 
@@ -289,12 +470,17 @@ def build_panel(
     policy: AlignmentPolicy | None = None,
     pit_dir: Path | None = None,
     measures_dir: Path | None = None,
+    include_zori: bool = False,
+    zori_yearly_path: Path | str | None = None,
+    rents_dir: Path | None = None,
+    zori_min_coverage: float = DEFAULT_ZORI_MIN_COVERAGE,
 ) -> pd.DataFrame:
     """Build analysis-ready CoC x year panel.
 
     Joins PIT counts with ACS measures for each year in the range,
     using the specified alignment policy to determine which boundary
-    and ACS vintages to use.
+    and ACS vintages to use. Optionally includes ZORI rent data and
+    computes the rent_to_income derived metric.
 
     Parameters
     ----------
@@ -309,6 +495,19 @@ def build_panel(
         Directory containing curated PIT files.
     measures_dir : Path, optional
         Directory containing curated ACS measure files.
+    include_zori : bool, optional
+        If True, include ZORI data and compute rent_to_income.
+        Default is False.
+    zori_yearly_path : Path or str, optional
+        Explicit path to yearly ZORI parquet file.
+        If None and include_zori=True, auto-discovers from rents_dir.
+    rents_dir : Path, optional
+        Directory containing curated rent files.
+        Defaults to 'data/curated/rents'.
+    zori_min_coverage : float, optional
+        Minimum coverage ratio for ZORI eligibility. CoC-years with coverage
+        below this threshold will have zori_coc and rent_to_income set to null.
+        Default is 0.90 (90%).
 
     Returns
     -------
@@ -320,10 +519,15 @@ def build_panel(
         median_household_income, median_gross_rent, coverage_ratio,
         boundary_changed, source.
 
+        When include_zori=True, also includes:
+        zori_coc, zori_coverage_ratio, zori_is_eligible, zori_excluded_reason,
+        rent_to_income, rent_metric, rent_alignment, zori_min_coverage.
+
     Raises
     ------
     ValueError
         If start_year > end_year.
+        If include_zori=True but no ZORI data is available.
 
     Notes
     -----
@@ -333,6 +537,13 @@ def build_panel(
       be included (PIT data is the anchor).
     - The boundary_changed column indicates whether the boundary vintage
       changed from the prior year for each CoC.
+    - When ZORI is included, rent_to_income is computed as:
+      zori_coc / (median_household_income / 12.0)
+    - rent_to_income is null when zori_coc is null, income is null, or
+      income is zero.
+    - ZORI eligibility is determined by coverage_ratio >= zori_min_coverage.
+    - CoCs with zero coverage are explicitly excluded (not imputed).
+    - High dominance generates warnings but is NOT a hard exclusion.
     """
     if start_year > end_year:
         raise ValueError(f"start_year ({start_year}) must be <= end_year ({end_year})")
@@ -342,6 +553,21 @@ def build_panel(
 
     logger.info(f"Building panel for {start_year}-{end_year}")
     logger.info(f"Policy: weighting={policy.weighting_method}")
+
+    # Load ZORI data if requested
+    zori_df = None
+    if include_zori:
+        logger.info("ZORI integration enabled, loading yearly ZORI data...")
+        zori_df = _load_zori_yearly(
+            zori_yearly_path=zori_yearly_path,
+            rents_dir=rents_dir,
+        )
+        if zori_df is None:
+            raise ValueError(
+                "ZORI integration requested but no ZORI yearly data available. "
+                "Run 'coclab aggregate-zori --to-yearly' first, or provide "
+                "--zori-yearly-path explicitly."
+            )
 
     year_dfs = []
 
@@ -421,8 +647,84 @@ def build_panel(
         if col not in panel_df.columns:
             panel_df[col] = pd.NA
 
-    # Reorder columns to canonical order
-    panel_df = panel_df[PANEL_COLUMNS].copy()
+    # =========================================================================
+    # ZORI Integration (if enabled)
+    # =========================================================================
+    if include_zori and zori_df is not None:
+        logger.info("Integrating ZORI data into panel...")
+
+        # Left join with ZORI yearly data
+        panel_df = panel_df.merge(
+            zori_df,
+            on=["coc_id", "year"],
+            how="left",
+        )
+
+        # Determine the rent alignment method from the ZORI data
+        rent_alignment = "pit_january"  # Default
+        if "method" in zori_df.columns:
+            methods = zori_df["method"].dropna().unique()
+            if len(methods) == 1:
+                rent_alignment = methods[0]
+
+        # Apply ZORI eligibility rules (Agent C logic)
+        # This adds zori_is_eligible, zori_excluded_reason, and nulls out
+        # ineligible rows
+        panel_df = apply_zori_eligibility(
+            panel_df,
+            zori_col="zori_coc",
+            coverage_col="zori_coverage_ratio",
+            min_coverage=zori_min_coverage,
+            dominance_col="zori_max_geo_contribution",
+        )
+
+        # Compute rent_to_income for eligible rows
+        panel_df = compute_rent_to_income(
+            panel_df,
+            zori_col="zori_coc",
+            income_col="median_household_income",
+            eligibility_col="zori_is_eligible",
+        )
+
+        # Create provenance metadata for ZORI integration
+        zori_provenance = ZoriProvenance(
+            rent_alignment=rent_alignment,
+            zori_min_coverage=zori_min_coverage,
+        )
+
+        # Add provenance columns
+        panel_df = add_provenance_columns(panel_df, zori_provenance)
+
+        # Remove temporary columns that shouldn't be in final output
+        cols_to_drop = ["method", "geo_count"]
+        for col in cols_to_drop:
+            if col in panel_df.columns:
+                panel_df = panel_df.drop(columns=[col])
+
+        # Log ZORI integration summary
+        summary = summarize_zori_eligibility(panel_df)
+        logger.info(
+            f"ZORI integration complete: "
+            f"{summary.get('zori_eligible_count', 0)} eligible observations "
+            f"({summary.get('zori_eligible_pct', 0):.1f}%)"
+        )
+
+        # Add ZORI columns to the ordering
+        all_columns = PANEL_COLUMNS + ZORI_COLUMNS + ZORI_PROVENANCE_COLUMNS
+        # Also keep zori_max_geo_contribution if present
+        if "zori_max_geo_contribution" in panel_df.columns:
+            all_columns.append("zori_max_geo_contribution")
+    else:
+        all_columns = PANEL_COLUMNS
+
+    # Ensure all required columns exist
+    for col in all_columns:
+        if col not in panel_df.columns:
+            panel_df[col] = pd.NA
+
+    # Reorder columns to canonical order (only keep columns that exist)
+    final_columns = [col for col in all_columns if col in panel_df.columns]
+    panel_df = panel_df[final_columns].copy()
 
     # Final dtype cleanup
     panel_df["coc_id"] = panel_df["coc_id"].astype(str)
@@ -454,6 +756,7 @@ def save_panel(
     end_year: int,
     output_dir: Path | None = None,
     policy: AlignmentPolicy | None = None,
+    zori_provenance: ZoriProvenance | None = None,
 ) -> Path:
     """Save panel DataFrame to Parquet with embedded provenance.
 
@@ -469,6 +772,8 @@ def save_panel(
         Output directory. Defaults to 'data/curated/panel'.
     policy : AlignmentPolicy, optional
         Policy used to build the panel (for provenance).
+    zori_provenance : ZoriProvenance, optional
+        ZORI integration provenance (for provenance).
 
     Returns
     -------
@@ -483,6 +788,7 @@ def save_panel(
     - Panel date range
     - Row and CoC counts
     - Policy settings (if provided)
+    - ZORI provenance (if provided)
     """
     output_dir = output_dir or DEFAULT_PANEL_DIR
     output_dir = Path(output_dir)
@@ -503,6 +809,14 @@ def save_panel(
 
     if policy is not None:
         extra["policy"] = policy.to_dict()
+
+    # Add ZORI provenance if provided
+    if zori_provenance is not None:
+        extra["zori"] = zori_provenance.to_dict()
+        # Also add ZORI eligibility summary from the data
+        summary = summarize_zori_eligibility(df)
+        if summary.get("zori_integrated"):
+            extra["zori_summary"] = summary
 
     # Extract vintages from data if available
     boundary_vintage = None
