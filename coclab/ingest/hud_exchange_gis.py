@@ -43,8 +43,8 @@ HUD_EXCHANGE_GDB_URL_TEMPLATE = (
 )
 
 # Pagination settings for ArcGIS API
-# Smaller page size to avoid timeout on large geometry payloads
-ARCGIS_PAGE_SIZE = 250
+# Smaller page size for more frequent progress updates
+ARCGIS_PAGE_SIZE = 50
 ARCGIS_REQUEST_TIMEOUT = 120.0
 
 # Known field name mappings across different vintage years
@@ -142,14 +142,14 @@ def _fetch_arcgis_page(
             last_error = e
             # Retry on 5xx errors (server-side issues)
             if e.response.status_code >= 500 and attempt < max_retries - 1:
-                time.sleep(2 ** attempt)  # Exponential backoff
+                time.sleep(2**attempt)  # Exponential backoff
                 continue
             raise
         except (httpx.TimeoutException, httpx.RemoteProtocolError) as e:
             # Retry on timeout or connection reset errors
             last_error = e
             if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
                 continue
             raise
 
