@@ -856,7 +856,7 @@ from coclab.xwalks import (
 
 # Build area-weighted tract crosswalk
 crosswalk = build_coc_tract_crosswalk(
-    coc_gdf: gpd.GeoDataFrame,      # CoC boundaries with 'coc_number' column
+    coc_gdf: gpd.GeoDataFrame,      # CoC boundaries with 'coc_id' column
     tract_gdf: gpd.GeoDataFrame,    # Tract geometries with 'GEOID' column
     boundary_vintage: str,           # e.g., "2025"
     tract_vintage: str,              # e.g., "2023"

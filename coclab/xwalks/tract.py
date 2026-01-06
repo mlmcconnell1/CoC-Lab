@@ -1,5 +1,6 @@
 """CoC-Tract area-weighted crosswalk generation."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 import geopandas as gpd
@@ -11,12 +12,18 @@ from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
 # ESRI:102003 - USA Contiguous Albers Equal Area Conic
 ALBERS_EQUAL_AREA_CRS = "ESRI:102003"
 
+# Default batch size for progress reporting
+DEFAULT_BATCH_SIZE = 40
+
 
 def build_coc_tract_crosswalk(
     coc_gdf: gpd.GeoDataFrame,
     tract_gdf: gpd.GeoDataFrame,
     boundary_vintage: str,
     tract_vintage: str,
+    *,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> pd.DataFrame:
     """Build area-weighted crosswalk between CoC boundaries and census tracts.
 
@@ -26,13 +33,18 @@ def build_coc_tract_crosswalk(
     Parameters
     ----------
     coc_gdf : gpd.GeoDataFrame
-        CoC boundary geometries with 'coc_number' column.
+        CoC boundary geometries with 'coc_id' column.
     tract_gdf : gpd.GeoDataFrame
         Census tract geometries with 'GEOID' column.
     boundary_vintage : str
         Version identifier for CoC boundaries (e.g., "2024").
     tract_vintage : str
         Version identifier for census tracts (e.g., "2020").
+    batch_size : int
+        Number of CoCs to process per batch for progress reporting.
+        Set to 0 to process all at once (no batching).
+    progress_callback : Callable[[int, int], None] | None
+        Optional callback called after each batch with (completed, total) counts.
 
     Returns
     -------
@@ -48,8 +60,8 @@ def build_coc_tract_crosswalk(
         - tract_area
     """
     # Ensure required columns exist
-    if "coc_number" not in coc_gdf.columns:
-        raise ValueError("coc_gdf must have 'coc_number' column")
+    if "coc_id" not in coc_gdf.columns:
+        raise ValueError("coc_gdf must have 'coc_id' column")
     if "GEOID" not in tract_gdf.columns:
         raise ValueError("tract_gdf must have 'GEOID' column")
 
@@ -61,13 +73,31 @@ def build_coc_tract_crosswalk(
     tract_proj = tract_proj.copy()
     tract_proj["tract_area"] = tract_proj.geometry.area
 
-    # Compute intersection with gpd.overlay()
-    intersections = gpd.overlay(
-        coc_proj[["coc_number", "geometry"]],
-        tract_proj[["GEOID", "tract_area", "geometry"]],
-        how="intersection",
-        keep_geom_type=False,
-    )
+    n_cocs = len(coc_proj)
+
+    # Process in batches if batch_size > 0 and we have a callback
+    if batch_size > 0 and progress_callback is not None:
+        intersection_results = []
+        for i in range(0, n_cocs, batch_size):
+            batch = coc_proj.iloc[i : i + batch_size]
+            batch_intersections = gpd.overlay(
+                batch[["coc_id", "geometry"]],
+                tract_proj[["GEOID", "tract_area", "geometry"]],
+                how="intersection",
+                keep_geom_type=False,
+            )
+            intersection_results.append(batch_intersections)
+            progress_callback(min(i + batch_size, n_cocs), n_cocs)
+
+        intersections = pd.concat(intersection_results, ignore_index=True)
+    else:
+        # Single bulk operation (faster, no progress)
+        intersections = gpd.overlay(
+            coc_proj[["coc_id", "geometry"]],
+            tract_proj[["GEOID", "tract_area", "geometry"]],
+            how="intersection",
+            keep_geom_type=False,
+        )
 
     # Calculate intersection areas
     intersections["intersection_area"] = intersections.geometry.area
@@ -80,7 +110,7 @@ def build_coc_tract_crosswalk(
     # Build crosswalk DataFrame
     crosswalk = pd.DataFrame(
         {
-            "coc_id": intersections["coc_number"],
+            "coc_id": intersections["coc_id"],
             "boundary_vintage": boundary_vintage,
             "tract_geoid": intersections["GEOID"],
             "tract_vintage": tract_vintage,

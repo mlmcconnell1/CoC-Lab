@@ -38,7 +38,7 @@ def simple_coc_gdf() -> gpd.GeoDataFrame:
     """
     return gpd.GeoDataFrame(
         {
-            "coc_number": ["XX-500"],
+            "coc_id": ["XX-500"],
             "geometry": [box(0, 0, 10, 10)],
         },
         crs="EPSG:4326",
@@ -74,7 +74,7 @@ def multi_coc_gdf() -> gpd.GeoDataFrame:
     """
     return gpd.GeoDataFrame(
         {
-            "coc_number": ["XX-500", "XX-501"],
+            "coc_id": ["XX-500", "XX-501"],
             "geometry": [box(0, 0, 10, 10), box(10, 0, 20, 10)],
         },
         crs="EPSG:4326",
@@ -532,7 +532,7 @@ def test_empty_intersection():
     in the crosswalk.
     """
     coc_gdf = gpd.GeoDataFrame(
-        {"coc_number": ["XX-500"], "geometry": [box(0, 0, 10, 10)]},
+        {"coc_id": ["XX-500"], "geometry": [box(0, 0, 10, 10)]},
         crs="EPSG:4326",
     )
     # Tract completely outside CoC
@@ -554,7 +554,7 @@ def test_tract_fully_contained():
     Uses small coordinates to avoid projection distortion issues.
     """
     coc_gdf = gpd.GeoDataFrame(
-        {"coc_number": ["XX-500"], "geometry": [box(0, 0, 5, 5)]},
+        {"coc_id": ["XX-500"], "geometry": [box(0, 0, 5, 5)]},
         crs="EPSG:4326",
     )
     tract_gdf = gpd.GeoDataFrame(
@@ -571,7 +571,7 @@ def test_tract_fully_contained():
 
 def test_missing_columns_raises():
     """Verify appropriate errors for missing required columns."""
-    # Missing coc_number
+    # Missing coc_id
     bad_coc = gpd.GeoDataFrame(
         {"bad_col": ["XX-500"], "geometry": [box(0, 0, 10, 10)]},
         crs="EPSG:4326",
@@ -581,12 +581,12 @@ def test_missing_columns_raises():
         crs="EPSG:4326",
     )
 
-    with pytest.raises(ValueError, match="coc_number"):
+    with pytest.raises(ValueError, match="coc_id"):
         build_coc_tract_crosswalk(bad_coc, good_tract, "2024", "2020")
 
     # Missing GEOID
     good_coc = gpd.GeoDataFrame(
-        {"coc_number": ["XX-500"], "geometry": [box(0, 0, 10, 10)]},
+        {"coc_id": ["XX-500"], "geometry": [box(0, 0, 10, 10)]},
         crs="EPSG:4326",
     )
     bad_tract = gpd.GeoDataFrame(

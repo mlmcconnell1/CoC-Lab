@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Annotated
 
+import click
 import geopandas as gpd
 import typer
 
@@ -108,14 +109,23 @@ def build_xwalks(
     if "geoid" in tract_gdf.columns and "GEOID" not in tract_gdf.columns:
         tract_gdf = tract_gdf.rename(columns={"geoid": "GEOID"})
 
-    # Build tract crosswalk
-    typer.echo("Building tract crosswalk (this may take a few minutes)...")
-    tract_xwalk = build_coc_tract_crosswalk(
-        coc_gdf=coc_gdf,
-        tract_gdf=tract_gdf,
-        boundary_vintage=boundary,
-        tract_vintage=str(tracts),
-    )
+    # Build tract crosswalk with progress bar
+    n_cocs = len(coc_gdf)
+    with click.progressbar(
+        length=n_cocs,
+        label="Building tract crosswalk",
+        show_pos=True,
+    ) as progress:
+        def update_progress(completed: int, total: int) -> None:
+            progress.update(completed - progress.pos)
+
+        tract_xwalk = build_coc_tract_crosswalk(
+            coc_gdf=coc_gdf,
+            tract_gdf=tract_gdf,
+            boundary_vintage=boundary,
+            tract_vintage=str(tracts),
+            progress_callback=update_progress,
+        )
 
     # Save tract crosswalk
     tract_output = save_crosswalk(

@@ -23,7 +23,7 @@ def build_coc_county_crosswalk(
     Parameters
     ----------
     coc_gdf : gpd.GeoDataFrame
-        CoC boundary geometries with 'coc_number' column.
+        CoC boundary geometries with 'coc_id' column.
     county_gdf : gpd.GeoDataFrame
         County geometries with 'GEOID' column.
     boundary_vintage : str
@@ -39,8 +39,8 @@ def build_coc_county_crosswalk(
         - area_share
     """
     # Ensure required columns exist
-    if "coc_number" not in coc_gdf.columns:
-        raise ValueError("coc_gdf must have 'coc_number' column")
+    if "coc_id" not in coc_gdf.columns:
+        raise ValueError("coc_gdf must have 'coc_id' column")
     if "GEOID" not in county_gdf.columns:
         raise ValueError("county_gdf must have 'GEOID' column")
 
@@ -54,7 +54,7 @@ def build_coc_county_crosswalk(
 
     # Compute intersection with gpd.overlay()
     intersections = gpd.overlay(
-        coc_proj[["coc_number", "geometry"]],
+        coc_proj[["coc_id", "geometry"]],
         county_proj[["GEOID", "county_area", "geometry"]],
         how="intersection",
         keep_geom_type=False,
@@ -71,7 +71,7 @@ def build_coc_county_crosswalk(
     # Build crosswalk DataFrame
     crosswalk = pd.DataFrame(
         {
-            "coc_id": intersections["coc_number"],
+            "coc_id": intersections["coc_id"],
             "boundary_vintage": boundary_vintage,
             "county_fips": intersections["GEOID"],
             "area_share": intersections["area_share"],
