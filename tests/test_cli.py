@@ -31,12 +31,12 @@ class TestIngestCommand:
         mock_ingest.return_value = Path("data/curated/coc_boundaries__2025.parquet")
 
         result = runner.invoke(
-            app, ["ingest", "--source", "hud_exchange", "--vintage", "2025"]
+            app, ["ingest", "--source", "hud_exchange", "--vintage", "2025", "--force"]
         )
 
         assert result.exit_code == 0
         assert "Successfully ingested" in result.output
-        mock_ingest.assert_called_once_with("2025")
+        mock_ingest.assert_called_once_with("2025", show_progress=True)
 
     @patch("coclab.ingest.hud_exchange_gis.ingest_hud_exchange")
     def test_ingest_hud_exchange_failure(self, mock_ingest):
@@ -44,7 +44,7 @@ class TestIngestCommand:
         mock_ingest.side_effect = ValueError("Download failed")
 
         result = runner.invoke(
-            app, ["ingest", "--source", "hud_exchange", "--vintage", "2025"]
+            app, ["ingest", "--source", "hud_exchange", "--vintage", "2025", "--force"]
         )
 
         assert result.exit_code == 1
