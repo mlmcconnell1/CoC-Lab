@@ -166,8 +166,8 @@ def parse_zori_county(raw_path: Path) -> pd.DataFrame:
         value_name="zori",
     )
 
-    # Parse dates - Zillow uses YYYY-MM-DD format
-    long_df["date"] = pd.to_datetime(long_df["date_str"], errors="coerce")
+    # Parse dates - Zillow uses YYYY-MM-DD format (end-of-month dates)
+    long_df["date"] = pd.to_datetime(long_df["date_str"], format="%Y-%m-%d", errors="coerce")
     long_df = long_df.dropna(subset=["date"])
 
     # Rename columns
@@ -226,8 +226,8 @@ def parse_zori_zip(raw_path: Path) -> pd.DataFrame:
         value_name="zori",
     )
 
-    # Parse dates
-    long_df["date"] = pd.to_datetime(long_df["date_str"], errors="coerce")
+    # Parse dates - Zillow uses YYYY-MM-DD format (end-of-month dates)
+    long_df["date"] = pd.to_datetime(long_df["date_str"], format="%Y-%m-%d", errors="coerce")
     long_df = long_df.dropna(subset=["date"])
 
     # Rename columns
@@ -281,17 +281,20 @@ def _validate_monthly_continuity(df: pd.DataFrame, max_warnings: int = 10) -> No
             if hasattr(curr_date, "date"):
                 curr_date = curr_date.date()
 
-            # Calculate expected next month
+            # Calculate expected next month (by year/month, ignoring day)
+            # Zillow uses end-of-month dates, so compare by year/month only
             if prev_date.month == 12:
-                expected = date(prev_date.year + 1, 1, 1)
+                expected_year, expected_month = prev_date.year + 1, 1
             else:
-                expected = date(prev_date.year, prev_date.month + 1, 1)
+                expected_year, expected_month = prev_date.year, prev_date.month + 1
 
-            if curr_date != expected:
+            if curr_date.year != expected_year or curr_date.month != expected_month:
                 warning_count += 1
                 if warning_count <= max_warnings:
                     logger.warning(
-                        f"Gap in ZORI series for {geo_id}: {prev_date} -> {curr_date}"
+                        f"Gap in ZORI series for {geo_id}: "
+                        f"{prev_date.year}-{prev_date.month:02d} -> "
+                        f"{curr_date.year}-{curr_date.month:02d}"
                     )
 
     if warning_count > max_warnings:
