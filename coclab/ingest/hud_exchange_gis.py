@@ -534,4 +534,15 @@ def ingest_hud_exchange(
     output_path = curated_boundary_path(boundary_vintage, base_dir=curated_dir)
     write_geoparquet(gdf, output_path)
 
+    # Register in boundary registry
+    from coclab.registry import register_vintage
+
+    source = "hud_arcgis_featureserver" if use_arcgis else "hud_exchange_gis_tools"
+    register_vintage(
+        boundary_vintage=boundary_vintage,
+        source=source,
+        path=output_path,
+        feature_count=len(gdf),
+    )
+
     return output_path
