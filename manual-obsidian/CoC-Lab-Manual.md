@@ -2392,6 +2392,10 @@ The manifest provides machine-readable provenance and file integrity information
 | `key_columns` | array | List of important column names |
 | `provenance` | object | Optional provenance metadata from source file |
 
+> **Implementation Notes:**
+> - `sha256` is computed on the **copied bundle file bytes**, not the source file. This ensures the hash matches what downstream consumers will read from the bundle, regardless of copy mode (copy, hardlink, or symlink).
+> - `path` values are **bundle-relative** (e.g., `data/panels/coc_panel__2018_2024.parquet`), not absolute paths or paths relative to the source repository. All artifact paths should be resolvable from the bundle root directory.
+
 ### Exit Codes
 
 | Code | Meaning |
