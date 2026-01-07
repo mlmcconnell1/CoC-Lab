@@ -16,6 +16,7 @@
 - [[#Methodology: ACS Aggregation to CoC Level]]
 - [[#Methodology: ZORI Aggregation to CoC Level]]
 - [[#Methodology: Panel Assembly (Phase 3)]]
+- [[#Bundle Layout and MANIFEST.json]]
 - [[#Module Reference]]
 - [[#Development]]
 
@@ -296,6 +297,8 @@ flowchart LR
     coclab --> ingest-zori
     coclab --> aggregate-zori
     coclab --> zori-diagnostics
+    coclab --> source-status
+    coclab --> export-bundle
 
     ingest --> |"--source hud_exchange"| HUD_EX[Download annual vintage]
     ingest --> |"--source hud_opendata"| HUD_OD[Fetch current snapshot]
@@ -319,6 +322,8 @@ flowchart LR
     list-measures --> LMEAS[List measure files]
     show-measures --> SMEAS[Display CoC measures]
     compare-vintages --> COMP[Diff boundary vintages]
+    source-status --> SRCSTAT[Display source registry status]
+    export-bundle --> EXPORT[Create analysis-ready bundle]
 ```
 
 ### `coclab ingest`
@@ -931,6 +936,62 @@ coclab source-status --type zori
 **Change Detection:**
 
 When `--check-changes` is used, the command identifies sources where the upstream data has changed between ingestions (different SHA-256 hashes). This helps detect silent updates to external data sources.
+
+### `coclab export-bundle`
+
+Export an analysis-ready bundle with MANIFEST.json for downstream analysis repositories.
+
+```bash
+# Basic export with default options
+coclab export-bundle --name my_analysis --panel data/curated/panels/coc_panel.parquet
+
+# Include inputs and use specific vintages
+coclab export-bundle --name replication --include panel,manifest,codebook,inputs \
+  --boundary-vintage 2025 --years 2011-2024
+
+# Create compressed archive
+coclab export-bundle --name archive --compress
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--name`, `-n` | Logical bundle name for metadata and documentation | Required |
+| `--out-dir`, `-o` | Output directory where export-N folders are created | `exports` |
+| `--panel`, `-p` | Explicit panel parquet path (inferred from curated if omitted) | Auto-infer |
+| `--include`, `-i` | Components to include (comma-separated) | `panel,manifest,codebook,diagnostics` |
+| `--boundary-vintage` | Boundary vintage (e.g., 2025) | None |
+| `--tracts-vintage` | Census tracts vintage (e.g., 2023) | None |
+| `--counties-vintage` | Counties vintage (e.g., 2023) | None |
+| `--acs-vintage` | ACS vintage (e.g., 2019-2023) | None |
+| `--years` | Year range (e.g., 2011-2024) | None |
+| `--copy-mode` | File copy mode: `copy`, `hardlink`, or `symlink` | `copy` |
+| `--compress` | Create .tar.gz archive of the bundle | `False` |
+| `--force`, `-f` | Create bundle even if identical manifest exists | `False` |
+
+**Include Components:**
+
+| Component | Description |
+|-----------|-------------|
+| `panel` | Primary panel parquet file(s) |
+| `inputs` | Boundaries, crosswalks, raw curated sources required to regenerate |
+| `derived` | Derived intermediate artifacts beyond the panel |
+| `diagnostics` | Diagnostic outputs |
+| `codebook` | Variable descriptions and schema documentation |
+| `manifest` | Always created; this flag controls whether it is also copied to `provenance/` |
+
+**Output:**
+- New export folder created: `{out-dir}/export-{n}/`
+- Each invocation creates a new numbered folder (export-1, export-2, ...) to preserve prior bundles
+- Summary of files exported by role and total size
+
+**Exit Codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `2` | Validation failure (missing panel, incompatible vintages, unreadable files) |
+| `3` | Filesystem failure (cannot create export directory, copy failure) |
+| `4` | Manifest failure (hashing/metadata extraction failure) |
 
 ---
 
@@ -2229,6 +2290,130 @@ Boundary changes are detected at annual resolution. Mid-year changes are assigne
 #### 3. Missing Data Handling
 
 CoCs missing from PIT or ACS for a given year are excluded from the panel for that year. Use `missingness_report()` to identify gaps.
+
+---
+
+## Bundle Layout and MANIFEST.json
+
+The `coclab export-bundle` command creates self-contained, analysis-ready bundles for downstream repositories. This section documents the bundle structure and manifest schema.
+
+### Bundle Directory Structure
+
+```
+export-{n}/
+  MANIFEST.json
+  README.md
+  data/
+    panels/
+    inputs/
+      boundaries/
+      xwalks/
+      pit/
+      rents/
+      acs/
+  diagnostics/
+  codebook/
+    schema.md
+    variables.csv
+```
+
+**Core Files:**
+
+| Path | Description |
+|------|-------------|
+| `MANIFEST.json` | Machine-readable manifest with file hashes and provenance |
+| `README.md` | Human-readable description of bundle contents and usage |
+| `data/panels/` | Primary analysis panel parquet file(s) |
+
+**Optional Directories (controlled by `--include`):**
+
+| Path | Include Flag | Description |
+|------|--------------|-------------|
+| `data/inputs/boundaries/` | `inputs` | CoC boundary GeoParquet files |
+| `data/inputs/xwalks/` | `inputs` | CoC-tract and CoC-county crosswalks |
+| `data/inputs/pit/` | `inputs` | PIT count parquet files |
+| `data/inputs/rents/` | `inputs` | ZORI rent data |
+| `data/inputs/acs/` | `inputs` | ACS demographic measures |
+| `diagnostics/` | `diagnostics` | Diagnostic outputs and quality reports |
+| `codebook/` | `codebook` | Variable documentation |
+
+### MANIFEST.json Schema
+
+The manifest provides machine-readable provenance and file integrity information:
+
+```json
+{
+  "bundle_name": "gbc_replication",
+  "export_id": "export-7",
+  "created_at_utc": "2026-01-07T21:15:03Z",
+  "coclab": {
+    "version": "0.9.3",
+    "git_commit": "abc1234",
+    "python": "3.11.6"
+  },
+  "parameters": {
+    "boundary_vintage": "2025",
+    "tracts_vintage": "2023",
+    "acs_vintage": "2019-2023",
+    "years": "2011-2024",
+    "copy_mode": "copy"
+  },
+  "artifacts": [...],
+  "sources": [...],
+  "notes": ""
+}
+```
+
+**Top-Level Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bundle_name` | string | Logical name provided via `--name` |
+| `export_id` | string | Folder name (e.g., `export-7`) |
+| `created_at_utc` | string | ISO 8601 timestamp |
+| `coclab.version` | string | CoC Lab package version |
+| `coclab.git_commit` | string | Git commit hash (if available) |
+| `coclab.python` | string | Python version |
+| `parameters` | object | Export configuration parameters |
+| `artifacts` | array | List of included files with metadata |
+| `sources` | array | External data source attributions |
+| `notes` | string | Optional user-provided notes |
+
+**Artifact Entry Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `role` | string | `panel`, `input`, `derived`, `diagnostic`, or `codebook` |
+| `path` | string | Relative path within bundle |
+| `sha256` | string | SHA-256 hash of file contents |
+| `bytes` | integer | File size in bytes |
+| `rows` | integer | Row count (for parquet/csv files) |
+| `columns` | integer | Column count |
+| `key_columns` | array | List of important column names |
+| `provenance` | object | Optional provenance metadata from source file |
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `2` | Validation failure (missing panel, incompatible vintages, unreadable files) |
+| `3` | Filesystem failure (cannot create export directory, copy failure) |
+| `4` | Manifest failure (hashing/metadata extraction failure) |
+
+### Using Bundles in Analysis Repositories
+
+Export bundles are designed for integration with version-controlled analysis repositories. Recommended workflow with DVC:
+
+```bash
+# In your analysis repository
+dvc init
+dvc add data/bundles/export-3
+git add data/bundles/export-3.dvc .gitignore
+git commit -m "Pin CoC Lab export bundle export-3"
+```
+
+All analysis code should reference paths within the bundle. The `MANIFEST.json` file pins exact file hashes for reproducibility.
 
 ---
 

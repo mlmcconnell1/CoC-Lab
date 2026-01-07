@@ -15,6 +15,7 @@ from coclab.cli.build_xwalks import build_xwalks
 from coclab.cli.compare_vintages import compare_vintages
 from coclab.cli.crosscheck_acs_population import crosscheck_acs_population
 from coclab.cli.diagnostics import diagnostics
+from coclab.cli.export_bundle import export_bundle
 from coclab.cli.ingest_acs_population import ingest_acs_population
 from coclab.cli.ingest_census import ingest_census
 from coclab.cli.ingest_pit import ingest_pit
@@ -80,6 +81,9 @@ app.command("verify-acs-population")(verify_acs_population)
 app.command("ingest-zori")(ingest_zori)
 app.command("aggregate-zori")(aggregate_zori)
 app.command("zori-diagnostics")(zori_diagnostics)
+
+# Export bundle command
+app.command("export-bundle")(export_bundle)
 
 
 @app.command("source-status")
