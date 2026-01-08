@@ -67,9 +67,9 @@ def compute_coc_diagnostics(
     coc_zori_df : pd.DataFrame
         CoC-level ZORI data with columns:
         - coc_id: CoC identifier
-        - date: month start date
+        - date: month start date (monthly) OR year: year (yearly)
         - zori_coc: aggregated ZORI value
-        - coverage_ratio: coverage ratio for the month
+        - coverage_ratio: coverage ratio for the month/year
         - max_geo_contribution: dominance of largest contributor
     min_coverage : float
         Threshold below which coverage is flagged as low. Default 0.90.
@@ -81,8 +81,8 @@ def compute_coc_diagnostics(
     pd.DataFrame
         Per-CoC diagnostics with columns:
         - coc_id
-        - months_total
-        - months_covered
+        - periods_total (months or years)
+        - periods_covered
         - coverage_ratio_mean
         - coverage_ratio_p10
         - coverage_ratio_p50
@@ -91,22 +91,31 @@ def compute_coc_diagnostics(
         - flag_low_coverage
         - flag_high_dominance
     """
-    required_cols = {"coc_id", "date", "coverage_ratio"}
+    # Support both monthly (date) and yearly (year) files
+    has_date = "date" in coc_zori_df.columns
+    has_year = "year" in coc_zori_df.columns
+    if not has_date and not has_year:
+        raise ValueError("Missing required time column: need either 'date' or 'year'")
+
+    required_cols = {"coc_id", "coverage_ratio"}
     missing_cols = required_cols - set(coc_zori_df.columns)
     if missing_cols:
         raise ValueError(f"Missing required columns: {missing_cols}")
 
+    # Determine if monthly or yearly data
+    is_monthly = "date" in coc_zori_df.columns
+
     results = []
 
     for coc_id, group in coc_zori_df.groupby("coc_id"):
-        months_total = len(group)
+        periods_total = len(group)
 
-        # Count months with valid ZORI (zori_coc not null)
+        # Count periods with valid ZORI (zori_coc not null)
         if "zori_coc" in group.columns:
-            months_covered = int(group["zori_coc"].notna().sum())
+            periods_covered = int(group["zori_coc"].notna().sum())
         else:
-            # Fallback: count months with coverage >= threshold
-            months_covered = int((group["coverage_ratio"] >= min_coverage).sum())
+            # Fallback: count periods with coverage >= threshold
+            periods_covered = int((group["coverage_ratio"] >= min_coverage).sum())
 
         # Coverage ratio statistics
         coverage_ratios = group["coverage_ratio"]
@@ -133,8 +142,8 @@ def compute_coc_diagnostics(
 
         results.append({
             "coc_id": coc_id,
-            "months_total": months_total,
-            "months_covered": months_covered,
+            "periods_total": periods_total,
+            "periods_covered": periods_covered,
             "coverage_ratio_mean": coverage_mean,
             "coverage_ratio_p10": coverage_p10,
             "coverage_ratio_p50": coverage_p50,
@@ -190,17 +199,23 @@ def generate_text_summary(
 
     # Date range and overall counts
     n_cocs = len(diagnostics_df)
-    n_months = diagnostics_df["months_total"].iloc[0] if len(diagnostics_df) > 0 else 0
+    n_periods = diagnostics_df["periods_total"].iloc[0] if len(diagnostics_df) > 0 else 0
+    is_monthly = "date" in coc_zori_df.columns
+    period_label = "Months" if is_monthly else "Years"
 
     lines.append("OVERVIEW")
     lines.append("-" * 50)
     lines.append(f"  Total CoCs:          {n_cocs}")
-    lines.append(f"  Months per CoC:      {n_months}")
+    lines.append(f"  {period_label} per CoC:      {n_periods}")
 
     if "date" in coc_zori_df.columns:
         date_min = coc_zori_df["date"].min()
         date_max = coc_zori_df["date"].max()
         lines.append(f"  Date range:          {date_min} to {date_max}")
+    elif "year" in coc_zori_df.columns:
+        year_min = coc_zori_df["year"].min()
+        year_max = coc_zori_df["year"].max()
+        lines.append(f"  Year range:          {year_min} to {year_max}")
 
     lines.append(f"  Coverage threshold:  {min_coverage:.0%}")
     lines.append(f"  Dominance threshold: {dominance_threshold:.0%}")
@@ -237,20 +252,21 @@ def generate_text_summary(
     )
     lines.append("")
 
-    # Months covered statistics
-    lines.append("MONTHS COVERED")
+    # Periods covered statistics
+    period_label_lower = "months" if is_monthly else "years"
+    lines.append(f"{period_label.upper()} COVERED")
     lines.append("-" * 50)
 
-    months_covered = diagnostics_df["months_covered"]
-    lines.append(f"  Mean months covered:   {months_covered.mean():.1f} / {n_months}")
-    lines.append(f"  Median months covered: {months_covered.median():.1f} / {n_months}")
-    lines.append(f"  Min months covered:    {months_covered.min()} / {n_months}")
-    lines.append(f"  Max months covered:    {months_covered.max()} / {n_months}")
+    periods_covered = diagnostics_df["periods_covered"]
+    lines.append(f"  Mean {period_label_lower} covered:   {periods_covered.mean():.1f} / {n_periods}")
+    lines.append(f"  Median {period_label_lower} covered: {periods_covered.median():.1f} / {n_periods}")
+    lines.append(f"  Min {period_label_lower} covered:    {periods_covered.min()} / {n_periods}")
+    lines.append(f"  Max {period_label_lower} covered:    {periods_covered.max()} / {n_periods}")
 
-    # CoCs with no valid months
-    no_valid_months = (months_covered == 0).sum()
-    if no_valid_months > 0:
-        lines.append(f"  CoCs with zero valid months: {no_valid_months}")
+    # CoCs with no valid periods
+    no_valid_periods = (periods_covered == 0).sum()
+    if no_valid_periods > 0:
+        lines.append(f"  CoCs with zero valid {period_label_lower}: {no_valid_periods}")
     lines.append("")
 
     # Dominance statistics
@@ -301,7 +317,7 @@ def generate_text_summary(
         lines.append(
             f"  {row['coc_id']}: "
             f"cov={row['coverage_ratio_mean']:.3f}, "
-            f"months={row['months_covered']}/{row['months_total']}"
+            f"{period_label_lower}={row['periods_covered']}/{row['periods_total']}"
             f"{flag_str}"
         )
 
@@ -375,8 +391,15 @@ def summarize_coc_zori(
     else:
         coc_zori_df = coc_zori_df_or_path
 
-    # Validate required columns
-    required_cols = {"coc_id", "date", "coverage_ratio"}
+    # Validate required columns - support both monthly (date) and yearly (year)
+    has_date = "date" in coc_zori_df.columns
+    has_year = "year" in coc_zori_df.columns
+    if not has_date and not has_year:
+        raise ValueError(
+            "Missing required time column in CoC ZORI data: need either 'date' or 'year'"
+        )
+
+    required_cols = {"coc_id", "coverage_ratio"}
     missing_cols = required_cols - set(coc_zori_df.columns)
     if missing_cols:
         raise ValueError(
@@ -388,9 +411,11 @@ def summarize_coc_zori(
     if "max_geo_contribution" not in coc_zori_df.columns:
         coc_zori_df["max_geo_contribution"] = None
 
+    time_col = "date" if has_date else "year"
+    period_name = "months" if has_date else "years"
     logger.info(
         f"Computing diagnostics for {coc_zori_df['coc_id'].nunique()} CoCs "
-        f"across {coc_zori_df['date'].nunique()} months"
+        f"across {coc_zori_df[time_col].nunique()} {period_name}"
     )
 
     # Compute per-CoC diagnostics
