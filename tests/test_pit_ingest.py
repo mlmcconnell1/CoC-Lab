@@ -164,14 +164,11 @@ class TestDownloadPitData:
         """Test that download raises FileNotFoundError on 404."""
         # Mock all URL variations that will be tried
         base = "https://www.huduser.gov/portal/sites/default/files/xls/2007-2020-"
-        urls_to_mock = [
-            f"{base}PIT-Counts-by-CoC.xlsx",
-            f"{base}Point-in-Time-Estimates-by-CoC.xlsx",
-            f"{base}PIT-Counts-by-CoC.xlsb",
-            f"{base}Point-in-Time-Estimates-by-CoC.xlsb",
-        ]
-        for url in urls_to_mock:
-            httpx_mock.add_response(url=url, status_code=404)
+        patterns = ["PIT-Counts-by-CoC", "Point-in-Time-Estimates-by-CoC", "PIT-Estimates-by-CoC"]
+        extensions = [".xlsx", ".xlsb"]
+        for pattern in patterns:
+            for ext in extensions:
+                httpx_mock.add_response(url=f"{base}{pattern}{ext}", status_code=404)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             with pytest.raises(FileNotFoundError, match="not found"):

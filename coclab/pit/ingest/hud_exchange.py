@@ -148,44 +148,50 @@ def _generate_alternate_urls(url: str, year: int) -> list[str]:
     HUD has used different filename patterns over the years:
     - 2007-{year}-PIT-Counts-by-CoC.xlsx (newer format)
     - 2007-{year}-Point-in-Time-Estimates-by-CoC.xlsx (older format)
+    - 2007-{year}-PIT-Estimates-by-CoC.xlsx (alternate older format)
 
     Also tries both .xlsx and .xlsb extensions.
     """
     alternates = []
+    seen = set()
 
-    # Pattern substitutions
-    patterns = [
-        ("PIT-Counts-by-CoC", "Point-in-Time-Estimates-by-CoC"),
-        ("Point-in-Time-Estimates-by-CoC", "PIT-Counts-by-CoC"),
+    # All known filename patterns
+    all_patterns = [
+        "PIT-Counts-by-CoC",
+        "Point-in-Time-Estimates-by-CoC",
+        "PIT-Estimates-by-CoC",
     ]
 
-    # Extension substitutions
-    extensions = [
-        (".xlsx", ".xlsb"),
-        (".xlsb", ".xlsx"),
-    ]
-
-    # Try alternate filename pattern with same extension
-    for old_pattern, new_pattern in patterns:
-        if old_pattern in url:
-            alternates.append(url.replace(old_pattern, new_pattern))
+    # Find which pattern is in the current URL
+    current_pattern = None
+    for pattern in all_patterns:
+        if pattern in url:
+            current_pattern = pattern
             break
 
-    # Try alternate extension with same filename pattern
-    for old_ext, new_ext in extensions:
-        if url.endswith(old_ext):
-            alternates.append(url.replace(old_ext, new_ext))
-            break
+    if current_pattern is None:
+        return alternates
 
-    # Try alternate filename pattern with alternate extension
-    for old_pattern, new_pattern in patterns:
-        if old_pattern in url:
-            alt_pattern_url = url.replace(old_pattern, new_pattern)
-            for old_ext, new_ext in extensions:
-                if alt_pattern_url.endswith(old_ext):
-                    alternates.append(alt_pattern_url.replace(old_ext, new_ext))
-                    break
-            break
+    # Extensions to try
+    extensions = [".xlsx", ".xlsb"]
+
+    # Current extension
+    current_ext = ".xlsb" if url.endswith(".xlsb") else ".xlsx"
+
+    # Generate all combinations of alternate patterns and extensions
+    for pattern in all_patterns:
+        for ext in extensions:
+            # Skip the original URL
+            if pattern == current_pattern and ext == current_ext:
+                continue
+
+            alt_url = url.replace(current_pattern, pattern)
+            if ext != current_ext:
+                alt_url = alt_url.replace(current_ext, ext)
+
+            if alt_url not in seen:
+                seen.add(alt_url)
+                alternates.append(alt_url)
 
     return alternates
 
