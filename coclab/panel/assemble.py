@@ -60,6 +60,8 @@ from coclab.panel.zori_eligibility import (
     compute_rent_to_income,
     summarize_zori_eligibility,
 )
+from coclab.pit.ingest import parse_pit_file
+from coclab.pit.ingest.hud_exchange import MIN_PIT_YEAR as MIN_PIT_VINTAGE_YEAR
 from coclab.pit.registry import get_pit_path
 from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
 
@@ -107,16 +109,119 @@ ZORI_PROVENANCE_COLUMNS = [
     "zori_min_coverage",
 ]
 
+# Default raw PIT directory
+DEFAULT_RAW_PIT_DIR = Path("data/raw/pit")
+
+
+def _find_latest_raw_vintage_file(
+    raw_pit_dir: Path | None = None,
+) -> tuple[Path, int] | None:
+    """Find the most recent raw PIT vintage file.
+
+    Parameters
+    ----------
+    raw_pit_dir : Path, optional
+        Directory containing raw PIT vintage files.
+        Defaults to 'data/raw/pit'.
+
+    Returns
+    -------
+    tuple[Path, int] or None
+        Tuple of (file_path, vintage_year) for the most recent vintage file,
+        or None if no vintage files are found.
+    """
+    raw_pit_dir = raw_pit_dir or DEFAULT_RAW_PIT_DIR
+
+    if not raw_pit_dir.exists():
+        return None
+
+    # Look for vintage directories (named by year)
+    vintage_dirs = []
+    for d in raw_pit_dir.iterdir():
+        if d.is_dir() and d.name.isdigit():
+            vintage_year = int(d.name)
+            # Only consider vintages that have actual files
+            files = list(d.glob("*.xls*"))
+            if files:
+                vintage_dirs.append((vintage_year, files[0]))
+
+    if not vintage_dirs:
+        return None
+
+    # Return the highest vintage year
+    vintage_dirs.sort(key=lambda x: x[0], reverse=True)
+    latest_year, latest_file = vintage_dirs[0]
+    return latest_file, latest_year
+
+
+def _load_pit_from_raw_vintage(
+    year: int,
+    vintage_file: Path,
+    vintage_year: int,
+) -> pd.DataFrame:
+    """Load PIT data for a specific year from a raw vintage file.
+
+    Parameters
+    ----------
+    year : int
+        The PIT year to extract.
+    vintage_file : Path
+        Path to the raw vintage Excel file.
+    vintage_year : int
+        The vintage year of the file (for logging/provenance).
+
+    Returns
+    -------
+    pd.DataFrame
+        PIT data with columns: coc_id, pit_total, pit_sheltered, pit_unsheltered.
+        Returns empty DataFrame if extraction fails.
+    """
+    try:
+        parse_result = parse_pit_file(
+            file_path=vintage_file,
+            year=year,
+            source="hud_user",
+            source_ref=f"vintage_{vintage_year}_fallback",
+        )
+        df = parse_result.df
+
+        # Filter to just the requested year
+        if "pit_year" in df.columns:
+            df = df[df["pit_year"] == year].copy()
+
+        # Select relevant columns
+        result_cols = ["coc_id", "pit_total"]
+        for col in ["pit_sheltered", "pit_unsheltered"]:
+            if col in df.columns:
+                result_cols.append(col)
+
+        df = df[result_cols].copy()
+        df["coc_id"] = df["coc_id"].astype(str)
+        df["pit_total"] = df["pit_total"].astype(int)
+
+        return df
+
+    except Exception as e:
+        logger.warning(
+            f"Failed to extract year {year} from vintage file {vintage_file}: {e}"
+        )
+        return pd.DataFrame(columns=["coc_id", "pit_total", "pit_sheltered", "pit_unsheltered"])
+
 
 def _load_pit_for_year(
     year: int,
     pit_dir: Path | None = None,
+    raw_pit_dir: Path | None = None,
 ) -> pd.DataFrame:
     """Load PIT data for a specific year.
 
     Attempts to load PIT data in the following order:
-    1. From the PIT registry (if registered)
-    2. From the curated PIT directory using canonical naming
+    1. From the PIT registry for the original vintage (if registered)
+    2. From the curated PIT directory using canonical naming (original vintage)
+    3. Fall back to extracting from the most recent raw vintage file
+
+    For years before 2013 (where no original vintage file exists), the fallback
+    to raw vintage files is the only option.
 
     Parameters
     ----------
@@ -125,6 +230,9 @@ def _load_pit_for_year(
     pit_dir : Path, optional
         Directory containing curated PIT files.
         Defaults to 'data/curated/pit'.
+    raw_pit_dir : Path, optional
+        Directory containing raw PIT vintage files.
+        Defaults to 'data/raw/pit'.
 
     Returns
     -------
@@ -137,33 +245,56 @@ def _load_pit_for_year(
     The returned DataFrame will have coc_id as a string column and
     pit_total as an integer. pit_sheltered and pit_unsheltered may be
     nullable integers (Int64 dtype).
+
+    When using fallback to raw vintage files, a message is printed to inform
+    the user which vintage is being used.
     """
-    # If pit_dir is explicitly provided, use it directly (skip registry)
+    df = None
+    use_fallback = True  # Whether to try raw vintage fallback
+
+    # If pit_dir is explicitly provided, use it directly (skip registry and fallback)
     # This supports testing with isolated data directories
     if pit_dir is not None:
+        use_fallback = False  # Explicit pit_dir disables fallback
         canonical_path = pit_dir / f"pit_counts__{year}.parquet"
         if canonical_path.exists():
             logger.info(f"Loading PIT {year} from provided path: {canonical_path}")
             df = pd.read_parquet(canonical_path)
-        else:
-            logger.warning(f"No PIT data found for year {year}")
-            return pd.DataFrame(columns=["coc_id", "pit_total", "pit_sheltered", "pit_unsheltered"])
     else:
-        # Try registry first
-        registry_path = get_pit_path(year)
-        if registry_path is not None and Path(registry_path).exists():
-            logger.info(f"Loading PIT {year} from registry: {registry_path}")
-            df = pd.read_parquet(registry_path)
-        else:
-            # Fall back to canonical path
-            canonical_path = DEFAULT_PIT_DIR / f"pit_counts__{year}.parquet"
-            if canonical_path.exists():
-                logger.info(f"Loading PIT {year} from canonical path: {canonical_path}")
-                df = pd.read_parquet(canonical_path)
+        # Only try original vintage for years >= MIN_PIT_VINTAGE_YEAR (2013+)
+        if year >= MIN_PIT_VINTAGE_YEAR:
+            # Try registry first (for original vintage)
+            registry_path = get_pit_path(year)
+            if registry_path is not None and Path(registry_path).exists():
+                logger.info(f"Loading PIT {year} from registry: {registry_path}")
+                df = pd.read_parquet(registry_path)
             else:
-                logger.warning(f"No PIT data found for year {year}")
-                cols = ["coc_id", "pit_total", "pit_sheltered", "pit_unsheltered"]
-                return pd.DataFrame(columns=cols)
+                # Fall back to canonical path
+                canonical_path = DEFAULT_PIT_DIR / f"pit_counts__{year}.parquet"
+                if canonical_path.exists():
+                    logger.info(f"Loading PIT {year} from canonical path: {canonical_path}")
+                    df = pd.read_parquet(canonical_path)
+
+    # If no original vintage found, fall back to raw vintage file
+    if df is None and use_fallback:
+        raw_vintage = _find_latest_raw_vintage_file(raw_pit_dir)
+        if raw_vintage is not None:
+            vintage_file, vintage_year = raw_vintage
+            # Only use vintage file if it contains data for our year
+            if year <= vintage_year:
+                print(
+                    f"[info] No original vintage PIT file for {year}; "
+                    f"using {vintage_year} vintage file"
+                )
+                logger.info(
+                    f"Falling back to raw vintage file for year {year}: "
+                    f"{vintage_file} (vintage {vintage_year})"
+                )
+                df = _load_pit_from_raw_vintage(year, vintage_file, vintage_year)
+
+    if df is None or df.empty:
+        logger.warning(f"No PIT data found for year {year}")
+        return pd.DataFrame(columns=["coc_id", "pit_total", "pit_sheltered", "pit_unsheltered"])
 
     # Standardize column names and select relevant columns
     if "pit_year" in df.columns:
