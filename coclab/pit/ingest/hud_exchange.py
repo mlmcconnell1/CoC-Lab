@@ -130,7 +130,6 @@ def get_pit_source_url(year: int) -> str:
 def _try_download_url(
     client: httpx.Client,
     url: str,
-    year: int,
 ) -> httpx.Response | None:
     """Attempt to download from a URL, returning None on 404."""
     try:
@@ -141,6 +140,54 @@ def _try_download_url(
         if e.response.status_code == 404:
             return None
         raise
+
+
+def _generate_alternate_urls(url: str, year: int) -> list[str]:
+    """Generate alternate URLs to try if primary fails.
+
+    HUD has used different filename patterns over the years:
+    - 2007-{year}-PIT-Counts-by-CoC.xlsx (newer format)
+    - 2007-{year}-Point-in-Time-Estimates-by-CoC.xlsx (older format)
+
+    Also tries both .xlsx and .xlsb extensions.
+    """
+    alternates = []
+
+    # Pattern substitutions
+    patterns = [
+        ("PIT-Counts-by-CoC", "Point-in-Time-Estimates-by-CoC"),
+        ("Point-in-Time-Estimates-by-CoC", "PIT-Counts-by-CoC"),
+    ]
+
+    # Extension substitutions
+    extensions = [
+        (".xlsx", ".xlsb"),
+        (".xlsb", ".xlsx"),
+    ]
+
+    # Try alternate filename pattern with same extension
+    for old_pattern, new_pattern in patterns:
+        if old_pattern in url:
+            alternates.append(url.replace(old_pattern, new_pattern))
+            break
+
+    # Try alternate extension with same filename pattern
+    for old_ext, new_ext in extensions:
+        if url.endswith(old_ext):
+            alternates.append(url.replace(old_ext, new_ext))
+            break
+
+    # Try alternate filename pattern with alternate extension
+    for old_pattern, new_pattern in patterns:
+        if old_pattern in url:
+            alt_pattern_url = url.replace(old_pattern, new_pattern)
+            for old_ext, new_ext in extensions:
+                if alt_pattern_url.endswith(old_ext):
+                    alternates.append(alt_pattern_url.replace(old_ext, new_ext))
+                    break
+            break
+
+    return alternates
 
 
 def download_pit_data(
@@ -199,30 +246,29 @@ def download_pit_data(
 
     logger.info(f"Downloading PIT data for {year} from {url}")
 
+    tried_urls = [url]
+
     with httpx.Client(follow_redirects=True, timeout=timeout) as client:
-        response = _try_download_url(client, url, year)
+        response = _try_download_url(client, url)
 
-        # If primary URL failed with 404 and it's not in the known list,
-        # try the alternate format
-        if response is None and year not in PIT_DATA_URLS:
-            # Try alternate format
-            if url.endswith(".xlsb"):
-                alt_url = url.replace(".xlsb", ".xlsx")
-            else:
-                alt_url = url.replace(".xlsx", ".xlsb")
+        # If primary URL failed with 404, try alternate URLs
+        if response is None:
+            alternate_urls = _generate_alternate_urls(url, year)
+            for alt_url in alternate_urls:
+                logger.info(f"Primary URL not found, trying: {alt_url}")
+                tried_urls.append(alt_url)
+                response = _try_download_url(client, alt_url)
 
-            logger.info(f"Primary URL not found, trying alternate format: {alt_url}")
-            response = _try_download_url(client, alt_url, year)
-
-            if response is not None:
-                url = alt_url
-                filename = url.split("/")[-1]
-                output_path = output_dir / filename
+                if response is not None:
+                    url = alt_url
+                    filename = url.split("/")[-1]
+                    output_path = output_dir / filename
+                    break
 
         if response is None:
             raise FileNotFoundError(
                 f"PIT data file not found for year {year}. "
-                f"Tried URL: {url}. "
+                f"Tried URLs: {tried_urls}. "
                 f"The file may not yet be published by HUD."
             )
 
