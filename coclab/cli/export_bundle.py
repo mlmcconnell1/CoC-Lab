@@ -199,7 +199,7 @@ def export_bundle(
 
     Examples:
 
-        coclab export-bundle --name my_analysis --panel data/curated/panels/panel.parquet
+        coclab export-bundle --name my_analysis --panel data/curated/panel/coc_panel__2011_2023.parquet
 
         coclab export-bundle --name replication --include panel,manifest,codebook,inputs
 

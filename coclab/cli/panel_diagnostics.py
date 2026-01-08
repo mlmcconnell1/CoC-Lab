@@ -39,7 +39,7 @@ def panel_diagnostics(
 
     Examples:
 
-        coclab panel-diagnostics --panel data/curated/panels/coc_panel__2018_2024.parquet
+        coclab panel-diagnostics --panel data/curated/panel/coc_panel__2018_2024.parquet
 
         coclab panel-diagnostics --panel panel.parquet --output-dir ./diagnostics/
 

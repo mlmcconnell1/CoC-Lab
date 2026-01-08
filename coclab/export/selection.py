@@ -6,7 +6,7 @@ from coclab.export.types import ArtifactRecord, BundleConfig, SelectionPlan
 
 # Standard file patterns for curated artifacts
 PATTERNS = {
-    "panel": "data/curated/panels/coc_panel__*.parquet",
+    "panel": "data/curated/panel/coc_panel__*.parquet",
     "tract_xwalk": "data/curated/xwalks/coc_tract_xwalk__*.parquet",
     "county_xwalk": "data/curated/xwalks/coc_county_xwalk__*.parquet",
     "boundaries": "data/curated/coc_boundaries__*.parquet",
