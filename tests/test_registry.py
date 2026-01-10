@@ -30,7 +30,7 @@ class TestRegistryEntry:
             boundary_vintage="2025",
             source="hud_exchange_gis_tools",
             ingested_at=datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
-            path=Path("data/curated/coc_boundaries__2025.parquet"),
+            path=Path("data/curated/coc_boundaries/coc_boundaries__2025.parquet"),
             feature_count=400,
             hash_of_file="abc123",
         )
@@ -38,7 +38,7 @@ class TestRegistryEntry:
         assert d["boundary_vintage"] == "2025"
         assert d["source"] == "hud_exchange_gis_tools"
         assert d["ingested_at"] == "2025-01-01T12:00:00+00:00"
-        assert d["path"] == "data/curated/coc_boundaries__2025.parquet"
+        assert d["path"] == "data/curated/coc_boundaries/coc_boundaries__2025.parquet"
         assert d["feature_count"] == 400
         assert d["hash_of_file"] == "abc123"
 
@@ -47,7 +47,7 @@ class TestRegistryEntry:
             "boundary_vintage": "2024",
             "source": "hud_opendata_arcgis",
             "ingested_at": "2024-06-15T10:30:00+00:00",
-            "path": "data/curated/coc_boundaries__2024.parquet",
+            "path": "data/curated/coc_boundaries/coc_boundaries__2024.parquet",
             "feature_count": 395,
             "hash_of_file": "def456",
         }
@@ -55,7 +55,7 @@ class TestRegistryEntry:
         assert entry.boundary_vintage == "2024"
         assert entry.source == "hud_opendata_arcgis"
         assert entry.ingested_at == datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
-        assert entry.path == Path("data/curated/coc_boundaries__2024.parquet")
+        assert entry.path == Path("data/curated/coc_boundaries/coc_boundaries__2024.parquet")
         assert entry.feature_count == 395
         assert entry.hash_of_file == "def456"
 

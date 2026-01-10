@@ -60,7 +60,7 @@ def sample_boundaries(temp_data_dir):
 
     # Save as GeoParquet
     vintage = "2025"
-    parquet_path = temp_data_dir / "data" / "curated" / f"coc_boundaries__{vintage}.parquet"
+    parquet_path = temp_data_dir / "data" / "curated" / "coc_boundaries" / f"coc_boundaries__{vintage}.parquet"
     gdf.to_parquet(parquet_path)
 
     # Register the vintage

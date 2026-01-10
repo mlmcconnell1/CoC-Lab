@@ -18,7 +18,7 @@ def _normalize_coc_id(coc_id: str) -> str:
 
 def _find_coc_boundary_file(vintage: str) -> Path:
     """Find the GeoParquet file for a given vintage."""
-    path = Path(f"data/curated/coc_boundaries__{vintage}.parquet")
+    path = Path(f"data/curated/coc_boundaries/coc_boundaries__{vintage}.parquet")
     if not path.exists():
         raise FileNotFoundError(f"Boundary file not found: {path}")
     return path

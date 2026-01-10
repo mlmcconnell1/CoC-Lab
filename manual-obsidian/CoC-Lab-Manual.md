@@ -1716,7 +1716,7 @@ erDiagram
 
 | File | Path Pattern | Description |
 |------|--------------|-------------|
-| Boundary data | `data/curated/coc_boundaries__{vintage}.parquet` | GeoParquet with boundaries |
+| Boundary data | `data/curated/coc_boundaries/coc_boundaries__{vintage}.parquet` | GeoParquet with boundaries |
 | Registry | `data/curated/boundary_registry.parquet` | Vintage tracking |
 | Maps | `data/curated/maps/{coc_id}__{vintage}.html` | Generated HTML maps |
 | Raw downloads | `data/raw/hud_exchange/{vintage}/` | Original source files |

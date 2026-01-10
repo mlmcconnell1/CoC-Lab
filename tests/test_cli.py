@@ -28,7 +28,7 @@ class TestIngestCommand:
     @patch("coclab.ingest.hud_exchange_gis.ingest_hud_exchange")
     def test_ingest_hud_exchange_success(self, mock_ingest):
         """Ingest hud_exchange with vintage should call ingest_hud_exchange."""
-        mock_ingest.return_value = Path("data/curated/coc_boundaries__2025.parquet")
+        mock_ingest.return_value = Path("data/curated/coc_boundaries/coc_boundaries__2025.parquet")
 
         result = runner.invoke(
             app, ["ingest", "--source", "hud_exchange", "--vintage", "2025", "--force"]
@@ -54,7 +54,7 @@ class TestIngestCommand:
     def test_ingest_hud_opendata_success(self, mock_ingest):
         """Ingest hud_opendata should call ingest_hud_opendata."""
         mock_ingest.return_value = Path(
-            "data/curated/coc_boundaries__HUDOpenData_2025-01-04.parquet"
+            "data/curated/coc_boundaries/coc_boundaries__HUDOpenData_2025-01-04.parquet"
         )
 
         result = runner.invoke(app, ["ingest", "--source", "hud_opendata"])
@@ -67,7 +67,7 @@ class TestIngestCommand:
     def test_ingest_hud_opendata_with_snapshot(self, mock_ingest):
         """Ingest hud_opendata with custom snapshot tag."""
         mock_ingest.return_value = Path(
-            "data/curated/coc_boundaries__custom_snapshot.parquet"
+            "data/curated/coc_boundaries/coc_boundaries__custom_snapshot.parquet"
         )
 
         result = runner.invoke(
@@ -103,7 +103,7 @@ class TestListVintagesCommand:
                 boundary_vintage="2025",
                 source="hud_exchange_gis_tools",
                 ingested_at=datetime(2025, 1, 4, 12, 0, 0, tzinfo=UTC),
-                path=Path("data/curated/coc_boundaries__2025.parquet"),
+                path=Path("data/curated/coc_boundaries/coc_boundaries__2025.parquet"),
                 feature_count=450,
                 hash_of_file="abc123",
             ),
@@ -111,7 +111,7 @@ class TestListVintagesCommand:
                 boundary_vintage="HUDOpenData_2025-01-04",
                 source="hud_opendata_arcgis",
                 ingested_at=datetime(2025, 1, 4, 10, 0, 0, tzinfo=UTC),
-                path=Path("data/curated/coc_boundaries__HUDOpenData_2025-01-04.parquet"),
+                path=Path("data/curated/coc_boundaries/coc_boundaries__HUDOpenData_2025-01-04.parquet"),
                 feature_count=448,
                 hash_of_file="def456",
             ),

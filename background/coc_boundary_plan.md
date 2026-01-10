@@ -67,7 +67,7 @@ All ingesters must output a GeoDataFrame with these columns (and a valid `geomet
 
 ### 1.2 Storage targets
 - Curated boundary vintages written as:  
-  `data/curated/coc_boundaries__{boundary_vintage}.parquet`
+  `data/curated/coc_boundaries/coc_boundaries__{boundary_vintage}.parquet`
 - A registry table (CSV/Parquet) listing available vintages and basic counts:  
   `data/curated/boundary_registry.parquet`
 
@@ -276,7 +276,7 @@ These functions define the integration points:
 ## 4) Acceptance criteria (v0)
 
 1. **Ingest**: Running `coclab ingest --source hud_exchange --vintage <YEAR>` creates:
-   - `data/curated/coc_boundaries__<YEAR>.parquet`
+   - `data/curated/coc_boundaries/coc_boundaries__<YEAR>.parquet`
    - updates `data/curated/boundary_registry.parquet`
 2. **Map**: Running `coclab show --coc CO-500` produces an HTML file with the boundary polygon rendered.
 3. **Versioning**: Multiple vintages can coexist; `latest_vintage()` selects a default consistently.

@@ -9,7 +9,7 @@ PATTERNS = {
     "panel": "data/curated/panel/coc_panel__*.parquet",
     "tract_xwalk": "data/curated/xwalks/coc_tract_xwalk__*.parquet",
     "county_xwalk": "data/curated/xwalks/coc_county_xwalk__*.parquet",
-    "boundaries": "data/curated/coc_boundaries__*.parquet",
+    "boundaries": "data/curated/coc_boundaries/coc_boundaries__*.parquet",
     "pit": "data/curated/pit/pit_counts__*.parquet",
     "zori": "data/curated/rents/coc_zori*.parquet",
     "measures": "data/curated/measures/coc_measures__*.parquet",

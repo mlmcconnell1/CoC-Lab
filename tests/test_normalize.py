@@ -292,12 +292,12 @@ class TestPathHelpers:
     def test_curated_boundary_path_default(self):
         """curated_boundary_path should return expected path format."""
         path = curated_boundary_path("2025")
-        assert path == Path("data/curated/coc_boundaries__2025.parquet")
+        assert path == Path("data/curated/coc_boundaries/coc_boundaries__2025.parquet")
 
     def test_curated_boundary_path_custom_base(self):
         """curated_boundary_path should respect custom base_dir."""
         path = curated_boundary_path("2025", base_dir="/custom/data")
-        assert path == Path("/custom/data/curated/coc_boundaries__2025.parquet")
+        assert path == Path("/custom/data/curated/coc_boundaries/coc_boundaries__2025.parquet")
 
     def test_registry_path_default(self):
         """registry_path should return expected path format."""

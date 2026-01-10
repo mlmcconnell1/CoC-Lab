@@ -87,7 +87,7 @@ class TestBuildXwalksCommand:
         from coclab.registry.schema import RegistryEntry
 
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            boundary_path = Path("data/curated/coc_boundaries__2025.parquet")
+            boundary_path = Path("data/curated/coc_boundaries/coc_boundaries__2025.parquet")
             boundary_path.parent.mkdir(parents=True, exist_ok=True)
             boundary_path.touch()
 

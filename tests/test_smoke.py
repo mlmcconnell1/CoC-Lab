@@ -136,7 +136,7 @@ class TestSmokeEndToEnd:
 
         # Step 2: Save as GeoParquet (simulates end of ingest)
         vintage = "2025"
-        parquet_path = smoke_test_env / "data" / "curated" / f"coc_boundaries__{vintage}.parquet"
+        parquet_path = smoke_test_env / "data" / "curated" / "coc_boundaries" / f"coc_boundaries__{vintage}.parquet"
         normalized_gdf.to_parquet(parquet_path)
 
         assert parquet_path.exists()
@@ -181,7 +181,7 @@ class TestSmokeEndToEnd:
         # Setup: normalize and save
         normalized_gdf = normalize_boundaries(fixture_boundaries_gdf)
         vintage = "2025"
-        parquet_path = smoke_test_env / "data" / "curated" / f"coc_boundaries__{vintage}.parquet"
+        parquet_path = smoke_test_env / "data" / "curated" / "coc_boundaries" / f"coc_boundaries__{vintage}.parquet"
         normalized_gdf.to_parquet(parquet_path)
 
         # Register
@@ -222,7 +222,7 @@ class TestSmokeCLI:
         # Setup
         normalized_gdf = normalize_boundaries(fixture_boundaries_gdf)
         vintage = "2025"
-        parquet_path = smoke_test_env / "data" / "curated" / f"coc_boundaries__{vintage}.parquet"
+        parquet_path = smoke_test_env / "data" / "curated" / "coc_boundaries" / f"coc_boundaries__{vintage}.parquet"
         normalized_gdf.to_parquet(parquet_path)
 
         registry_path = smoke_test_env / "data" / "curated" / "boundary_registry.parquet"
@@ -245,7 +245,7 @@ class TestSmokeCLI:
         # Setup
         normalized_gdf = normalize_boundaries(fixture_boundaries_gdf)
         vintage = "2025"
-        parquet_path = smoke_test_env / "data" / "curated" / f"coc_boundaries__{vintage}.parquet"
+        parquet_path = smoke_test_env / "data" / "curated" / "coc_boundaries" / f"coc_boundaries__{vintage}.parquet"
         normalized_gdf.to_parquet(parquet_path)
 
         registry_path = smoke_test_env / "data" / "curated" / "boundary_registry.parquet"
@@ -268,7 +268,7 @@ class TestSmokeCLI:
         # Setup
         normalized_gdf = normalize_boundaries(fixture_boundaries_gdf)
         vintage = "2025"
-        parquet_path = smoke_test_env / "data" / "curated" / f"coc_boundaries__{vintage}.parquet"
+        parquet_path = smoke_test_env / "data" / "curated" / "coc_boundaries" / f"coc_boundaries__{vintage}.parquet"
         normalized_gdf.to_parquet(parquet_path)
 
         registry_path = smoke_test_env / "data" / "curated" / "boundary_registry.parquet"
@@ -368,7 +368,7 @@ class TestSmokeEdgeCases:
         # Setup with vintage 2025
         normalized_gdf = normalize_boundaries(fixture_boundaries_gdf)
         vintage = "2025"
-        parquet_path = smoke_test_env / "data" / "curated" / f"coc_boundaries__{vintage}.parquet"
+        parquet_path = smoke_test_env / "data" / "curated" / "coc_boundaries" / f"coc_boundaries__{vintage}.parquet"
         normalized_gdf.to_parquet(parquet_path)
 
         registry_path = smoke_test_env / "data" / "curated" / "boundary_registry.parquet"
