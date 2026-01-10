@@ -24,9 +24,12 @@ from coclab.pit.ingest.parser import (
     InvalidCoCIdError,
     PITParseError,
     PITParseResult,
+    PITVintageParseResult,
     get_canonical_output_path,
+    get_vintage_output_path,
     normalize_coc_id,
     parse_pit_file,
+    parse_pit_vintage,
     write_pit_parquet,
 )
 
@@ -44,8 +47,11 @@ __all__ = [
     "InvalidCoCIdError",
     "PITParseError",
     "PITParseResult",
+    "PITVintageParseResult",
     "get_canonical_output_path",
+    "get_vintage_output_path",
     "normalize_coc_id",
     "parse_pit_file",
+    "parse_pit_vintage",
     "write_pit_parquet",
 ]

@@ -600,3 +600,154 @@ def get_canonical_output_path(year: int, base_dir: Path | str | None = None) -> 
     else:
         base_dir = Path(base_dir)
     return base_dir / f"pit_counts__{year}.parquet"
+
+
+def get_vintage_output_path(vintage: int, base_dir: Path | str | None = None) -> Path:
+    """Get the output path for a PIT vintage file containing all years.
+
+    Parameters
+    ----------
+    vintage : int
+        PIT vintage year (the release year, e.g., 2024).
+    base_dir : Path or str, optional
+        Base directory for curated PIT data.
+        Defaults to 'data/curated/pit'.
+
+    Returns
+    -------
+    Path
+        Path like 'data/curated/pit/pit_vintage__2024.parquet'.
+    """
+    if base_dir is None:
+        base_dir = Path("data/curated/pit")
+    else:
+        base_dir = Path(base_dir)
+    return base_dir / f"pit_vintage__{vintage}.parquet"
+
+
+@dataclass
+class PITVintageParseResult:
+    """Result of parsing all years from a PIT vintage file.
+
+    Attributes
+    ----------
+    df : pd.DataFrame
+        Parsed data in canonical schema with all years combined.
+    vintage : int
+        The vintage year (release year) of the file.
+    years_parsed : list[int]
+        List of years successfully parsed from the file.
+    cross_state_mappings : dict[str, str]
+        CoC IDs that were mapped due to cross-state suffixes.
+    total_rows_read : int
+        Total rows read across all year sheets.
+    total_rows_skipped : int
+        Total rows skipped across all year sheets.
+    """
+
+    df: pd.DataFrame
+    vintage: int
+    years_parsed: list[int] = field(default_factory=list)
+    cross_state_mappings: dict[str, str] = field(default_factory=dict)
+    total_rows_read: int = 0
+    total_rows_skipped: int = 0
+
+
+def parse_pit_vintage(
+    file_path: Path,
+    vintage: int,
+    source: str = "hud_user",
+    source_ref: str | None = None,
+) -> PITVintageParseResult:
+    """Parse all year tabs from a PIT vintage file into canonical schema.
+
+    HUD PIT files contain multiple sheets, one per year. This function
+    parses all year-named sheets (e.g., "2007", "2024") and combines
+    them into a single DataFrame.
+
+    Parameters
+    ----------
+    file_path : Path
+        Path to the PIT data file (Excel format with year-named sheets).
+    vintage : int
+        The vintage/release year of the file (e.g., 2024 for the 2024 release).
+    source : str
+        Data source identifier.
+    source_ref : str, optional
+        URL or reference for the source data.
+
+    Returns
+    -------
+    PITVintageParseResult
+        Result containing combined DataFrame with all years.
+
+    Raises
+    ------
+    ValueError
+        If no year sheets can be found or parsed.
+    """
+    logger.info(f"Parsing PIT vintage file: {file_path} (vintage {vintage})")
+
+    suffix = file_path.suffix.lower()
+    if suffix not in (".xlsx", ".xls", ".xlsb"):
+        raise ValueError(f"Vintage parsing requires Excel format, got: {suffix}")
+
+    engine = "pyxlsb" if suffix == ".xlsb" else None
+    xl = pd.ExcelFile(file_path, engine=engine)
+
+    # Find year-named sheets (4-digit numbers)
+    year_sheets = []
+    for sheet_name in xl.sheet_names:
+        if sheet_name.isdigit() and len(sheet_name) == 4:
+            year_sheets.append(int(sheet_name))
+
+    if not year_sheets:
+        raise ValueError(f"No year sheets found in {file_path}. Sheets: {xl.sheet_names}")
+
+    year_sheets.sort()
+    logger.info(f"Found {len(year_sheets)} year sheets: {year_sheets[0]}-{year_sheets[-1]}")
+
+    # Parse each year sheet
+    all_results: list[pd.DataFrame] = []
+    all_cross_state_mappings: dict[str, str] = {}
+    total_rows_read = 0
+    total_rows_skipped = 0
+    years_parsed: list[int] = []
+
+    for year in year_sheets:
+        try:
+            result = parse_pit_file(
+                file_path=file_path,
+                year=year,
+                source=source,
+                source_ref=source_ref,
+                sheet_name=str(year),
+            )
+            if len(result.df) > 0:
+                all_results.append(result.df)
+                years_parsed.append(year)
+                all_cross_state_mappings.update(result.cross_state_mappings)
+                total_rows_read += result.rows_read
+                total_rows_skipped += result.rows_skipped
+                logger.info(f"  Year {year}: {len(result.df)} CoCs")
+        except Exception as e:
+            logger.warning(f"Failed to parse year {year}: {e}")
+
+    if not all_results:
+        raise ValueError(f"No years could be parsed from {file_path}")
+
+    # Combine all years
+    combined_df = pd.concat(all_results, ignore_index=True)
+    logger.info(
+        f"Parsed {len(combined_df)} total records across {len(years_parsed)} years "
+        f"({years_parsed[0]}-{years_parsed[-1]})"
+    )
+
+    return PITVintageParseResult(
+        df=combined_df,
+        vintage=vintage,
+        years_parsed=years_parsed,
+        cross_state_mappings=all_cross_state_mappings,
+        total_rows_read=total_rows_read,
+        total_rows_skipped=total_rows_skipped,
+    )
