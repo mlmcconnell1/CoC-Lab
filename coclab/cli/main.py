@@ -166,6 +166,62 @@ def ingest_boundaries(
         raise typer.Exit(1)
 
 
+def delete_boundaries(
+    vintage: Annotated[
+        str,
+        typer.Argument(help="Boundary vintage year to delete (e.g., '2024')"),
+    ],
+    source: Annotated[
+        str,
+        typer.Argument(
+            help="Data source (e.g., 'hud_exchange_gis_tools', 'hud_arcgis_featureserver')"
+        ),
+    ],
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            "-y",
+            help="Skip confirmation prompt",
+        ),
+    ] = False,
+) -> None:
+    """Delete a boundary vintage from the registry.
+
+    This removes the registry entry but does not delete the underlying data file.
+
+    Examples:
+
+        coclab delete-boundaries 2024 hud_exchange_gis_tools
+
+        coclab delete-boundaries 2024 hud_exchange_gis_tools --yes
+    """
+    from coclab.registry.registry import delete_vintage, list_vintages
+
+    # Check if the entry exists first
+    vintages = list_vintages()
+    matching = [v for v in vintages if v.boundary_vintage == vintage and v.source == source]
+
+    if not matching:
+        typer.echo(f"No entry found for vintage '{vintage}' with source '{source}'", err=True)
+        raise typer.Exit(1)
+
+    entry = matching[0]
+    typer.echo(f"Found entry: vintage={vintage}, source={source}, features={entry.feature_count}")
+
+    if not yes:
+        confirm = typer.confirm("Are you sure you want to delete this registry entry?")
+        if not confirm:
+            typer.echo("Aborted.")
+            raise typer.Exit(0)
+
+    if delete_vintage(vintage, source):
+        typer.echo(f"Deleted registry entry for vintage '{vintage}' from source '{source}'")
+    else:
+        typer.echo("Failed to delete entry", err=True)
+        raise typer.Exit(1)
+
+
 def list_vintages_cmd() -> None:
     """List all available boundary vintages in the registry."""
     from coclab.registry.registry import list_vintages
@@ -304,6 +360,7 @@ app.command("build-xwalks")(build_xwalks)
 app.command("compare-vintages")(compare_vintages)
 app.command("crosscheck-acs-population")(crosscheck_acs_population)
 app.command("crosscheck-pit-vintages")(crosscheck_pit_vintages)
+app.command("delete-boundaries")(delete_boundaries)
 app.command("export-bundle")(export_bundle)
 app.command("ingest-acs-population")(ingest_acs_population)
 app.command("ingest-boundaries")(ingest_boundaries)

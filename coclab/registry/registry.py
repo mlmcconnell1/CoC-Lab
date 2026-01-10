@@ -158,6 +158,37 @@ def _extract_year(vintage: str) -> int | None:
     return None
 
 
+def delete_vintage(
+    boundary_vintage: str,
+    source: str,
+    registry_path: Path | None = None,
+) -> bool:
+    """Delete a vintage entry from the registry.
+
+    Args:
+        boundary_vintage: Version identifier (e.g., '2024')
+        source: Origin of the data (e.g., 'hud_exchange_gis_tools')
+        registry_path: Custom registry path (uses default if not specified)
+
+    Returns:
+        True if an entry was deleted, False if no matching entry was found
+    """
+    reg_path = _get_registry_path(registry_path)
+    df = _load_registry(reg_path)
+
+    if df.empty:
+        return False
+
+    mask = (df["boundary_vintage"] == boundary_vintage) & (df["source"] == source)
+
+    if not mask.any():
+        return False
+
+    df = df[~mask]
+    _save_registry(df, reg_path)
+    return True
+
+
 def latest_vintage(
     source: str | None = None,
     registry_path: Path | None = None,
