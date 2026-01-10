@@ -71,7 +71,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_PIT_DIR = Path("data/curated/pit")
 DEFAULT_MEASURES_DIR = Path("data/curated/measures")
 DEFAULT_PANEL_DIR = Path("data/curated/panel")
-DEFAULT_RENTS_DIR = Path("data/curated/rents")
+DEFAULT_RENTS_DIR = Path("data/curated/zori")
 
 # Canonical panel columns in desired order
 PANEL_COLUMNS = [
@@ -424,7 +424,7 @@ def _load_zori_yearly(
         If provided, this takes precedence over auto-discovery.
     rents_dir : Path, optional
         Directory to search for yearly ZORI files.
-        Defaults to 'data/curated/rents'.
+        Defaults to 'data/curated/zori'.
 
     Returns
     -------
@@ -634,7 +634,7 @@ def build_panel(
         If None and include_zori=True, auto-discovers from rents_dir.
     rents_dir : Path, optional
         Directory containing curated rent files.
-        Defaults to 'data/curated/rents'.
+        Defaults to 'data/curated/zori'.
     zori_min_coverage : float, optional
         Minimum coverage ratio for ZORI eligibility. CoC-years with coverage
         below this threshold will have zori_coc and rent_to_income set to null.

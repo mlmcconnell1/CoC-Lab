@@ -26,7 +26,7 @@ Usage
 
     # Generate diagnostics from a DataFrame or file path
     text_summary, diagnostics_df = summarize_coc_zori(
-        coc_zori_df_or_path="data/curated/rents/coc_zori__county__b2025__c2023__acs2019-2023__wrenter_households.parquet",
+        coc_zori_df_or_path="data/curated/zori/coc_zori__county__b2025__c2023__acs2019-2023__wrenter_households.parquet",
         min_coverage=0.90,
         dominance_threshold=0.80,
     )
@@ -376,7 +376,7 @@ def summarize_coc_zori(
     Examples
     --------
     >>> from coclab.rents.diagnostics import summarize_coc_zori
-    >>> path = "data/curated/rents/coc_zori__county__b2025.parquet"
+    >>> path = "data/curated/zori/coc_zori__county__b2025.parquet"
     >>> text, df = summarize_coc_zori(path)
     >>> print(text)
     """

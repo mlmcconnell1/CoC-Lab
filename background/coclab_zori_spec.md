@@ -21,7 +21,7 @@ This spec is designed to enable **parallel implementation by multiple agents** w
 - Producing publication-ready figures.
 
 ### 1.3 Success Criteria
-- `coclab ingest-zori` produces a normalized Parquet file under `data/curated/rents/` with reproducible metadata.
+- `coclab ingest-zori` produces a normalized Parquet file under `data/curated/zori/` with reproducible metadata.
 - `coclab aggregate-zori` produces a CoC×month (and optionally CoC×year) Parquet file and prints coverage diagnostics.
 - Aggregation artifacts include:
   - boundary vintage, crosswalk vintage, base geography vintage (if applicable)
@@ -63,16 +63,16 @@ coclab ingest-zori --geography county --force
 - `--geography` (required): one of `county`, `zip` (zip is optional feature; implement county first)
 - `--url` (optional): override download URL
 - `--force` (flag): re-download and reprocess even if cached
-- `--output-dir` (default: `data/curated/rents`)
-- `--raw-dir` (default: `data/raw/rents`)
+- `--output-dir` (default: `data/curated/zori`)
+- `--raw-dir` (default: `data/raw/zori`)
 - `--start` / `--end` (optional): filter date range after ingest (do not truncate raw archive)
 
 **Outputs:**
-- Raw archive/csv saved to: `data/raw/rents/zori__{geography}__{download_date}.(csv|zip)`
+- Raw archive/csv saved to: `data/raw/zori/zori__{geography}__{download_date}.(csv|zip)`
 - Curated normalized parquet:
-  - `data/curated/rents/zori__{geography}.parquet` (latest)
+  - `data/curated/zori/zori__{geography}.parquet` (latest)
   - optionally versioned by hash:
-    - `data/curated/rents/zori__{geography}__{sha256[:10]}.parquet`
+    - `data/curated/zori/zori__{geography}__{sha256[:10]}.parquet`
 
 **Exit codes:**
 - `0` success
@@ -95,18 +95,18 @@ coclab aggregate-zori --boundary 2025 --counties 2023 --acs 2019-2023 --weightin
 - `--xwalk-path` (optional): explicit crosswalk path; if omitted, infer from `boundary` and `counties`
 - `--weighting`, `-w`: `renter_households` (preferred), `housing_units`, `population`, `equal`
 - `--acs` (required when weighting depends on ACS): ACS 5-year vintage used to compute weights (e.g., `2019-2023`)
-- `--output-dir` (default: `data/curated/rents`)
+- `--output-dir` (default: `data/curated/zori`)
 - `--to-yearly` (flag): also emit a yearly collapsed file (see §5.4)
 - `--yearly-method` (default: `pit_january`): `pit_january`, `calendar_mean`, `calendar_median`
 - `--force` (flag): recompute outputs even if present
 
 **Outputs:**
 - Monthly CoC-level ZORI:
-  - `data/curated/rents/coc_zori__{geography}__b{boundary}__c{counties}__acs{acs}__w{weighting}.parquet`
+  - `data/curated/zori/coc_zori__{geography}__b{boundary}__c{counties}__acs{acs}__w{weighting}.parquet`
 - Optional yearly output:
-  - `data/curated/rents/coc_zori_yearly__{geography}__b{boundary}__c{counties}__acs{acs}__w{weighting}__m{yearly_method}.parquet`
+  - `data/curated/zori/coc_zori_yearly__{geography}__b{boundary}__c{counties}__acs{acs}__w{weighting}__m{yearly_method}.parquet`
 - Diagnostics summary printed to console and optionally saved:
-  - `data/curated/rents/diagnostics__coc_zori__{...}.parquet`
+  - `data/curated/zori/diagnostics__coc_zori__{...}.parquet`
 
 **Exit codes:**
 - `0` success
@@ -300,8 +300,8 @@ coclab/
   cli/
     zori.py            # new Typer group
 data/
-  raw/rents/
-  curated/rents/
+  raw/zori/
+  curated/zori/
 ```
 
 ---
@@ -367,7 +367,7 @@ coclab ingest-zori --geography county
 coclab aggregate-zori --boundary 2025 --counties 2023 --acs 2019-2023 --weighting renter_households --to-yearly
 
 # 4) Optional diagnostics
-coclab zori-diagnostics --coc-zori data/curated/rents/coc_zori__county__b2025__c2023__acs2019-2023__wrenter_households.parquet
+coclab zori-diagnostics --coc-zori data/curated/zori/coc_zori__county__b2025__c2023__acs2019-2023__wrenter_households.parquet
 ```
 
 ---

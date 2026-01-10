@@ -676,7 +676,7 @@ coclab build-panel --start 2018 --end 2024 --include-zori
 coclab build-panel --start 2018 --end 2024 --include-zori --zori-min-coverage 0.80
 
 # Explicit ZORI data path
-coclab build-panel --start 2018 --end 2024 --include-zori --zori-yearly-path data/curated/rents/coc_zori_yearly.parquet
+coclab build-panel --start 2018 --end 2024 --include-zori --zori-yearly-path data/curated/zori/coc_zori_yearly.parquet
 ```
 
 | Option | Description | Default |
@@ -889,8 +889,8 @@ coclab ingest-zori --geography county --start 2020-01-01 --end 2024-12-31
 | `--geography`, `-g` | Geography level: `county` or `zip` | `county` |
 | `--url` | Override download URL | Auto-detected |
 | `--force`, `-f` | Re-download and reprocess even if cached | False |
-| `--output-dir`, `-o` | Output directory for curated parquet | `data/curated/rents` |
-| `--raw-dir` | Directory for raw downloads | `data/raw/rents` |
+| `--output-dir`, `-o` | Output directory for curated parquet | `data/curated/zori` |
+| `--raw-dir` | Directory for raw downloads | `data/raw/zori` |
 | `--start` | Filter to dates >= start (YYYY-MM-DD) | None |
 | `--end` | Filter to dates <= end (YYYY-MM-DD) | None |
 
@@ -900,7 +900,7 @@ coclab ingest-zori --geography county --start 2020-01-01 --end 2024-12-31
 - `3` - Download error
 
 **Output:**
-- `data/curated/rents/zori__{geography}.parquet`
+- `data/curated/zori/zori__{geography}.parquet`
 
 ### `coclab aggregate-zori`
 
@@ -926,7 +926,7 @@ coclab aggregate-zori -b 2025 -c 2023 --acs 2019-2023 -w housing_units
 | `--zori-path` | Explicit path to ZORI parquet file | Auto-detected |
 | `--xwalk-path` | Explicit crosswalk path | Inferred |
 | `--weighting`, `-w` | Weighting: `renter_households`, `housing_units`, `population`, `equal` | `renter_households` |
-| `--output-dir`, `-o` | Output directory | `data/curated/rents` |
+| `--output-dir`, `-o` | Output directory | `data/curated/zori` |
 | `--to-yearly` | Also emit yearly collapsed file | False |
 | `--yearly-method` | `pit_january`, `calendar_mean`, `calendar_median` | `pit_january` |
 | `--force`, `-f` | Recompute even if output exists | False |
@@ -945,8 +945,8 @@ coclab ingest-zori --geography county
 - `3` - Failure to compute weights (ACS missing)
 
 **Output:**
-- `data/curated/rents/coc_zori__{geography}__b{boundary}__c{counties}__acs{acs}__w{weighting}.parquet`
-- Optional yearly: `data/curated/rents/coc_zori_yearly__...parquet`
+- `data/curated/zori/coc_zori__{geography}__b{boundary}__c{counties}__acs{acs}__w{weighting}.parquet`
+- Optional yearly: `data/curated/zori/coc_zori_yearly__...parquet`
 
 ### `coclab zori-diagnostics`
 
@@ -954,7 +954,7 @@ Summarize CoC ZORI coverage, missingness, and quality metrics.
 
 ```bash
 # Run diagnostics on CoC ZORI file
-coclab zori-diagnostics --coc-zori data/curated/rents/coc_zori__county__b2025.parquet
+coclab zori-diagnostics --coc-zori data/curated/zori/coc_zori__county__b2025.parquet
 
 # Save diagnostics to file
 coclab zori-diagnostics --coc-zori coc_zori.parquet --output diagnostics.csv
@@ -1401,7 +1401,7 @@ output_path = ingest_zori(
     start: date | str | None = None,  # Filter dates >= start
     end: date | str | None = None,    # Filter dates <= end
 ) -> Path
-# Output: data/curated/rents/zori__{geography}.parquet
+# Output: data/curated/zori/zori__{geography}.parquet
 
 # Build county weights from ACS data
 weights_df = build_county_weights(
@@ -1444,7 +1444,7 @@ output_path = aggregate_zori_to_coc(
     yearly_method: str = "pit_january",
     force: bool = False,
 ) -> Path
-# Output: data/curated/rents/coc_zori__{geography}__b{boundary}__c{counties}__acs{acs}__w{weighting}.parquet
+# Output: data/curated/zori/coc_zori__{geography}__b{boundary}__c{counties}__acs{acs}__w{weighting}.parquet
 
 # Aggregate county ZORI to CoC for each month
 coc_zori_df = aggregate_monthly(
@@ -1804,11 +1804,11 @@ erDiagram
 | Tract population | `data/curated/acs/tract_population__{acs}__{tracts}.parquet` | ACS tract population |
 | CoC population rollup | `data/curated/acs/coc_population_rollup__{boundary}__{acs}__{tracts}__{weighting}.parquet` | Aggregated CoC population |
 | Population crosscheck | `data/curated/acs/acs_population_crosscheck__{boundary}__{acs}__{tracts}__{weighting}.parquet` | Validation report |
-| Raw ZORI | `data/raw/rents/zori__{geography}__{date}.csv` | Downloaded Zillow CSV |
-| Normalized ZORI | `data/curated/rents/zori__{geography}.parquet` | Normalized ZORI data |
+| Raw ZORI | `data/raw/zori/zori__{geography}__{date}.csv` | Downloaded Zillow CSV |
+| Normalized ZORI | `data/curated/zori/zori__{geography}.parquet` | Normalized ZORI data |
 | County weights | `data/curated/acs/county_weights__{acs}__{method}.parquet` | ACS county weights |
-| CoC ZORI | `data/curated/rents/coc_zori__{geo}__b{boundary}__c{counties}__acs{acs}__w{weight}.parquet` | Aggregated CoC ZORI |
-| CoC ZORI yearly | `data/curated/rents/coc_zori_yearly__...parquet` | Yearly collapsed ZORI |
+| CoC ZORI | `data/curated/zori/coc_zori__{geo}__b{boundary}__c{counties}__acs{acs}__w{weight}.parquet` | Aggregated CoC ZORI |
+| CoC ZORI yearly | `data/curated/zori/coc_zori_yearly__...parquet` | Yearly collapsed ZORI |
 
 ### Dataset Provenance
 

@@ -60,8 +60,8 @@ ZILLOW_ATTRIBUTION = (
 )
 
 # Default directories
-DEFAULT_RAW_DIR = Path("data/raw/rents")
-DEFAULT_OUTPUT_DIR = Path("data/curated/rents")
+DEFAULT_RAW_DIR = Path("data/raw/zori")
+DEFAULT_OUTPUT_DIR = Path("data/curated/zori")
 
 
 def download_zori(
@@ -79,7 +79,7 @@ def download_zori(
     url : str, optional
         Override URL for download. If None, uses default URL for geography.
     raw_dir : Path or str, optional
-        Directory to save raw file. Defaults to 'data/raw/rents'.
+        Directory to save raw file. Defaults to 'data/raw/zori'.
     force : bool
         Re-download even if cached file exists.
 
@@ -349,12 +349,12 @@ def get_output_path(
     geography : str
         Geography level ("county" or "zip").
     output_dir : Path or str, optional
-        Output directory. Defaults to 'data/curated/rents'.
+        Output directory. Defaults to 'data/curated/zori'.
 
     Returns
     -------
     Path
-        Output path like 'data/curated/rents/zori__county.parquet'.
+        Output path like 'data/curated/zori/zori__county.parquet'.
     """
     if output_dir is None:
         output_dir = DEFAULT_OUTPUT_DIR
@@ -383,9 +383,9 @@ def ingest_zori(
     force : bool
         Re-download and reprocess even if cached.
     output_dir : Path or str, optional
-        Output directory for curated parquet. Defaults to 'data/curated/rents'.
+        Output directory for curated parquet. Defaults to 'data/curated/zori'.
     raw_dir : Path or str, optional
-        Directory for raw downloads. Defaults to 'data/raw/rents'.
+        Directory for raw downloads. Defaults to 'data/raw/zori'.
     start : date or str, optional
         Filter to dates >= start after ingest.
     end : date or str, optional

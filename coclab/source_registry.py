@@ -25,7 +25,7 @@ Usage
         source_url="https://files.zillowstatic.com/...",
         raw_sha256="abc123...",
         file_size=1234567,
-        local_path="data/raw/rents/zori__county__2025-01-06.csv",
+        local_path="data/raw/zori/zori__county__2025-01-06.csv",
     )
 
     # Check if upstream data has changed

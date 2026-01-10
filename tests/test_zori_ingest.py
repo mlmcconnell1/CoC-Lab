@@ -203,7 +203,7 @@ class TestGetOutputPath:
     def test_default_path(self):
         """Test default output path generation."""
         path = get_output_path("county")
-        assert path == Path("data/curated/rents/zori__county.parquet")
+        assert path == Path("data/curated/zori/zori__county.parquet")
 
     def test_custom_base_dir(self):
         """Test output path with custom base directory."""
@@ -213,7 +213,7 @@ class TestGetOutputPath:
     def test_zip_geography(self):
         """Test output path for ZIP geography."""
         path = get_output_path("zip")
-        assert path == Path("data/curated/rents/zori__zip.parquet")
+        assert path == Path("data/curated/zori/zori__zip.parquet")
 
 
 class TestDownloadZori:

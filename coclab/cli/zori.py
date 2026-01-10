@@ -15,8 +15,8 @@ import httpx
 import typer
 
 # Default directories matching the spec
-DEFAULT_OUTPUT_DIR = Path("data/curated/rents")
-DEFAULT_RAW_DIR = Path("data/raw/rents")
+DEFAULT_OUTPUT_DIR = Path("data/curated/zori")
+DEFAULT_RAW_DIR = Path("data/raw/zori")
 
 # Weighting method choices
 WeightingChoice = Literal["renter_households", "housing_units", "population", "equal"]

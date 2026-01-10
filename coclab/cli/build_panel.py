@@ -9,7 +9,7 @@ import typer
 DEFAULT_ZORI_MIN_COVERAGE = 0.90
 
 # Default ZORI rents directory
-DEFAULT_RENTS_DIR = Path("data/curated/rents")
+DEFAULT_RENTS_DIR = Path("data/curated/zori")
 
 
 def _resolve_zori_yearly_path(explicit_path: Path | None) -> Path | None:
@@ -145,7 +145,7 @@ def build_panel_cmd(
         coclab build-panel --start 2018 --end 2024 --include-zori --zori-min-coverage 0.85
 
         coclab build-panel --start 2018 --end 2024 --include-zori \\
-            --zori-yearly-path data/curated/rents/coc_zori_yearly.parquet
+            --zori-yearly-path data/curated/zori/coc_zori_yearly.parquet
     """
     from coclab.panel import AlignmentPolicy, build_panel, save_panel
     from coclab.panel.policies import default_acs_vintage, default_boundary_vintage
@@ -197,7 +197,7 @@ def build_panel_cmd(
                 typer.echo(f"Specified path does not exist: {zori_yearly_path}")
             else:
                 typer.echo(
-                    "No yearly ZORI file found in default location: data/curated/rents/"
+                    "No yearly ZORI file found in default location: data/curated/zori/"
                 )
             raise typer.Exit(1)
         typer.echo(f"ZORI yearly data: {resolved_zori_path}")

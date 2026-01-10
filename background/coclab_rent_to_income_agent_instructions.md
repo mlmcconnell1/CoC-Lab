@@ -17,7 +17,7 @@ These instructions are written to allow **parallel work by multiple agents** wit
 ## Architectural Rule (Non‑Negotiable)
 
 - ❌ Do **not** add `rent_to_income` to:
-  - `data/curated/rents/`
+  - `data/curated/zori/`
   - `data/curated/measures/`
 - ✅ Add `rent_to_income` **only** to:
   - `data/curated/panels/` (the output of `coclab build-panel`, or an adjacent derive step)

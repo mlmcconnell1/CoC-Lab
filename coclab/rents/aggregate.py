@@ -77,7 +77,7 @@ from coclab.rents.weights import (
 logger = logging.getLogger(__name__)
 
 # Default directories
-DEFAULT_OUTPUT_DIR = Path("data/curated/rents")
+DEFAULT_OUTPUT_DIR = Path("data/curated/zori")
 DEFAULT_XWALK_DIR = Path("data/curated/xwalks")
 
 # Default minimum coverage threshold (per spec section 5.2)
@@ -106,7 +106,7 @@ def load_zori(
     zori_path : Path or str, optional
         Explicit path to ZORI parquet file. If None, uses default path.
     output_dir : Path or str, optional
-        Base directory for ZORI data. Defaults to 'data/curated/rents'.
+        Base directory for ZORI data. Defaults to 'data/curated/zori'.
 
     Returns
     -------
@@ -538,12 +538,12 @@ def get_coc_zori_path(
     weighting : str
         Weighting method (e.g., "renter_households").
     output_dir : Path or str, optional
-        Output directory. Defaults to 'data/curated/rents'.
+        Output directory. Defaults to 'data/curated/zori'.
 
     Returns
     -------
     Path
-        Output path like 'data/curated/rents/coc_zori__county__b2025__c2023__
+        Output path like 'data/curated/zori/coc_zori__county__b2025__c2023__
         acs2019-2023__wrenter_households.parquet'
     """
     if output_dir is None:
@@ -584,12 +584,12 @@ def get_coc_zori_yearly_path(
     yearly_method : str
         Yearly collapse method (e.g., "pit_january").
     output_dir : Path or str, optional
-        Output directory. Defaults to 'data/curated/rents'.
+        Output directory. Defaults to 'data/curated/zori'.
 
     Returns
     -------
     Path
-        Output path like 'data/curated/rents/coc_zori_yearly__county__b2025__
+        Output path like 'data/curated/zori/coc_zori_yearly__county__b2025__
         c2023__acs2019-2023__wrenter_households__mpit_january.parquet'
     """
     if output_dir is None:
@@ -651,7 +651,7 @@ def aggregate_zori_to_coc(
     xwalk_path : Path or str, optional
         Explicit path to crosswalk parquet file.
     output_dir : Path or str, optional
-        Output directory. Defaults to 'data/curated/rents'.
+        Output directory. Defaults to 'data/curated/zori'.
     xwalk_dir : Path or str, optional
         Directory for crosswalks. Defaults to 'data/curated/xwalks'.
     weights_dir : Path or str, optional
