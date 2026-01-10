@@ -13,6 +13,7 @@
 - [[#Python API]]
 - [[#Data Model]]
 - [[#Workflows]]
+  - [[#Typical Use Sequence: Building a Panel from Scratch]]
 - [[#Methodology: ACS Aggregation to CoC Level]]
 - [[#Methodology: ZORI Aggregation to CoC Level]]
 - [[#Methodology: Panel Assembly (Phase 3)]]
@@ -2020,6 +2021,159 @@ sequenceDiagram
     CLI->>Storage: Save coc_measures__2025__2022.parquet
     CLI-->>User: Measures built (N CoCs)
 ```
+
+### Typical Use Sequence: Building a Panel from Scratch
+
+This section demonstrates the complete command sequence to build an analysis-ready CoC × year panel with ZORI rent data, starting from a clean slate with no previously ingested files.
+
+**Goal:** Export bundle covering 2015–2024 with ZORI integration.
+
+#### Phase 1: Ingest External Data Sources
+
+```bash
+# 1a. Ingest CoC boundaries for each year (2015-2024)
+coclab ingest-boundaries --source hud_exchange --vintage 2015
+coclab ingest-boundaries --source hud_exchange --vintage 2016
+coclab ingest-boundaries --source hud_exchange --vintage 2017
+coclab ingest-boundaries --source hud_exchange --vintage 2018
+coclab ingest-boundaries --source hud_exchange --vintage 2019
+coclab ingest-boundaries --source hud_exchange --vintage 2020
+coclab ingest-boundaries --source hud_exchange --vintage 2021
+coclab ingest-boundaries --source hud_exchange --vintage 2022
+coclab ingest-boundaries --source hud_exchange --vintage 2023
+coclab ingest-boundaries --source hud_exchange --vintage 2024
+
+# 1b. Ingest Census geometries (tracts and counties)
+coclab ingest-census --year 2023 --type all
+
+# 1c. Ingest PIT counts (one vintage contains all historical years)
+coclab ingest-pit-vintage --vintage 2024
+
+# 1d. Ingest ZORI rent data
+coclab ingest-zori --geography county
+```
+
+#### Phase 2: Build Crosswalks
+
+Build crosswalks for each boundary vintage against the 2023 Census geometries:
+
+```bash
+coclab build-xwalks --boundary 2015 --tracts 2023 --counties 2023
+coclab build-xwalks --boundary 2016 --tracts 2023 --counties 2023
+coclab build-xwalks --boundary 2017 --tracts 2023 --counties 2023
+coclab build-xwalks --boundary 2018 --tracts 2023 --counties 2023
+coclab build-xwalks --boundary 2019 --tracts 2023 --counties 2023
+coclab build-xwalks --boundary 2020 --tracts 2023 --counties 2023
+coclab build-xwalks --boundary 2021 --tracts 2023 --counties 2023
+coclab build-xwalks --boundary 2022 --tracts 2023 --counties 2023
+coclab build-xwalks --boundary 2023 --tracts 2023 --counties 2023
+coclab build-xwalks --boundary 2024 --tracts 2023 --counties 2023
+```
+
+#### Phase 3: Build ACS Measures
+
+The default alignment policy maps PIT year Y → ACS vintage Y-1. Build measures for each required (boundary, ACS) pair:
+
+```bash
+# PIT 2015 → boundary 2015, ACS 2014 (2010-2014 estimates)
+coclab build-measures --boundary 2015 --acs 2010-2014
+
+# PIT 2016 → boundary 2016, ACS 2015 (2011-2015 estimates)
+coclab build-measures --boundary 2016 --acs 2011-2015
+
+# PIT 2017 → boundary 2017, ACS 2016 (2012-2016 estimates)
+coclab build-measures --boundary 2017 --acs 2012-2016
+
+# PIT 2018 → boundary 2018, ACS 2017 (2013-2017 estimates)
+coclab build-measures --boundary 2018 --acs 2013-2017
+
+# PIT 2019 → boundary 2019, ACS 2018 (2014-2018 estimates)
+coclab build-measures --boundary 2019 --acs 2014-2018
+
+# PIT 2020 → boundary 2020, ACS 2019 (2015-2019 estimates)
+coclab build-measures --boundary 2020 --acs 2015-2019
+
+# PIT 2021 → boundary 2021, ACS 2020 (2016-2020 estimates)
+coclab build-measures --boundary 2021 --acs 2016-2020
+
+# PIT 2022 → boundary 2022, ACS 2021 (2017-2021 estimates)
+coclab build-measures --boundary 2022 --acs 2017-2021
+
+# PIT 2023 → boundary 2023, ACS 2022 (2018-2022 estimates)
+coclab build-measures --boundary 2023 --acs 2018-2022
+
+# PIT 2024 → boundary 2024, ACS 2023 (2019-2023 estimates)
+coclab build-measures --boundary 2024 --acs 2019-2023
+```
+
+#### Phase 4: Aggregate ZORI to CoC Level
+
+Aggregate county-level ZORI to CoC geography with yearly collapse:
+
+```bash
+coclab aggregate-zori \
+  --boundary 2024 \
+  --counties 2023 \
+  --acs 2019-2023 \
+  --weighting renter_households \
+  --to-yearly
+```
+
+#### Phase 5: Build the Panel
+
+Assemble the CoC × year panel with ZORI integration:
+
+```bash
+coclab build-panel \
+  --start 2015 \
+  --end 2024 \
+  --weighting population \
+  --include-zori \
+  --zori-min-coverage 0.90
+```
+
+#### Phase 6: Export the Bundle
+
+Create an analysis-ready export bundle:
+
+```bash
+coclab export-bundle \
+  --name coc_analysis_2015_2024 \
+  --years 2015-2024 \
+  --include panel,manifest,codebook,diagnostics \
+  --compress
+```
+
+#### Output Summary
+
+| Phase | Output Location |
+|-------|-----------------|
+| 1a. Boundaries | `data/curated/coc_boundaries/coc_boundaries__YYYY.parquet` |
+| 1b. Census | `data/curated/census/tracts__2023.parquet`, `counties__2023.parquet` |
+| 1c. PIT | `data/curated/pit/pit_vintage__2024.parquet` |
+| 1d. ZORI | `data/curated/zori/zori__county.parquet` |
+| 2. Crosswalks | `data/curated/xwalks/coc_tract_xwalk__YYYY__2023.parquet` |
+| 3. Measures | `data/curated/measures/coc_measures__YYYY__XXXX-YYYY.parquet` |
+| 4. CoC ZORI | `data/curated/zori/coc_zori_yearly__*.parquet` |
+| 5. Panel | `data/curated/panels/coc_panel__2015_2024__zori.parquet` |
+| 6. Export | `exports/export-1/` (with MANIFEST.json, codebook, etc.) |
+
+#### Alignment Policy Reference
+
+The default alignment policy determines vintage matching:
+
+| PIT Year | Boundary Vintage | ACS Vintage | ACS 5-Year Range |
+|----------|------------------|-------------|------------------|
+| 2015 | 2015 | 2014 | 2010-2014 |
+| 2016 | 2016 | 2015 | 2011-2015 |
+| 2017 | 2017 | 2016 | 2012-2016 |
+| 2018 | 2018 | 2017 | 2013-2017 |
+| 2019 | 2019 | 2018 | 2014-2018 |
+| 2020 | 2020 | 2019 | 2015-2019 |
+| 2021 | 2021 | 2020 | 2016-2020 |
+| 2022 | 2022 | 2021 | 2017-2021 |
+| 2023 | 2023 | 2022 | 2018-2022 |
+| 2024 | 2024 | 2023 | 2019-2023 |
 
 ---
 
