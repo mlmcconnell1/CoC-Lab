@@ -4,7 +4,7 @@
 
 ```python
 from coclab.ingest import ingest_hud_exchange, ingest_hud_opendata
-from coclab.registry import latest_vintage, list_vintages
+from coclab.registry import latest_vintage, list_boundaries
 from coclab.viz import render_coc_map
 
 # Ingest a vintage
@@ -14,7 +14,7 @@ output_path = ingest_hud_exchange("2025")
 vintage = latest_vintage()
 
 # List all vintages
-for entry in list_vintages():
+for entry in list_boundaries():
     print(f"{entry.boundary_vintage}: {entry.feature_count} features")
 
 # Render a map
@@ -49,7 +49,7 @@ path = ingest_hud_opendata(
 ```python
 from coclab.registry import (
     register_vintage,
-    list_vintages,
+    list_boundaries,
     latest_vintage,
     RegistryEntry
 )
@@ -65,7 +65,7 @@ register_vintage(
 ) -> None
 
 # List all vintages (sorted by ingested_at descending)
-entries: list[RegistryEntry] = list_vintages()
+entries: list[RegistryEntry] = list_boundaries()
 
 # Get latest vintage string
 vintage: str = latest_vintage(source: str | None = None)

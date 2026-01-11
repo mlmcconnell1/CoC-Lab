@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from coclab.registry import RegistryEntry, latest_vintage, list_vintages, register_vintage
+from coclab.registry import RegistryEntry, latest_vintage, list_boundaries, register_vintage
 
 
 @pytest.fixture
@@ -92,7 +92,7 @@ class TestRegisterVintage:
             feature_count=400,
             registry_path=temp_registry,
         )
-        entries = list_vintages(registry_path=temp_registry)
+        entries = list_boundaries(registry_path=temp_registry)
         assert len(entries) == 2
         vintages = {e.boundary_vintage for e in entries}
         assert vintages == {"2024", "2025"}
@@ -116,7 +116,7 @@ class TestRegisterVintage:
             ingested_at=datetime(2025, 2, 1, 12, 0, 0, tzinfo=timezone.utc),
             registry_path=temp_registry,
         )
-        entries = list_vintages(registry_path=temp_registry)
+        entries = list_boundaries(registry_path=temp_registry)
         assert len(entries) == 1
         # Original timestamp preserved
         assert entries[0].ingested_at == ingested_at
@@ -147,17 +147,17 @@ class TestRegisterVintage:
         hash2 = entry2.hash_of_file
 
         assert hash1 != hash2
-        entries = list_vintages(registry_path=temp_registry)
+        entries = list_boundaries(registry_path=temp_registry)
         assert len(entries) == 1
         assert entries[0].hash_of_file == hash2
         assert entries[0].feature_count == 405
 
 
 class TestListVintages:
-    """Tests for list_vintages function."""
+    """Tests for list_boundaries function."""
 
     def test_empty_registry(self, temp_registry):
-        entries = list_vintages(registry_path=temp_registry)
+        entries = list_boundaries(registry_path=temp_registry)
         assert entries == []
 
     def test_sorted_by_ingested_at_descending(self, temp_registry, sample_parquet):
@@ -185,7 +185,7 @@ class TestListVintages:
             ingested_at=datetime(2024, 6, 1, tzinfo=timezone.utc),
             registry_path=temp_registry,
         )
-        entries = list_vintages(registry_path=temp_registry)
+        entries = list_boundaries(registry_path=temp_registry)
         assert [e.boundary_vintage for e in entries] == ["2025", "2024", "2023"]
 
 

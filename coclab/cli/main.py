@@ -126,10 +126,10 @@ def ingest_boundaries(
 
         from coclab.geo.io import curated_boundary_path
         from coclab.ingest.hud_exchange_gis import ingest_hud_exchange
-        from coclab.registry.registry import list_vintages
+        from coclab.registry.registry import list_boundaries
 
         output_path = curated_boundary_path(vintage)
-        registered_vintages = [v.boundary_vintage for v in list_vintages()]
+        registered_vintages = [v.boundary_vintage for v in list_boundaries()]
         file_exists = output_path.exists()
         in_registry = vintage in registered_vintages
 
@@ -207,10 +207,10 @@ def delete_boundaries(
 
         coclab delete-boundaries 2024 hud_exchange_gis_tools --yes
     """
-    from coclab.registry.registry import delete_vintage, list_vintages
+    from coclab.registry.registry import delete_vintage, list_boundaries
 
     # Check if the entry exists first
-    vintages = list_vintages()
+    vintages = list_boundaries()
     matching = [v for v in vintages if v.boundary_vintage == vintage and v.source == source]
 
     if not matching:
@@ -233,11 +233,11 @@ def delete_boundaries(
         raise typer.Exit(1)
 
 
-def list_vintages_cmd() -> None:
+def list_boundaries_cmd() -> None:
     """List all available boundary vintages in the registry."""
-    from coclab.registry.registry import list_vintages
+    from coclab.registry.registry import list_boundaries
 
-    vintages = list_vintages()
+    vintages = list_boundaries()
 
     if not vintages:
         typer.echo("No vintages registered yet.")
@@ -379,9 +379,9 @@ app.command("ingest-census")(ingest_census)
 app.command("ingest-pit")(ingest_pit)
 app.command("ingest-pit-vintage")(ingest_pit_vintage)
 app.command("ingest-zori")(ingest_zori)
+app.command("list-boundaries")(list_boundaries_cmd)
 app.command("list-census")(list_census)
 app.command("list-measures")(list_measures)
-app.command("list-vintages")(list_vintages_cmd)
 app.command("list-xwalks")(list_xwalks)
 app.command("panel-diagnostics")(panel_diagnostics)
 app.command("rollup-acs-population")(rollup_acs_population)

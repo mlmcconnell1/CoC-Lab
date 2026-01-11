@@ -11,7 +11,7 @@ flowchart LR
     coclab --> ingest-pit
     coclab --> ingest-pit-vintage
     coclab --> ingest-acs-population
-    coclab --> list-vintages
+    coclab --> list-boundaries
     coclab --> show
     coclab --> build-xwalks
     coclab --> build-measures
@@ -39,7 +39,7 @@ flowchart LR
     ingest-pit --> PIT[Download & parse PIT counts]
     ingest-pit-vintage --> PITVINT[Parse all years from vintage]
     ingest-acs-population --> ACSPOP[Fetch tract population]
-    list-vintages --> LIST[Display available vintages]
+    list-boundaries --> LIST[List boundary vintages]
     show --> MAP[Render interactive map]
     build-xwalks --> XWALK[Create tract/county crosswalks]
     build-measures --> MEAS[Aggregate ACS data to CoC]
@@ -541,6 +541,24 @@ coclab ingest-zori --geography county --start 2020-01-01 --end 2024-12-31
 **Output:**
 - `data/curated/zori/zori__{geography}.parquet`
 
+## `coclab list-boundaries`
+
+List all available boundary vintages in the registry.
+
+```bash
+coclab list-boundaries
+```
+
+**Example Output:**
+```
+Available boundary vintages:
+
+Vintage                        Source                    Features   Ingested At
+-------------------------------------------------------------------------------------
+2025                           hud_exchange_gis_tools    400        2025-01-15 14:30
+HUDOpenData_2025-01-10         hud_opendata_arcgis       402        2025-01-10 09:15
+```
+
 ## `coclab list-census`
 
 List available TIGER census geometry files (tracts and counties).
@@ -586,24 +604,6 @@ coclab list-measures
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--dir`, `-d` | Directory to scan | `data/curated/measures` |
-
-## `coclab list-vintages`
-
-List all available boundary vintages in the registry.
-
-```bash
-coclab list-vintages
-```
-
-**Example Output:**
-```
-Available boundary vintages:
-
-Vintage                        Source                    Features   Ingested At
--------------------------------------------------------------------------------------
-2025                           hud_exchange_gis_tools    400        2025-01-15 14:30
-HUDOpenData_2025-01-10         hud_opendata_arcgis       402        2025-01-10 09:15
-```
 
 ## `coclab list-xwalks`
 

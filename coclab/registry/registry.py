@@ -125,8 +125,8 @@ def register_vintage(
     return entry
 
 
-def list_vintages(registry_path: Path | None = None) -> list[RegistryEntry]:
-    """List all registered vintages.
+def list_boundaries(registry_path: Path | None = None) -> list[RegistryEntry]:
+    """List all registered boundary vintages.
 
     Args:
         registry_path: Custom registry path (uses default if not specified)

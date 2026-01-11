@@ -50,14 +50,14 @@ class TestBuildXwalksCommand:
     """Tests for the build-xwalks CLI command."""
 
     @patch("coclab.cli.build_xwalks.latest_vintage")
-    @patch("coclab.cli.build_xwalks.list_vintages")
+    @patch("coclab.cli.build_xwalks.list_boundaries")
     def test_build_xwalks_missing_boundary(
         self,
-        mock_list_vintages,
+        mock_list_boundaries,
         mock_latest_vintage,
     ):
         """Should fail if no boundary vintages are registered."""
-        mock_list_vintages.return_value = []
+        mock_list_boundaries.return_value = []
         mock_latest_vintage.return_value = None
 
         result = runner.invoke(app, ["build-xwalks"])
@@ -65,7 +65,7 @@ class TestBuildXwalksCommand:
         assert result.exit_code == 1
         assert "No boundary vintages found in registry" in result.output
 
-    @patch("coclab.cli.build_xwalks.list_vintages")
+    @patch("coclab.cli.build_xwalks.list_boundaries")
     @patch("coclab.cli.build_xwalks.gpd.read_parquet")
     @patch("coclab.cli.build_xwalks.build_coc_tract_crosswalk")
     @patch("coclab.cli.build_xwalks.save_crosswalk")
@@ -78,7 +78,7 @@ class TestBuildXwalksCommand:
         mock_save_crosswalk,
         mock_build_crosswalk,
         mock_read_parquet,
-        mock_list_vintages,
+        mock_list_boundaries,
         tmp_path,
     ):
         """Build-xwalks should succeed and skip counties when missing."""
@@ -95,7 +95,7 @@ class TestBuildXwalksCommand:
             tracts_path.parent.mkdir(parents=True, exist_ok=True)
             tracts_path.touch()
 
-            mock_list_vintages.return_value = [
+            mock_list_boundaries.return_value = [
                 RegistryEntry(
                     boundary_vintage="2025",
                     source="hud_exchange_gis_tools",

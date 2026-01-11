@@ -193,7 +193,7 @@ These functions define the integration points:
    - append/update registry with idempotency
 3. `latest_vintage()`:
    - choose most recent `ingested_at` or highest year for `hud_exchange_gis_tools` by policy
-4. Provide `list_vintages()` for CLI
+4. Provide `list_boundaries()` for CLI
 
 **Deliverables**
 - `coclab/registry/registry.py`

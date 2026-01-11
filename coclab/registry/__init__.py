@@ -2,7 +2,7 @@
 
 from coclab.registry.registry import (
     latest_vintage,
-    list_vintages,
+    list_boundaries,
     register_vintage,
 )
 from coclab.registry.schema import RegistryEntry
@@ -10,6 +10,6 @@ from coclab.registry.schema import RegistryEntry
 __all__ = [
     "RegistryEntry",
     "latest_vintage",
-    "list_vintages",
+    "list_boundaries",
     "register_vintage",
 ]

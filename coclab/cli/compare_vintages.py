@@ -7,7 +7,7 @@ import geopandas as gpd
 import pandas as pd
 import typer
 
-from coclab.registry.registry import list_vintages
+from coclab.registry.registry import list_boundaries
 
 
 def compare_vintages(
@@ -60,7 +60,7 @@ def compare_vintages(
         coclab compare-vintages -v1 2024 -v2 2025 -o diff_report.csv
     """
     # Look up vintage paths in registry
-    vintages = list_vintages()
+    vintages = list_boundaries()
     vintage_map = {v.boundary_vintage: v for v in vintages}
 
     # Validate vintage1 exists

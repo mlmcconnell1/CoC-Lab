@@ -8,7 +8,7 @@ import geopandas as gpd
 import typer
 
 from coclab.measures.diagnostics import compute_crosswalk_diagnostics, summarize_diagnostics
-from coclab.registry.registry import latest_vintage, list_vintages
+from coclab.registry.registry import latest_vintage, list_boundaries
 from coclab.xwalks.county import build_coc_county_crosswalk, save_county_crosswalk
 from coclab.xwalks.tract import build_coc_tract_crosswalk, save_crosswalk
 
@@ -75,7 +75,7 @@ def build_xwalks(
         typer.echo(f"Using latest boundary vintage: {boundary}")
     else:
         # Verify the boundary vintage exists
-        vintages = list_vintages()
+        vintages = list_boundaries()
         vintage_ids = [v.boundary_vintage for v in vintages]
         if boundary not in vintage_ids:
             typer.echo(
@@ -87,7 +87,7 @@ def build_xwalks(
 
     # Load CoC boundaries from registry
     typer.echo(f"Loading CoC boundaries (vintage: {boundary})...")
-    vintages = list_vintages()
+    vintages = list_boundaries()
     boundary_entry = next(v for v in vintages if v.boundary_vintage == boundary)
     boundary_path = Path(boundary_entry.path)
     if not boundary_path.exists():

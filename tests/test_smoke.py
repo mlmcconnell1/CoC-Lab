@@ -18,7 +18,7 @@ from typer.testing import CliRunner
 
 from coclab.cli.main import app
 from coclab.geo.normalize import normalize_boundaries
-from coclab.registry import latest_vintage, list_vintages, register_vintage
+from coclab.registry import latest_vintage, list_boundaries, register_vintage
 from coclab.viz import render_coc_map
 
 runner = CliRunner()
@@ -155,7 +155,7 @@ class TestSmokeEndToEnd:
         assert entry.feature_count == 4
 
         # Verify registry works
-        vintages = list_vintages(registry_path=registry_path)
+        vintages = list_boundaries(registry_path=registry_path)
         assert len(vintages) == 1
         assert vintages[0].boundary_vintage == vintage
 
@@ -211,14 +211,14 @@ class TestSmokeEndToEnd:
 class TestSmokeCLI:
     """Smoke tests for CLI commands."""
 
-    def test_cli_list_vintages_empty(self, smoke_test_env):
-        """Test list-vintages command with empty registry."""
-        result = runner.invoke(app, ["list-vintages"])
+    def test_cli_list_boundaries_empty(self, smoke_test_env):
+        """Test list-boundaries command with empty registry."""
+        result = runner.invoke(app, ["list-boundaries"])
         assert result.exit_code == 0
         assert "No vintages registered" in result.stdout
 
-    def test_cli_list_vintages_with_data(self, smoke_test_env, fixture_boundaries_gdf):
-        """Test list-vintages command shows registered vintages."""
+    def test_cli_list_boundaries_with_data(self, smoke_test_env, fixture_boundaries_gdf):
+        """Test list-boundaries command shows registered vintages."""
         # Setup
         normalized_gdf = normalize_boundaries(fixture_boundaries_gdf)
         vintage = "2025"
@@ -235,7 +235,7 @@ class TestSmokeCLI:
         )
 
         # Test
-        result = runner.invoke(app, ["list-vintages"])
+        result = runner.invoke(app, ["list-boundaries"])
         assert result.exit_code == 0
         assert "2025" in result.stdout
         assert "hud_exchange_gis_tools" in result.stdout

@@ -37,10 +37,10 @@ Or from HUD Open Data (current snapshot):
 coclab ingest-boundaries --source hud_opendata --snapshot latest
 ```
 
-#### 2. List available vintages
+#### 2. List available boundaries
 
 ```bash
-coclab list-vintages
+coclab list-boundaries
 ```
 
 Example output:
@@ -79,7 +79,7 @@ The command generates an interactive HTML map with the CoC boundary and opens it
 
 ```python
 from coclab.ingest import ingest_hud_exchange
-from coclab.registry import latest_vintage, list_vintages
+from coclab.registry import latest_vintage, list_boundaries
 from coclab.viz import render_coc_map
 
 # Ingest a vintage
@@ -88,8 +88,8 @@ output_path = ingest_hud_exchange("2025")
 # Get the latest vintage
 vintage = latest_vintage()
 
-# List all vintages
-for entry in list_vintages():
+# List all boundaries
+for entry in list_boundaries():
     print(f"{entry.boundary_vintage}: {entry.feature_count} features")
 
 # Render a map

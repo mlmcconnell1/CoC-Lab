@@ -78,22 +78,22 @@ class TestIngestCommand:
         mock_ingest.assert_called_once_with(snapshot_tag="custom_snapshot")
 
 
-class TestListVintagesCommand:
-    """Tests for the 'list-vintages' command."""
+class TestListBoundariesCommand:
+    """Tests for the 'list-boundaries' command."""
 
-    @patch("coclab.registry.registry.list_vintages")
-    def test_list_vintages_empty(self, mock_list):
-        """List vintages when no vintages registered."""
+    @patch("coclab.registry.registry.list_boundaries")
+    def test_list_boundaries_empty(self, mock_list):
+        """List boundaries when no vintages registered."""
         mock_list.return_value = []
 
-        result = runner.invoke(app, ["list-vintages"])
+        result = runner.invoke(app, ["list-boundaries"])
 
         assert result.exit_code == 0
         assert "No vintages registered" in result.output
 
-    @patch("coclab.registry.registry.list_vintages")
-    def test_list_vintages_with_entries(self, mock_list):
-        """List vintages with registered entries."""
+    @patch("coclab.registry.registry.list_boundaries")
+    def test_list_boundaries_with_entries(self, mock_list):
+        """List boundaries with registered entries."""
         from datetime import UTC, datetime
 
         from coclab.registry.schema import RegistryEntry
@@ -117,7 +117,7 @@ class TestListVintagesCommand:
             ),
         ]
 
-        result = runner.invoke(app, ["list-vintages"])
+        result = runner.invoke(app, ["list-boundaries"])
 
         assert result.exit_code == 0
         assert "2025" in result.output
@@ -195,7 +195,7 @@ class TestHelpOutput:
 
         assert result.exit_code == 0
         assert "ingest" in result.output
-        assert "list-vintages" in result.output
+        assert "list-boundaries" in result.output
         assert "show" in result.output
 
     def test_ingest_help(self):

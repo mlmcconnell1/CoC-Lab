@@ -83,7 +83,7 @@ Vintage tracking and version selection.
 
 **Functions:**
 - `register_vintage()` - Idempotent registration with hash checking
-- `list_vintages()` - Get all entries sorted by date
+- `list_boundaries()` - Get all entries sorted by date
 - `latest_vintage()` - Resolve current version by source policy
 - `compute_file_hash()` - SHA-256 of file contents
 
