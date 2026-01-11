@@ -1,0 +1,413 @@
+# Data Model
+
+## Canonical Boundary Schema
+
+All boundary data is normalized to this schema before storage:
+
+```mermaid
+erDiagram
+    COC_BOUNDARY {
+        string boundary_vintage PK "e.g., 2025 or HUDOpenData_2025-01-10"
+        string coc_id PK "CoC code like CO-500"
+        string coc_name "Official name/label"
+        string state_abbrev "e.g., CO"
+        string source "hud_exchange_gis_tools | hud_opendata_arcgis"
+        string source_ref "URL or dataset identifier"
+        datetime ingested_at "UTC timestamp"
+        string geom_hash "SHA-256 of normalized WKB"
+        geometry geometry "Polygon/MultiPolygon in EPSG:4326"
+    }
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `boundary_vintage` | string | Version identifier (e.g., `2025`) |
+| `coc_id` | string | CoC identifier (e.g., `CO-500`) |
+| `coc_name` | string | Official CoC name |
+| `state_abbrev` | string | US state abbreviation |
+| `source` | string | Data source identifier |
+| `source_ref` | string | URL or reference to original data |
+| `ingested_at` | datetime | UTC timestamp of ingestion |
+| `geom_hash` | string | SHA-256 hash for change detection |
+| `geometry` | Polygon/MultiPolygon | Boundary in EPSG:4326 |
+
+## Registry Schema
+
+The registry tracks all available boundary vintages:
+
+```mermaid
+erDiagram
+    REGISTRY_ENTRY {
+        string boundary_vintage PK
+        string source
+        datetime ingested_at
+        string path
+        int feature_count
+        string hash_of_file
+    }
+```
+
+## Crosswalk Schema
+
+Crosswalks link CoC boundaries to census geographies:
+
+```mermaid
+erDiagram
+    COC_TRACT_CROSSWALK {
+        string coc_id PK "CoC identifier"
+        string boundary_vintage PK "CoC boundary version"
+        string tract_geoid PK "Census tract GEOID"
+        string tract_vintage "Tract vintage year"
+        float area_share "Fraction of tract area in CoC"
+        float pop_share "Population-weighted share (nullable)"
+        float intersection_area "Area of overlap in sq meters"
+        float tract_area "Total tract area in sq meters"
+    }
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `coc_id` | string | CoC identifier (e.g., `CO-500`) |
+| `boundary_vintage` | string | CoC boundary version |
+| `tract_geoid` | string | 11-digit census tract GEOID |
+| `tract_vintage` | string | Census tract vintage year |
+| `area_share` | float | `intersection_area / tract_area` |
+| `pop_share` | float | Population-weighted share (nullable) |
+| `intersection_area` | float | Overlap area in square meters |
+| `tract_area` | float | Total tract area in square meters |
+
+## CoC Measures Schema
+
+Aggregated demographic measures at CoC level:
+
+```mermaid
+erDiagram
+    COC_MEASURES {
+        string coc_id PK "CoC identifier"
+        string boundary_vintage "CoC boundary version"
+        int acs_vintage "ACS 5-year estimate end year"
+        string weighting_method "area or population"
+        float total_population "Estimated total population"
+        float adult_population "Population 18+"
+        float population_below_poverty "Below 100% FPL"
+        float median_household_income "Weighted median income"
+        float median_gross_rent "Weighted median rent"
+        float coverage_ratio "Fraction of CoC area with ACS data (ideally ~1)"
+        string source "acs_5yr"
+    }
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `coc_id` | string | CoC identifier |
+| `boundary_vintage` | string | CoC boundary version used |
+| `acs_vintage` | int | ACS 5-year estimate end year |
+| `weighting_method` | string | `area` or `population` |
+| `total_population` | float | Weighted population estimate |
+| `adult_population` | float | Population 18 and older |
+| `population_below_poverty` | float | Below 100% federal poverty line |
+| `median_household_income` | float | Population-weighted median |
+| `median_gross_rent` | float | Population-weighted median |
+| `coverage_ratio` | float | Fraction of CoC area covered by tracts with data |
+| `source` | string | Always `acs_5yr` |
+
+## PIT Counts Schema (Phase 3)
+
+Canonical PIT (Point-in-Time) count data:
+
+```mermaid
+erDiagram
+    PIT_COUNTS {
+        int pit_year PK "Calendar year of PIT count"
+        string coc_id PK "Normalized CoC ID (ST-NNN)"
+        int pit_total "Total persons experiencing homelessness"
+        int pit_sheltered "Sheltered count (nullable)"
+        int pit_unsheltered "Unsheltered count (nullable)"
+        string data_source "Source identifier"
+        string source_ref "URL or dataset reference"
+        datetime ingested_at "UTC timestamp of ingestion"
+        string notes "Data quirks or caveats (nullable)"
+    }
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `pit_year` | int | Calendar year of PIT count |
+| `coc_id` | string | Normalized CoC ID (e.g., `CO-500`) |
+| `pit_total` | int | Total persons experiencing homelessness |
+| `pit_sheltered` | int | Sheltered count (nullable) |
+| `pit_unsheltered` | int | Unsheltered count (nullable) |
+| `data_source` | string | Source identifier (e.g., `hud_exchange`) |
+| `source_ref` | string | URL or dataset reference |
+| `ingested_at` | datetime | UTC timestamp of ingestion |
+| `notes` | string | Data quirks or caveats (nullable) |
+
+## Panel Schema (Phase 3)
+
+Analysis-ready CoC × year panels combining PIT counts with ACS measures:
+
+```mermaid
+erDiagram
+    COC_PANEL {
+        string coc_id PK "CoC identifier"
+        int year PK "Panel year"
+        int pit_total "Total homeless count"
+        int pit_sheltered "Sheltered count (nullable)"
+        int pit_unsheltered "Unsheltered count (nullable)"
+        string boundary_vintage_used "CoC boundary version"
+        string acs_vintage_used "ACS estimate version"
+        string weighting_method "area or population"
+        float total_population "Weighted population estimate"
+        float adult_population "Population 18+"
+        float population_below_poverty "Below poverty line"
+        float median_household_income "Weighted median income"
+        float median_gross_rent "Weighted median rent"
+        float coverage_ratio "Fraction of CoC area with data"
+        bool boundary_changed "True if boundary changed from prior year"
+        string source "Data source identifier"
+    }
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `coc_id` | string | CoC identifier (e.g., `CO-500`) |
+| `year` | int | Panel year |
+| `pit_total` | int | Total homeless count from PIT |
+| `pit_sheltered` | int | Sheltered count (nullable) |
+| `pit_unsheltered` | int | Unsheltered count (nullable) |
+| `boundary_vintage_used` | string | CoC boundary version applied |
+| `acs_vintage_used` | string | ACS estimate version applied |
+| `weighting_method` | string | `area` or `population` |
+| `total_population` | float | Weighted population estimate |
+| `adult_population` | float | Population 18 and older |
+| `population_below_poverty` | float | Below 100% federal poverty line |
+| `median_household_income` | float | Population-weighted median |
+| `median_gross_rent` | float | Population-weighted median |
+| `coverage_ratio` | float | Fraction of CoC area covered by tracts with data |
+| `boundary_changed` | bool | True if CoC boundary changed from prior year |
+| `source` | string | Data source identifier |
+
+## Normalized ZORI Schema
+
+ZORI data from Zillow is normalized to this long-format schema:
+
+```mermaid
+erDiagram
+    ZORI_NORMALIZED {
+        string geo_type "county or zip"
+        string geo_id PK "5-char FIPS or ZIP"
+        date date PK "Month start (YYYY-MM-01)"
+        float zori "ZORI value in dollars"
+        string region_name "Zillow region name"
+        string state "State name"
+        string data_source "Zillow Economic Research"
+        string metric "ZORI"
+        datetime ingested_at "UTC timestamp"
+        string source_ref "Download URL"
+        string raw_sha256 "SHA256 of raw download"
+    }
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `geo_type` | string | Geography type: `county` or `zip` |
+| `geo_id` | string | 5-character FIPS code (county) or ZIP code |
+| `date` | date | Month start date (e.g., `2024-01-01`) |
+| `zori` | float | ZORI value (level) in dollars |
+| `region_name` | string | Zillow's region name |
+| `state` | string | State name |
+| `data_source` | string | Always `Zillow Economic Research` |
+| `metric` | string | Always `ZORI` |
+| `ingested_at` | datetime | UTC timestamp of ingestion |
+| `source_ref` | string | Download URL |
+| `raw_sha256` | string | SHA256 hash of raw download for provenance |
+
+## CoC ZORI Schema
+
+Aggregated ZORI data at CoC level:
+
+```mermaid
+erDiagram
+    COC_ZORI {
+        string coc_id PK "CoC identifier"
+        date date PK "Month start"
+        float zori_coc "Weighted ZORI value"
+        float coverage_ratio "Fraction of CoC with ZORI data"
+        float max_geo_contribution "Max single county contribution"
+        int geo_count "Number of contributing counties"
+        string boundary_vintage "CoC boundary version"
+        string county_vintage "County vintage year"
+        string acs_vintage "ACS vintage for weights"
+        string weighting_method "renter_households, housing_units, etc."
+    }
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `coc_id` | string | CoC identifier (e.g., `CO-500`) |
+| `date` | date | Month start date |
+| `zori_coc` | float | Weighted average ZORI for CoC |
+| `coverage_ratio` | float | Sum of weights for counties with ZORI data |
+| `max_geo_contribution` | float | Largest single county weight |
+| `geo_count` | int | Number of counties contributing to estimate |
+| `boundary_vintage` | string | CoC boundary version used |
+| `county_vintage` | string | TIGER county vintage |
+| `acs_vintage` | string | ACS vintage for demographic weights |
+| `weighting_method` | string | Weighting method used |
+
+## County Weights Schema
+
+ACS-based county weights for ZORI aggregation:
+
+```mermaid
+erDiagram
+    COUNTY_WEIGHTS {
+        string county_fips PK "5-char county FIPS"
+        string acs_vintage "ACS 5-year vintage"
+        string weighting_method "renter_households, etc."
+        int weight_value "Raw count from ACS"
+        string county_name "County name"
+        string data_source "acs_5yr"
+        string source_ref "Census API reference"
+        datetime ingested_at "UTC timestamp"
+    }
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `county_fips` | string | 5-character county FIPS code |
+| `acs_vintage` | string | ACS 5-year estimate vintage |
+| `weighting_method` | string | `renter_households`, `housing_units`, or `population` |
+| `weight_value` | int | Raw count from ACS table |
+| `county_name` | string | County name from Census |
+| `data_source` | string | Always `acs_5yr` |
+| `source_ref` | string | Census API endpoint reference |
+| `ingested_at` | datetime | UTC timestamp of retrieval |
+
+## Storage Locations
+
+| File | Path Pattern | Description |
+|------|--------------|-------------|
+| Boundary data | `data/curated/coc_boundaries/coc_boundaries__{vintage}.parquet` | GeoParquet with boundaries |
+| Registry | `data/curated/boundary_registry.parquet` | Vintage tracking |
+| Maps | `data/curated/maps/{coc_id}__{vintage}.html` | Generated HTML maps |
+| Raw downloads | `data/raw/hud_exchange/{vintage}/` | Original source files |
+| Census tracts | `data/curated/census/tracts__{year}.parquet` | TIGER tract geometries |
+| Census counties | `data/curated/census/counties__{year}.parquet` | TIGER county geometries |
+| Tract crosswalks | `data/curated/xwalks/coc_tract_xwalk__{boundary}__{tracts}.parquet` | CoC-tract mapping |
+| County crosswalks | `data/curated/xwalks/coc_county_xwalk__{boundary}.parquet` | CoC-county mapping |
+| CoC measures | `data/curated/measures/coc_measures__{boundary}__{acs}.parquet` | Aggregated ACS data |
+| PIT counts | `data/curated/pit/pit_counts__{year}.parquet` | Canonical PIT data (single year) |
+| PIT vintages | `data/curated/pit/pit_vintage__{vintage}.parquet` | All years from a vintage release |
+| PIT registry | `data/curated/pit/pit_registry.parquet` | PIT year tracking |
+| PIT vintage registry | `data/curated/pit/pit_vintage_registry.parquet` | PIT vintage tracking |
+| CoC panels | `data/curated/panels/coc_panel__{start}_{end}.parquet` | Analysis-ready panels |
+| Tract population | `data/curated/acs/tract_population__{acs}__{tracts}.parquet` | ACS tract population |
+| CoC population rollup | `data/curated/acs/coc_population_rollup__{boundary}__{acs}__{tracts}__{weighting}.parquet` | Aggregated CoC population |
+| Population crosscheck | `data/curated/acs/acs_population_crosscheck__{boundary}__{acs}__{tracts}__{weighting}.parquet` | Validation report |
+| Raw ZORI | `data/raw/zori/zori__{geography}__{date}.csv` | Downloaded Zillow CSV |
+| Normalized ZORI | `data/curated/zori/zori__{geography}.parquet` | Normalized ZORI data |
+| County weights | `data/curated/acs/county_weights__{acs}__{method}.parquet` | ACS county weights |
+| CoC ZORI | `data/curated/zori/coc_zori__{geo}__b{boundary}__c{counties}__acs{acs}__w{weight}.parquet` | Aggregated CoC ZORI |
+| CoC ZORI yearly | `data/curated/zori/coc_zori_yearly__...parquet` | Yearly collapsed ZORI |
+
+## Dataset Provenance
+
+All CoC Lab Parquet files embed **provenance metadata** in the file schema, enabling full reproducibility without sidecar files.
+
+### Provenance Block Schema
+
+```json
+{
+  "boundary_vintage": "2025",
+  "tract_vintage": "2023",
+  "acs_vintage": "2022",
+  "weighting": "population",
+  "created_at": "2025-01-05T12:30:00+00:00",
+  "coclab_version": "0.1.0",
+  "notation": "A2022@B2025×T2023",
+  "extra": {
+    "dataset_type": "coc_measures",
+    "crosswalk_path": "data/curated/xwalks/coc_tract_xwalk__2025__2023.parquet"
+  }
+}
+```
+
+The `notation` field uses the shorthand from [[07-Temporal-Terminology|Temporal Terminology]]: this example describes ACS 2022 aggregated to 2025 CoC boundaries via 2023 tract crosswalk (A2022@B2025×T2023).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `boundary_vintage` | string | CoC boundary version used |
+| `tract_vintage` | string | Census tract geometry version |
+| `acs_vintage` | string | ACS 5-year estimate end year |
+| `weighting` | string | Weighting method (`area`, `population`, `area+population`) |
+| `created_at` | ISO 8601 | Timestamp of dataset creation |
+| `coclab_version` | string | CoC Lab version that produced the file |
+| `extra` | object | Extensible metadata (dataset type, source paths, etc.) |
+
+### Reading Provenance
+
+```python
+from coclab.provenance import read_provenance
+
+provenance = read_provenance("data/curated/measures/coc_measures__2025__2022.parquet")
+print(provenance.boundary_vintage)  # "2025"
+print(provenance.weighting)         # "population"
+print(provenance.to_json())         # Full JSON representation
+```
+
+### Design Rationale
+
+- **Embedded in Parquet metadata**: Provenance travels with the data file
+- **Extensible**: The `extra` field allows adding fields without schema changes
+- **No sidecar files**: Eliminates file proliferation and sync issues
+- **Read without loading data**: Provenance can be inspected via schema metadata
+
+### PIT Provenance Metadata
+
+PIT count Parquet files include additional provenance fields tracking data lineage and any CoC ID transformations:
+
+```json
+{
+  "created_at": "2025-01-05T22:02:41.946985+00:00",
+  "coclab_version": "0.1.0",
+  "extra": {
+    "pit_year": 2024,
+    "row_count": 385,
+    "data_source": "hud_exchange",
+    "source_ref": "https://www.huduser.gov/.../2007-2024-PIT-Counts-by-CoC.xlsb",
+    "ingested_at": "2025-01-05T22:02:41.929693+00:00",
+    "rows_read": 390,
+    "rows_skipped": 5,
+    "cross_state_mappings": {
+      "MO-604a": "MO-604"
+    }
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `pit_year` | int | PIT count year |
+| `row_count` | int | Number of CoC records in output |
+| `data_source` | string | Source identifier (e.g., `hud_exchange`) |
+| `source_ref` | string | Download URL or file reference |
+| `ingested_at` | ISO 8601 | Timestamp when data was parsed |
+| `rows_read` | int | Total rows read from source file |
+| `rows_skipped` | int | Rows skipped due to invalid CoC IDs or missing data |
+| `cross_state_mappings` | object | CoC IDs with letter suffixes mapped to base IDs |
+
+**Reading PIT Provenance:**
+
+```python
+from coclab.provenance import read_provenance
+
+provenance = read_provenance("data/curated/pit/pit_counts__2024.parquet")
+print(provenance.extra["pit_year"])           # 2024
+print(provenance.extra["source_ref"])         # HUD download URL
+print(provenance.extra["cross_state_mappings"])  # {"MO-604a": "MO-604"}
+```
+
+---
+
+**Previous:** [[05-Python-API]] | **Next:** [[07-Temporal-Terminology]]
