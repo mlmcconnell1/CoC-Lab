@@ -4,6 +4,16 @@ Provides commands for ingesting CoC boundary data, building crosswalks,
 computing measures, and visualizing boundaries.
 """
 
+import warnings
+
+# Suppress known PyArrow warnings on macOS (sysctlbyname failures in sandboxed environments)
+# These are harmless warnings about CPU cache detection that don't affect functionality.
+warnings.filterwarnings(
+    "ignore",
+    message=".*sysctlbyname failed.*",
+    category=UserWarning,
+)
+
 from pathlib import Path
 from typing import Annotated
 

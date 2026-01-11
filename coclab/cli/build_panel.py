@@ -219,6 +219,9 @@ def build_panel_cmd(
             start_year=start,
             end_year=end,
             policy=policy,
+            include_zori=include_zori,
+            zori_yearly_path=resolved_zori_path,
+            zori_min_coverage=zori_min_coverage,
         )
     except Exception as e:
         typer.echo(f"Error building panel: {e}", err=True)
@@ -309,7 +312,7 @@ def build_panel_cmd(
             total_cocs = panel_df["coc_id"].nunique()
             typer.echo(f"  CoCs with any ZORI data: {cocs_with_zori} / {total_cocs}")
         else:
-            typer.echo("  Note: ZORI columns not yet computed (Agent A integration pending)")
+            typer.echo("  Note: ZORI columns not present (check ZORI data compatibility with panel years)")
 
         if "zori_is_eligible" in panel_df.columns:
             eligible_count = panel_df["zori_is_eligible"].sum()

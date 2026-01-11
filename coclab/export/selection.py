@@ -300,7 +300,8 @@ def build_selection_plan(
             print(f"[selected] diagnostic: {path.name}")
 
         if not diag_files:
-            print("[info] No diagnostic files found")
+            print("[info] No diagnostic files found in data/diagnostics/")
+            print("       To include diagnostics, run: coclab panel-diagnostics --panel <path> --format csv --output-dir data/diagnostics/")
 
     # Codebook artifacts would be generated, not selected
     # This is a placeholder for integration with codebook generation
