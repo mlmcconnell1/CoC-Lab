@@ -28,6 +28,18 @@ Alignment policies are **pure functions** that map PIT years to data vintages. U
 
 Policies are recorded in panel provenance metadata for reproducibility.
 
+## Alignment Type Field
+
+Panel outputs include `alignment_type` to make boundary alignment explicit:
+
+| Value | Meaning |
+|-------|---------|
+| `period_faithful` | Boundary vintage matches PIT year (P{Y}@B{Y}) |
+| `retrospective` | Boundary vintage is newer than PIT year (e.g., P2018@B2025) |
+| `custom` | Boundary vintage is older than PIT year or uses non-standard labels |
+
+Mixed policies can yield multiple `alignment_type` values within the same panel.
+
 ## Boundary Change Detection
 
 The `boundary_changed` flag indicates a **boundary break**—whether a CoC's boundary differs from the prior year:

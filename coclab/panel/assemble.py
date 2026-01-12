@@ -13,6 +13,7 @@ Panel Schema (Canonical Columns)
 - boundary_vintage_used: Which boundary vintage was used
 - acs_vintage_used: Which ACS vintage was used
 - tract_vintage_used: Which tract vintage was used for crosswalk
+- alignment_type: period_faithful, retrospective, or custom
 - weighting_method: "area" or "population"
 - total_population: From ACS measures
 - adult_population: From ACS measures (nullable)
@@ -84,6 +85,7 @@ PANEL_COLUMNS = [
     "boundary_vintage_used",
     "acs_vintage_used",
     "tract_vintage_used",
+    "alignment_type",
     "weighting_method",
     "total_population",
     "adult_population",
@@ -605,6 +607,28 @@ def _detect_boundary_changes(df: pd.DataFrame) -> pd.Series:
     return boundary_changed.reindex(df.index)
 
 
+def _determine_alignment_type(pit_year: int, boundary_vintage: str) -> str:
+    """Classify alignment type for a PIT year and boundary vintage.
+
+    Returns:
+    - period_faithful: boundary vintage matches PIT year.
+    - retrospective: boundary vintage is newer or same-year than PIT year.
+    - custom: boundary vintage is older or non-numeric.
+    """
+    if boundary_vintage == str(pit_year):
+        return "period_faithful"
+
+    try:
+        boundary_year = int(boundary_vintage)
+    except (TypeError, ValueError):
+        return "custom"
+
+    if boundary_year >= pit_year:
+        return "retrospective"
+
+    return "custom"
+
+
 def build_panel(
     start_year: int,
     end_year: int,
@@ -656,7 +680,7 @@ def build_panel(
         Panel DataFrame with canonical columns:
         coc_id, year, pit_total, pit_sheltered, pit_unsheltered,
         boundary_vintage_used, acs_vintage_used, tract_vintage_used,
-        weighting_method, total_population, adult_population,
+        alignment_type, weighting_method, total_population, adult_population,
         population_below_poverty, median_household_income, median_gross_rent,
         coverage_ratio, boundary_changed, source.
 
@@ -746,6 +770,7 @@ def build_panel(
         year_df["boundary_vintage_used"] = boundary_vintage
         year_df["acs_vintage_used"] = acs_vintage
         year_df["tract_vintage_used"] = tract_vintage
+        year_df["alignment_type"] = _determine_alignment_type(year, boundary_vintage)
         year_df["weighting_method"] = weighting
         year_df["source"] = "coclab_panel"
 
@@ -877,6 +902,8 @@ def build_panel(
     # tract_vintage_used may be None if provenance not available, use nullable string
     if "tract_vintage_used" in panel_df.columns:
         panel_df["tract_vintage_used"] = panel_df["tract_vintage_used"].astype("string")
+    if "alignment_type" in panel_df.columns:
+        panel_df["alignment_type"] = panel_df["alignment_type"].astype("string")
     panel_df["weighting_method"] = panel_df["weighting_method"].astype(str)
     panel_df["source"] = panel_df["source"].astype(str)
     panel_df["boundary_changed"] = panel_df["boundary_changed"].astype(bool)

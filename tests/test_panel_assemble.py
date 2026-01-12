@@ -20,6 +20,7 @@ import pytest
 from coclab.panel.assemble import (
     PANEL_COLUMNS,
     _detect_boundary_changes,
+    _determine_alignment_type,
     _load_acs_measures,
     _load_pit_for_year,
     build_panel,
@@ -254,6 +255,22 @@ class TestDetectBoundaryChanges:
         assert len(result) == 0
 
 
+class TestDetermineAlignmentType:
+    """Tests for _determine_alignment_type function."""
+
+    def test_period_faithful(self):
+        assert _determine_alignment_type(2024, "2024") == "period_faithful"
+
+    def test_retrospective_newer_boundary(self):
+        assert _determine_alignment_type(2022, "2025") == "retrospective"
+
+    def test_custom_older_boundary(self):
+        assert _determine_alignment_type(2024, "2022") == "custom"
+
+    def test_custom_non_numeric_boundary(self):
+        assert _determine_alignment_type(2024, "latest") == "custom"
+
+
 class TestBuildPanel:
     """Tests for build_panel function."""
 
@@ -335,6 +352,7 @@ class TestBuildPanel:
         # Default policy: boundary = year, acs = year - 1
         assert result["boundary_vintage_used"].iloc[0] == "2024"
         assert result["acs_vintage_used"].iloc[0] == "2023"
+        assert result["alignment_type"].iloc[0] == "period_faithful"
         assert result["weighting_method"].iloc[0] == "population"
 
     def test_build_uses_custom_policy(self, data_dirs):
@@ -354,6 +372,7 @@ class TestBuildPanel:
         )
 
         assert result["weighting_method"].iloc[0] == "area"
+        assert result["alignment_type"].iloc[0] == "period_faithful"
 
     def test_build_invalid_year_range_raises(self, data_dirs):
         """Test that invalid year range raises ValueError."""
@@ -458,6 +477,7 @@ class TestSavePanel:
             "pit_unsheltered": [400, 450, 15000, 16000],
             "boundary_vintage_used": ["2023", "2024", "2023", "2024"],
             "acs_vintage_used": ["2022", "2023", "2022", "2023"],
+            "alignment_type": ["period_faithful"] * 4,
             "weighting_method": ["population"] * 4,
             "total_population": [500000, 505000, 10000000, 10100000],
             "adult_population": [400000, 404000, 8000000, 8080000],
@@ -540,6 +560,7 @@ class TestPanelColumns:
             "pit_unsheltered",
             "boundary_vintage_used",
             "acs_vintage_used",
+            "alignment_type",
             "weighting_method",
             "total_population",
             "adult_population",
