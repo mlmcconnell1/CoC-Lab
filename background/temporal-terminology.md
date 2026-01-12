@@ -96,13 +96,83 @@ COC_PANEL.acs_vintage_used        →  Documents which A was applied
 
 ### Filenames
 
-The shorthand maps to existing filename conventions:
+The shorthand maps directly to filenames using `@` for "analyzed using" and `x` for crosswalk joins (ASCII-safe version of `×`).
 
-| Shorthand | Filename Pattern |
-|-----------|------------------|
-| B2025 | `coc_boundaries__2025.parquet` |
-| A2022@B2025×T2023 | `coc_measures__2025__2022.parquet` (boundary__acs) |
-| P2024 | `pit_counts__2024.parquet` |
+#### Naming Convention
+
+**Pattern:** `{dataset}__{temporal-notation}.parquet`
+
+- The `{dataset}` prefix describes what the file contains
+- The `{temporal-notation}` suffix encodes vintages using the shorthand notation
+- Double underscores (`__`) separate the dataset name from temporal notation
+- Single underscores within the temporal notation separate year ranges
+
+#### Simple Datasets (Single Vintage)
+
+| Shorthand | Filename |
+|-----------|----------|
+| B2025 | `boundaries__B2025.parquet` |
+| T2023 | `tracts__T2023.parquet` |
+| C2023 | `counties__C2023.parquet` |
+| P2024 | `pit__P2024.parquet` |
+| A2023 | `acs_tracts__A2023.parquet` |
+
+#### Derived Datasets (Compound Notation)
+
+| Shorthand | Filename | Description |
+|-----------|----------|-------------|
+| A2023@B2025 | `measures__A2023@B2025.parquet` | ACS 2023 aggregated to 2025 boundaries |
+| A2023@B2025xT2023 | `measures__A2023@B2025xT2023.parquet` | Same, via 2023 tract crosswalk |
+| P2024@B2025 | `pit__P2024@B2025.parquet` | PIT 2024 aligned to 2025 boundaries |
+
+#### Crosswalks
+
+Crosswalks join two geometry vintages. The notation shows what is being crossed:
+
+| Shorthand | Filename | Description |
+|-----------|----------|-------------|
+| B2025xT2023 | `xwalk__B2025xT2023.parquet` | CoC 2025 to tract 2023 crosswalk |
+| B2025xC2023 | `xwalk__B2025xC2023.parquet` | CoC 2025 to county 2023 crosswalk |
+
+#### ZORI Files
+
+ZORI files have additional parameters for weighting and time resolution:
+
+| Current Name | New Name | Notation |
+|--------------|----------|----------|
+| `coc_zori__county__b2025__c2023__acs2019-2023__wrenter_households.parquet` | `zori__A2023@B2025xC2023__wrenter.parquet` | A2023@B2025xC2023 |
+| `coc_zori_yearly__...` | `zori_yearly__A2023@B2025xC2023__wrenter.parquet` | Same with yearly suffix |
+
+#### Panel Files
+
+Panel files span multiple years and use a target boundary alignment:
+
+| Current Name | New Name | Description |
+|--------------|----------|-------------|
+| `coc_panel__2015_2024.parquet` | `panel__Y2015-2024@B2025.parquet` | Panel years 2015-2024 aligned to B2025 |
+
+#### Migration Mapping
+
+| Current Filename Pattern | New Filename Pattern |
+|-------------------------|---------------------|
+| `coc_boundaries__2025.parquet` | `boundaries__B2025.parquet` |
+| `tracts__2023.parquet` | `tracts__T2023.parquet` |
+| `counties__2023.parquet` | `counties__C2023.parquet` |
+| `pit_counts__2024.parquet` | `pit__P2024.parquet` |
+| `coc_measures__2025__2019-2023.parquet` | `measures__A2023@B2025.parquet` |
+| `coc_tract_xwalk__2025__2023.parquet` | `xwalk__B2025xT2023.parquet` |
+| `tract_population__2019-2023__2023.parquet` | `acs_tracts__A2023xT2023.parquet` |
+| `coc_panel__2015_2024.parquet` | `panel__Y2015-2024@B2025.parquet` |
+
+#### Exceptions and Edge Cases
+
+1. **Raw files**: Raw data files retain their original naming from the source (HUD, Census, Zillow).
+
+2. **Registry files**: Registry files (e.g., `pit_registry.parquet`, `source_registry.parquet`) do not contain temporal notation as they are metadata indexes.
+
+3. **Diagnostic files**: Diagnostic outputs may use simplified names with the parent dataset's notation (e.g., `diagnostics__A2023@B2025.csv`).
+
+4. **Export bundles**: Export bundles use sequential numbering (`export-1/`, `export-2/`) and preserve internal file naming.
 
 ### Provenance Metadata
 
