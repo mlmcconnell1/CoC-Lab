@@ -135,7 +135,7 @@ class TestLoadAcsMeasures:
 
     def test_load_existing_measures(self, measures_data_dir):
         """Test loading ACS measures for existing vintage combination."""
-        result = _load_acs_measures(
+        result, tract_vintage = _load_acs_measures(
             boundary_vintage="2024",
             acs_vintage="2023",
             weighting="population",
@@ -146,10 +146,12 @@ class TestLoadAcsMeasures:
         assert "coc_id" in result.columns
         assert "total_population" in result.columns
         assert "coverage_ratio" in result.columns
+        # tract_vintage is None for test data without provenance
+        assert tract_vintage is None
 
     def test_load_missing_measures_returns_empty(self, measures_data_dir):
         """Test loading ACS measures for missing vintage returns empty DataFrame."""
-        result = _load_acs_measures(
+        result, tract_vintage = _load_acs_measures(
             boundary_vintage="2020",
             acs_vintage="2019",
             weighting="population",
@@ -159,10 +161,11 @@ class TestLoadAcsMeasures:
         assert len(result) == 0
         assert "coc_id" in result.columns
         assert "total_population" in result.columns
+        assert tract_vintage is None
 
     def test_load_weighting_specific_file(self, measures_data_dir):
         """Test that weighting-specific files are preferred."""
-        result = _load_acs_measures(
+        result, tract_vintage = _load_acs_measures(
             boundary_vintage="2024",
             acs_vintage="2023",
             weighting="area",
@@ -173,7 +176,7 @@ class TestLoadAcsMeasures:
 
     def test_load_ensures_string_coc_id(self, measures_data_dir):
         """Test that coc_id is converted to string."""
-        result = _load_acs_measures(
+        result, tract_vintage = _load_acs_measures(
             boundary_vintage="2024",
             acs_vintage="2023",
             weighting="population",

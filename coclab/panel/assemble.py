@@ -12,6 +12,7 @@ Panel Schema (Canonical Columns)
 - pit_unsheltered: Unsheltered count (nullable)
 - boundary_vintage_used: Which boundary vintage was used
 - acs_vintage_used: Which ACS vintage was used
+- tract_vintage_used: Which tract vintage was used for crosswalk
 - weighting_method: "area" or "population"
 - total_population: From ACS measures
 - adult_population: From ACS measures (nullable)
@@ -63,7 +64,7 @@ from coclab.panel.zori_eligibility import (
 from coclab.pit.ingest import parse_pit_file
 from coclab.pit.ingest.hud_exchange import MIN_PIT_YEAR as MIN_PIT_VINTAGE_YEAR
 from coclab.pit.registry import get_pit_path
-from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
+from coclab.provenance import ProvenanceBlock, read_provenance, write_parquet_with_provenance
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,7 @@ PANEL_COLUMNS = [
     "pit_unsheltered",
     "boundary_vintage_used",
     "acs_vintage_used",
+    "tract_vintage_used",
     "weighting_method",
     "total_population",
     "adult_population",
@@ -320,7 +322,7 @@ def _load_acs_measures(
     acs_vintage: str,
     weighting: Literal["area", "population"],
     measures_dir: Path | None = None,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, str | None]:
     """Load ACS measures for a specific vintage combination.
 
     Parameters
@@ -337,11 +339,13 @@ def _load_acs_measures(
 
     Returns
     -------
-    pd.DataFrame
-        ACS measures with columns: coc_id, total_population, adult_population,
-        population_below_poverty, median_household_income, median_gross_rent,
-        coverage_ratio.
-        Returns empty DataFrame if no data found.
+    tuple[pd.DataFrame, str | None]
+        Tuple of (DataFrame, tract_vintage) where:
+        - DataFrame contains ACS measures with columns: coc_id, total_population,
+          adult_population, population_below_poverty, median_household_income,
+          median_gross_rent, coverage_ratio. Returns empty DataFrame if no data found.
+        - tract_vintage is the tract vintage from provenance metadata, or None if
+          not available.
 
     Notes
     -----
@@ -377,10 +381,16 @@ def _load_acs_measures(
             "median_household_income",
             "median_gross_rent",
             "coverage_ratio",
-        ])
+        ]), None
 
     logger.info(f"Loading ACS measures from: {measures_path}")
     df = pd.read_parquet(measures_path)
+
+    # Extract tract_vintage from provenance metadata
+    tract_vintage = None
+    provenance = read_provenance(measures_path)
+    if provenance is not None:
+        tract_vintage = provenance.tract_vintage
 
     # Filter by weighting method if column exists and file has multiple methods
     if "weighting_method" in df.columns:
@@ -405,7 +415,7 @@ def _load_acs_measures(
     df = df[result_cols].copy()
     df["coc_id"] = df["coc_id"].astype(str)
 
-    return df
+    return df, tract_vintage
 
 
 def _load_zori_yearly(
@@ -645,10 +655,10 @@ def build_panel(
     pd.DataFrame
         Panel DataFrame with canonical columns:
         coc_id, year, pit_total, pit_sheltered, pit_unsheltered,
-        boundary_vintage_used, acs_vintage_used, weighting_method,
-        total_population, adult_population, population_below_poverty,
-        median_household_income, median_gross_rent, coverage_ratio,
-        boundary_changed, source.
+        boundary_vintage_used, acs_vintage_used, tract_vintage_used,
+        weighting_method, total_population, adult_population,
+        population_below_poverty, median_household_income, median_gross_rent,
+        coverage_ratio, boundary_changed, source.
 
         When include_zori=True, also includes:
         zori_coc, zori_coverage_ratio, zori_is_eligible, zori_excluded_reason,
@@ -722,8 +732,8 @@ def build_panel(
             logger.warning(f"No PIT data for year {year}, skipping")
             continue
 
-        # Load ACS measures
-        acs_df = _load_acs_measures(
+        # Load ACS measures (returns DataFrame and tract_vintage from provenance)
+        acs_df, tract_vintage = _load_acs_measures(
             boundary_vintage=boundary_vintage,
             acs_vintage=acs_vintage,
             weighting=weighting,
@@ -735,6 +745,7 @@ def build_panel(
         year_df["year"] = year
         year_df["boundary_vintage_used"] = boundary_vintage
         year_df["acs_vintage_used"] = acs_vintage
+        year_df["tract_vintage_used"] = tract_vintage
         year_df["weighting_method"] = weighting
         year_df["source"] = "coclab_panel"
 
@@ -863,6 +874,9 @@ def build_panel(
     panel_df["pit_total"] = panel_df["pit_total"].astype(int)
     panel_df["boundary_vintage_used"] = panel_df["boundary_vintage_used"].astype(str)
     panel_df["acs_vintage_used"] = panel_df["acs_vintage_used"].astype(str)
+    # tract_vintage_used may be None if provenance not available, use nullable string
+    if "tract_vintage_used" in panel_df.columns:
+        panel_df["tract_vintage_used"] = panel_df["tract_vintage_used"].astype("string")
     panel_df["weighting_method"] = panel_df["weighting_method"].astype(str)
     panel_df["source"] = panel_df["source"].astype(str)
     panel_df["boundary_changed"] = panel_df["boundary_changed"].astype(bool)
