@@ -4,15 +4,22 @@ from pathlib import Path
 
 from coclab.export.types import ArtifactRecord, BundleConfig, SelectionPlan
 
-# Standard file patterns for curated artifacts
+# Standard file patterns for curated artifacts (new temporal shorthand + legacy)
 PATTERNS = {
-    "panel": "data/curated/panel/coc_panel__*.parquet",
-    "tract_xwalk": "data/curated/xwalks/coc_tract_xwalk__*.parquet",
-    "county_xwalk": "data/curated/xwalks/coc_county_xwalk__*.parquet",
-    "boundaries": "data/curated/coc_boundaries/coc_boundaries__*.parquet",
-    "pit": "data/curated/pit/pit_counts__*.parquet",
-    "zori": "data/curated/zori/coc_zori*.parquet",
-    "measures": "data/curated/measures/coc_measures__*.parquet",
+    # Panel: new panel__Y*@B*.parquet, legacy coc_panel__*.parquet
+    "panel": ["data/curated/panel/panel__Y*.parquet", "data/curated/panel/coc_panel__*.parquet"],
+    # Tract crosswalk: new xwalk__B*xT*.parquet, legacy coc_tract_xwalk__*.parquet
+    "tract_xwalk": ["data/curated/xwalks/xwalk__B*xT*.parquet", "data/curated/xwalks/coc_tract_xwalk__*.parquet"],
+    # County crosswalk: new xwalk__B*xC*.parquet, legacy coc_county_xwalk__*.parquet
+    "county_xwalk": ["data/curated/xwalks/xwalk__B*xC*.parquet", "data/curated/xwalks/coc_county_xwalk__*.parquet"],
+    # Boundaries: new boundaries__B*.parquet, legacy coc_boundaries__*.parquet
+    "boundaries": ["data/curated/coc_boundaries/boundaries__B*.parquet", "data/curated/coc_boundaries/coc_boundaries__*.parquet"],
+    # PIT: new pit__P*.parquet, legacy pit_counts__*.parquet
+    "pit": ["data/curated/pit/pit__P*.parquet", "data/curated/pit/pit_counts__*.parquet"],
+    # ZORI: new zori__A*.parquet, legacy coc_zori*.parquet
+    "zori": ["data/curated/zori/zori__A*.parquet", "data/curated/zori/coc_zori*.parquet"],
+    # Measures: new measures__A*.parquet, legacy coc_measures__*.parquet
+    "measures": ["data/curated/measures/measures__A*.parquet", "data/curated/measures/coc_measures__*.parquet"],
 }
 
 # Destination paths within bundle by category
@@ -56,10 +63,25 @@ def _select_latest_by_mtime(files: list[Path]) -> Path | None:
     return max(files, key=lambda f: f.stat().st_mtime)
 
 
-def _find_matching_files(pattern: str, base_dir: Path) -> list[Path]:
-    """Find files matching a glob pattern relative to base_dir."""
-    full_pattern = base_dir / pattern
-    return sorted(full_pattern.parent.glob(full_pattern.name))
+def _find_matching_files(patterns: str | list[str], base_dir: Path) -> list[Path]:
+    """Find files matching glob pattern(s) relative to base_dir.
+
+    Args:
+        patterns: Single pattern string or list of patterns to match
+        base_dir: Base directory for pattern resolution
+
+    Returns:
+        Sorted list of matching file paths (deduplicated)
+    """
+    if isinstance(patterns, str):
+        patterns = [patterns]
+
+    matches = set()
+    for pattern in patterns:
+        full_pattern = base_dir / pattern
+        matches.update(full_pattern.parent.glob(full_pattern.name))
+
+    return sorted(matches)
 
 
 def select_panel(

@@ -258,12 +258,19 @@ def _load_pit_for_year(
 
     # If pit_dir is explicitly provided, use it directly (skip registry and fallback)
     # This supports testing with isolated data directories
+    from coclab.naming import pit_filename
+
     if pit_dir is not None:
         use_fallback = False  # Explicit pit_dir disables fallback
-        canonical_path = pit_dir / f"pit_counts__{year}.parquet"
+        # Try new naming first, then legacy
+        canonical_path = pit_dir / pit_filename(year)
+        legacy_path = pit_dir / f"pit_counts__{year}.parquet"
         if canonical_path.exists():
             logger.info(f"Loading PIT {year} from provided path: {canonical_path}")
             df = pd.read_parquet(canonical_path)
+        elif legacy_path.exists():
+            logger.info(f"Loading PIT {year} from legacy path: {legacy_path}")
+            df = pd.read_parquet(legacy_path)
     else:
         # Only try original vintage for years >= MIN_PIT_VINTAGE_YEAR (2013+)
         if year >= MIN_PIT_VINTAGE_YEAR:
@@ -273,11 +280,15 @@ def _load_pit_for_year(
                 logger.info(f"Loading PIT {year} from registry: {registry_path}")
                 df = pd.read_parquet(registry_path)
             else:
-                # Fall back to canonical path
-                canonical_path = DEFAULT_PIT_DIR / f"pit_counts__{year}.parquet"
+                # Fall back to canonical path (try new naming first, then legacy)
+                canonical_path = DEFAULT_PIT_DIR / pit_filename(year)
+                legacy_path = DEFAULT_PIT_DIR / f"pit_counts__{year}.parquet"
                 if canonical_path.exists():
                     logger.info(f"Loading PIT {year} from canonical path: {canonical_path}")
                     df = pd.read_parquet(canonical_path)
+                elif legacy_path.exists():
+                    logger.info(f"Loading PIT {year} from legacy path: {legacy_path}")
+                    df = pd.read_parquet(legacy_path)
 
     # If no original vintage found, fall back to raw vintage file
     if df is None and use_fallback:
@@ -954,7 +965,7 @@ def save_panel(
 
     Notes
     -----
-    Output filename: coc_panel__{start_year}_{end_year}.parquet
+    Output filename: panel__Y{start}-{end}@B{boundary}.parquet
 
     Provenance metadata includes:
     - Panel date range
@@ -962,11 +973,31 @@ def save_panel(
     - Policy settings (if provided)
     - ZORI provenance (if provided)
     """
+    from coclab.naming import panel_filename
+
     output_dir = output_dir or DEFAULT_PANEL_DIR
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    filename = f"coc_panel__{start_year}_{end_year}.parquet"
+    # Extract vintages from data if available
+    boundary_vintage = None
+    acs_vintage = None
+    weighting = None
+
+    if not df.empty:
+        boundary_vintages = df["boundary_vintage_used"].unique()
+        if len(boundary_vintages) == 1:
+            boundary_vintage = str(boundary_vintages[0])
+        else:
+            # Use the most common boundary vintage if multiple exist
+            boundary_vintage = str(df["boundary_vintage_used"].mode().iloc[0])
+
+    # Generate filename with temporal shorthand
+    if boundary_vintage:
+        filename = panel_filename(start_year, end_year, boundary_vintage)
+    else:
+        # Fallback if no boundary vintage can be determined
+        filename = f"panel__Y{start_year}-{end_year}.parquet"
     output_path = output_dir / filename
 
     # Build provenance
@@ -990,16 +1021,8 @@ def save_panel(
         if summary.get("zori_integrated"):
             extra["zori_summary"] = summary
 
-    # Extract vintages from data if available
-    boundary_vintage = None
-    acs_vintage = None
-    weighting = None
-
+    # Extract remaining vintages from data
     if not df.empty:
-        boundary_vintages = df["boundary_vintage_used"].unique()
-        if len(boundary_vintages) == 1:
-            boundary_vintage = str(boundary_vintages[0])
-
         acs_vintages = df["acs_vintage_used"].unique()
         if len(acs_vintages) == 1:
             acs_vintage = str(acs_vintages[0])

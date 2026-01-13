@@ -17,11 +17,25 @@ def _normalize_coc_id(coc_id: str) -> str:
 
 
 def _find_coc_boundary_file(vintage: str) -> Path:
-    """Find the GeoParquet file for a given vintage."""
-    path = Path(f"data/curated/coc_boundaries/coc_boundaries__{vintage}.parquet")
-    if not path.exists():
-        raise FileNotFoundError(f"Boundary file not found: {path}")
-    return path
+    """Find the GeoParquet file for a given vintage.
+
+    Checks both new temporal shorthand and legacy naming patterns.
+    """
+    from coclab.naming import boundary_path
+
+    # Try new naming first
+    new_path = boundary_path(vintage)
+    if new_path.exists():
+        return new_path
+
+    # Fall back to legacy naming
+    legacy_path = Path(f"data/curated/coc_boundaries/coc_boundaries__{vintage}.parquet")
+    if legacy_path.exists():
+        return legacy_path
+
+    raise FileNotFoundError(
+        f"Boundary file not found: tried {new_path} and {legacy_path}"
+    )
 
 
 def render_coc_map(

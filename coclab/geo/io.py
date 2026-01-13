@@ -68,14 +68,11 @@ def curated_boundary_path(boundary_vintage: str, base_dir: Path | str | None = N
         base_dir: Base data directory (defaults to "data")
 
     Returns:
-        Path like data/curated/coc_boundaries/coc_boundaries__2025.parquet
+        Path like data/curated/coc_boundaries/boundaries__B2025.parquet
     """
-    if base_dir is None:
-        base_dir = Path("data")
-    else:
-        base_dir = Path(base_dir)
+    from coclab.naming import boundary_path
 
-    return base_dir / "curated" / "coc_boundaries" / f"coc_boundaries__{boundary_vintage}.parquet"
+    return boundary_path(boundary_vintage, base_dir)
 
 
 def registry_path(base_dir: Path | str | None = None) -> Path:

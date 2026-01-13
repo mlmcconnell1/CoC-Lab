@@ -21,12 +21,26 @@ def _format_size(size_bytes: int) -> str:
 def _parse_census_filename(filename: str) -> dict | None:
     """Parse census geometry filename to extract type and year.
 
-    Expected formats:
+    Expected formats (new temporal shorthand):
+        tracts__T{year}.parquet
+        counties__C{year}.parquet
+
+    Also supports legacy formats:
         tracts__{year}.parquet
         counties__{year}.parquet
     """
-    pattern = r"^(tracts|counties)__(\d{4})\.parquet$"
-    match = re.match(pattern, filename)
+    # New temporal shorthand format: tracts__T2023.parquet, counties__C2023.parquet
+    new_pattern = r"^(tracts)__T(\d{4})\.parquet$|^(counties)__C(\d{4})\.parquet$"
+    match = re.match(new_pattern, filename)
+    if match:
+        if match.group(1):  # tracts match
+            return {"type": "tracts", "year": int(match.group(2))}
+        else:  # counties match
+            return {"type": "counties", "year": int(match.group(4))}
+
+    # Legacy format: tracts__2023.parquet, counties__2023.parquet
+    legacy_pattern = r"^(tracts|counties)__(\d{4})\.parquet$"
+    match = re.match(legacy_pattern, filename)
     if match:
         return {
             "type": match.group(1),

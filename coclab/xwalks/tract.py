@@ -232,12 +232,14 @@ def save_crosswalk(
     Returns
     -------
     Path
-        Path to saved parquet file.
+        Path to saved parquet file (e.g., xwalk__B2025xT2023.parquet).
     """
+    from coclab.naming import tract_xwalk_filename
+
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    filename = f"coc_tract_xwalk__{boundary_vintage}__{tract_vintage}.parquet"
+    filename = tract_xwalk_filename(boundary_vintage, tract_vintage)
     output_path = output_dir / filename
 
     # Build provenance block

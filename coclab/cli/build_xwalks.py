@@ -106,15 +106,22 @@ def build_xwalks(
         )
         raise typer.Exit(1) from e
 
-    # Load tract geometries
-    tract_path = Path(f"data/curated/census/tracts__{tracts}.parquet")
+    # Load tract geometries (try new naming, then legacy)
+    from coclab.naming import tract_filename
+
+    tract_path = Path("data/curated/census") / tract_filename(tracts)
+    legacy_tract_path = Path(f"data/curated/census/tracts__{tracts}.parquet")
+
     if not tract_path.exists():
-        typer.echo(
-            f"Error: Tract file not found: {tract_path}. "
-            f"Run 'coclab ingest-census --year {tracts} --type tracts' first.",
-            err=True,
-        )
-        raise typer.Exit(1)
+        if legacy_tract_path.exists():
+            tract_path = legacy_tract_path
+        else:
+            typer.echo(
+                f"Error: Tract file not found: {tract_path}. "
+                f"Run 'coclab ingest-census --year {tracts} --type tracts' first.",
+                err=True,
+            )
+            raise typer.Exit(1)
 
     typer.echo(f"Loading census tracts (vintage: {tracts})...")
     try:
@@ -163,15 +170,22 @@ def build_xwalks(
     tract_diagnostics = compute_crosswalk_diagnostics(tract_xwalk)
     typer.echo(summarize_diagnostics(tract_diagnostics))
 
-    # Load county geometries
-    county_path = Path(f"data/curated/census/counties__{county_vintage}.parquet")
+    # Load county geometries (try new naming, then legacy)
+    from coclab.naming import county_filename
+
+    county_path = Path("data/curated/census") / county_filename(county_vintage)
+    legacy_county_path = Path(f"data/curated/census/counties__{county_vintage}.parquet")
+
     if not county_path.exists():
-        typer.echo(
-            f"Warning: County file not found: {county_path}. "
-            f"Skipping county crosswalk.",
-            err=True,
-        )
-        return
+        if legacy_county_path.exists():
+            county_path = legacy_county_path
+        else:
+            typer.echo(
+                f"Warning: County file not found: {county_path}. "
+                f"Skipping county crosswalk.",
+                err=True,
+            )
+            return
 
     typer.echo(f"\nLoading census counties (vintage: {county_vintage})...")
     try:
@@ -199,6 +213,7 @@ def build_xwalks(
     county_output = save_county_crosswalk(
         crosswalk=county_xwalk,
         boundary_vintage=boundary,
+        county_vintage=county_vintage,
         output_dir=output_dir,
     )
     typer.echo(f"Saved county crosswalk to: {county_output}")

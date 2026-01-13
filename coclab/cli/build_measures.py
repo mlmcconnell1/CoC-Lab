@@ -105,15 +105,23 @@ def build_measures(
             raise typer.Exit(1)
         typer.echo(f"Using latest boundary vintage: {boundary}")
 
-    # Find crosswalk file
-    xwalk_path = xwalk_dir / f"coc_tract_xwalk__{boundary}__{tract_vintage}.parquet"
+    # Find crosswalk file (try new naming, then legacy)
+    from coclab.naming import tract_xwalk_filename
+
+    xwalk_path = xwalk_dir / tract_xwalk_filename(boundary, tract_vintage)
+    legacy_xwalk_path = xwalk_dir / f"coc_tract_xwalk__{boundary}__{tract_vintage}.parquet"
+
     if not xwalk_path.exists():
-        typer.echo(
-            f"Error: Crosswalk file not found: {xwalk_path}. "
-            f"Run 'coclab build-xwalks --boundary {boundary} --tracts {tract_vintage}' first.",
-            err=True,
-        )
-        raise typer.Exit(1)
+        # Try legacy path
+        if legacy_xwalk_path.exists():
+            xwalk_path = legacy_xwalk_path
+        else:
+            typer.echo(
+                f"Error: Crosswalk file not found: {xwalk_path}. "
+                f"Run 'coclab build-xwalks --boundary {boundary} --tracts {tract_vintage}' first.",
+                err=True,
+            )
+            raise typer.Exit(1)
 
     typer.echo(f"Building CoC measures:")
     typer.echo(f"  Boundary vintage: {boundary}")

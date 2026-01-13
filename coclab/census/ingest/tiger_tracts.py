@@ -174,10 +174,12 @@ def save_tracts(gdf: gpd.GeoDataFrame, year: int = 2023) -> Path:
         year: Vintage year for filename
 
     Returns:
-        Path to saved parquet file
+        Path to saved parquet file (e.g., tracts__T2023.parquet)
     """
+    from coclab.naming import tract_filename
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = OUTPUT_DIR / f"tracts__{year}.parquet"
+    output_path = OUTPUT_DIR / tract_filename(year)
     gdf.to_parquet(output_path, index=False)
     return output_path
 

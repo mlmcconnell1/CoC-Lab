@@ -434,15 +434,18 @@ def build_coc_measures(
 
     # Save to parquet if output_dir specified
     if output_dir is not None:
+        from coclab.naming import measures_filename
+
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"coc_measures__{boundary_vintage}__{acs_vintage_str}.parquet"
-        output_path = output_dir / filename
 
         # Extract tract_vintage from crosswalk if available
         tract_vintage = None
         if "tract_vintage" in crosswalk.columns:
             tract_vintage = str(crosswalk["tract_vintage"].iloc[0])
+
+        filename = measures_filename(acs_vintage_str, boundary_vintage, tract_vintage)
+        output_path = output_dir / filename
 
         # Build provenance block
         provenance = ProvenanceBlock(

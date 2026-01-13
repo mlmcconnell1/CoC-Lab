@@ -490,11 +490,13 @@ class TestSavePanel:
         })
 
     def test_save_creates_file(self, sample_panel, tmp_path):
-        """Test that Parquet file is created."""
+        """Test that Parquet file is created with temporal shorthand naming."""
         result = save_panel(sample_panel, 2023, 2024, output_dir=tmp_path)
 
         assert result.exists()
-        assert result.name == "coc_panel__2023_2024.parquet"
+        # New naming: panel__Y{start}-{end}@B{boundary}.parquet
+        # When multiple boundary vintages exist, mode() is used (2023 appears first)
+        assert result.name == "panel__Y2023-2024@B2023.parquet"
 
     def test_save_creates_output_dir(self, sample_panel, tmp_path):
         """Test that output directory is created if needed."""

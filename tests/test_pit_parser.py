@@ -323,21 +323,21 @@ class TestGetCanonicalOutputPath:
     """Tests for get_canonical_output_path function."""
 
     def test_default_path(self):
-        """Test default base directory."""
+        """Test default base directory with temporal shorthand."""
         path = get_canonical_output_path(2024)
-        assert path == Path("data/curated/pit/pit_counts__2024.parquet")
+        assert path == Path("data/curated/pit/pit__P2024.parquet")
 
     def test_custom_base_dir(self, tmp_path):
         """Test custom base directory."""
         path = get_canonical_output_path(2024, base_dir=tmp_path)
-        assert path == tmp_path / "pit_counts__2024.parquet"
+        assert path == tmp_path / "pit__P2024.parquet"
 
     def test_year_in_filename(self):
-        """Test that year appears in filename."""
+        """Test that year appears in filename with P prefix."""
         path = get_canonical_output_path(2023)
-        assert "2023" in str(path)
+        assert "P2023" in str(path)
         path = get_canonical_output_path(2024)
-        assert "2024" in str(path)
+        assert "P2024" in str(path)
 
 
 class TestCanonicalColumns:

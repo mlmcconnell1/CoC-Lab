@@ -23,13 +23,31 @@ def format_file_size(size_bytes: int) -> str:
 def parse_measures_filename(filename: str) -> tuple[str, str] | None:
     """Parse boundary_vintage and acs_vintage from measures filename.
 
-    Expected format: coc_measures__{boundary}__{acs}.parquet
+    Expected formats (new temporal shorthand):
+        measures__A{acs}@B{boundary}.parquet
+        measures__A{acs}@B{boundary}xT{tract}.parquet
+
+    Legacy format:
+        coc_measures__{boundary}__{acs}.parquet
 
     Returns
     -------
     tuple[str, str] | None
         (boundary_vintage, acs_vintage) or None if filename doesn't match pattern.
     """
+    import re
+
+    # New format: measures__A2023@B2025.parquet or measures__A2023@B2025xT2023.parquet
+    if filename.startswith("measures__"):
+        # Pattern: measures__A{acs}@B{boundary}[xT{tract}].parquet
+        new_pattern = r"^measures__A(\d{4})@B(\d{4})(?:xT\d{4})?\.parquet$"
+        match = re.match(new_pattern, filename)
+        if match:
+            acs_vintage = match.group(1)
+            boundary_vintage = match.group(2)
+            return boundary_vintage, acs_vintage
+
+    # Legacy format: coc_measures__{boundary}__{acs}.parquet
     if not filename.startswith("coc_measures__") or not filename.endswith(".parquet"):
         return None
 
@@ -73,8 +91,15 @@ def list_measures(
         typer.echo(f"Directory not found: {measures_dir}")
         return
 
-    # Find all parquet files matching the measures pattern
+    # Find all parquet files matching the measures pattern (new and legacy)
     measure_files = []
+    # New format: measures__A*@B*.parquet
+    for filepath in measures_dir.glob("measures__A*.parquet"):
+        parsed = parse_measures_filename(filepath.name)
+        if parsed:
+            boundary_vintage, acs_vintage = parsed
+            measure_files.append((filepath, boundary_vintage, acs_vintage))
+    # Legacy format: coc_measures__*.parquet
     for filepath in measures_dir.glob("coc_measures__*.parquet"):
         parsed = parse_measures_filename(filepath.name)
         if parsed:

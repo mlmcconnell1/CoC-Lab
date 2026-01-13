@@ -22,10 +22,23 @@ def _format_size(size_bytes: int) -> str:
 def _parse_tract_filename(filename: str) -> dict | None:
     """Parse tract crosswalk filename to extract vintages.
 
-    Expected format: coc_tract_xwalk__{boundary}__{tracts}.parquet
+    Expected formats:
+        New: xwalk__B{boundary}xT{tracts}.parquet
+        Legacy: coc_tract_xwalk__{boundary}__{tracts}.parquet
     """
-    pattern = r"^coc_tract_xwalk__(.+?)__(.+?)\.parquet$"
-    match = re.match(pattern, filename)
+    # New format: xwalk__B2025xT2023.parquet
+    new_pattern = r"^xwalk__B(\d{4})xT(\d{4})\.parquet$"
+    match = re.match(new_pattern, filename)
+    if match:
+        return {
+            "type": "tract",
+            "boundary_vintage": match.group(1),
+            "census_vintage": match.group(2),
+        }
+
+    # Legacy format: coc_tract_xwalk__{boundary}__{tracts}.parquet
+    legacy_pattern = r"^coc_tract_xwalk__(.+?)__(.+?)\.parquet$"
+    match = re.match(legacy_pattern, filename)
     if match:
         return {
             "type": "tract",
@@ -38,10 +51,23 @@ def _parse_tract_filename(filename: str) -> dict | None:
 def _parse_county_filename(filename: str) -> dict | None:
     """Parse county crosswalk filename to extract vintages.
 
-    Expected format: coc_county_xwalk__{boundary}.parquet
+    Expected formats:
+        New: xwalk__B{boundary}xC{county}.parquet
+        Legacy: coc_county_xwalk__{boundary}.parquet
     """
-    pattern = r"^coc_county_xwalk__(.+?)\.parquet$"
-    match = re.match(pattern, filename)
+    # New format: xwalk__B2025xC2023.parquet
+    new_pattern = r"^xwalk__B(\d{4})xC(\d{4})\.parquet$"
+    match = re.match(new_pattern, filename)
+    if match:
+        return {
+            "type": "county",
+            "boundary_vintage": match.group(1),
+            "census_vintage": match.group(2),
+        }
+
+    # Legacy format: coc_county_xwalk__{boundary}.parquet
+    legacy_pattern = r"^coc_county_xwalk__(.+?)\.parquet$"
+    match = re.match(legacy_pattern, filename)
     if match:
         return {
             "type": "county",

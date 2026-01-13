@@ -593,13 +593,15 @@ def get_canonical_output_path(year: int, base_dir: Path | str | None = None) -> 
     Returns
     -------
     Path
-        Path like 'data/curated/pit/pit_counts__2024.parquet'.
+        Path like 'data/curated/pit/pit__P2024.parquet'.
     """
+    from coclab.naming import pit_filename
+
     if base_dir is None:
         base_dir = Path("data/curated/pit")
     else:
         base_dir = Path(base_dir)
-    return base_dir / f"pit_counts__{year}.parquet"
+    return base_dir / pit_filename(year)
 
 
 def get_vintage_output_path(vintage: int, base_dir: Path | str | None = None) -> Path:
@@ -616,13 +618,15 @@ def get_vintage_output_path(vintage: int, base_dir: Path | str | None = None) ->
     Returns
     -------
     Path
-        Path like 'data/curated/pit/pit_vintage__2024.parquet'.
+        Path like 'data/curated/pit/pit_vintage__P2024.parquet'.
     """
+    from coclab.naming import pit_vintage_filename
+
     if base_dir is None:
         base_dir = Path("data/curated/pit")
     else:
         base_dir = Path(base_dir)
-    return base_dir / f"pit_vintage__{vintage}.parquet"
+    return base_dir / pit_vintage_filename(vintage)
 
 
 @dataclass

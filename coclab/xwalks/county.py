@@ -87,6 +87,7 @@ def build_coc_county_crosswalk(
 def save_county_crosswalk(
     crosswalk: pd.DataFrame,
     boundary_vintage: str,
+    county_vintage: str | int,
     output_dir: Path | str = "data/curated/xwalks",
 ) -> Path:
     """Save county crosswalk to parquet file.
@@ -97,18 +98,22 @@ def save_county_crosswalk(
         Crosswalk DataFrame from build_coc_county_crosswalk.
     boundary_vintage : str
         Version identifier for CoC boundaries.
+    county_vintage : str | int
+        Version identifier for county geometries.
     output_dir : Path | str
         Output directory for parquet file.
 
     Returns
     -------
     Path
-        Path to saved parquet file.
+        Path to saved parquet file (e.g., xwalk__B2025xC2023.parquet).
     """
+    from coclab.naming import county_xwalk_filename
+
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    filename = f"coc_county_xwalk__{boundary_vintage}.parquet"
+    filename = county_xwalk_filename(boundary_vintage, county_vintage)
     output_path = output_dir / filename
 
     crosswalk.to_parquet(output_path, index=False)

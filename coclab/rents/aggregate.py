@@ -545,16 +545,18 @@ def get_coc_zori_path(
     Path
         Output path like 'data/curated/zori/coc_zori__county__b2025__c2023__
         acs2019-2023__wrenter_households.parquet'
+
+    Note:
+        New format uses temporal shorthand: zori__A2023@B2025xC2023__wrenter.parquet
     """
+    from coclab.naming import zori_filename as _zori_filename
+
     if output_dir is None:
         output_dir = DEFAULT_OUTPUT_DIR
     else:
         output_dir = Path(output_dir)
 
-    filename = (
-        f"coc_zori__{geography}__b{boundary}__c{counties}"
-        f"__acs{acs_vintage}__w{weighting}.parquet"
-    )
+    filename = _zori_filename(acs_vintage, boundary, counties, weighting)
     return output_dir / filename
 
 
@@ -591,16 +593,18 @@ def get_coc_zori_yearly_path(
     Path
         Output path like 'data/curated/zori/coc_zori_yearly__county__b2025__
         c2023__acs2019-2023__wrenter_households__mpit_january.parquet'
+
+    Note:
+        New format uses temporal shorthand: zori_yearly__A2023@B2025xC2023__wrenter__mpit_january.parquet
     """
+    from coclab.naming import zori_yearly_filename as _zori_yearly_filename
+
     if output_dir is None:
         output_dir = DEFAULT_OUTPUT_DIR
     else:
         output_dir = Path(output_dir)
 
-    filename = (
-        f"coc_zori_yearly__{geography}__b{boundary}__c{counties}"
-        f"__acs{acs_vintage}__w{weighting}__m{yearly_method}.parquet"
-    )
+    filename = _zori_yearly_filename(acs_vintage, boundary, counties, weighting, yearly_method)
     return output_dir / filename
 
 
