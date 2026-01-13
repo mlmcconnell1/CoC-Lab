@@ -294,7 +294,7 @@ erDiagram
 | Raw downloads | `data/raw/hud_exchange/{vintage}/` | Original source files |
 | Census tracts | `data/curated/census/tracts__{year}.parquet` | TIGER tract geometries |
 | Census counties | `data/curated/census/counties__{year}.parquet` | TIGER county geometries |
-| Tract crosswalks | `data/curated/xwalks/coc_tract_xwalk__{boundary}__{tracts}.parquet` | CoC-tract mapping |
+| Tract crosswalks | `data/curated/xwalks/coc_tract_xwalk__{boundary}__{tract}.parquet` | CoC-tract mapping |
 | County crosswalks | `data/curated/xwalks/coc_county_xwalk__{boundary}.parquet` | CoC-county mapping |
 | CoC measures | `data/curated/measures/coc_measures__{boundary}__{acs}.parquet` | Aggregated ACS data |
 | PIT counts | `data/curated/pit/pit_counts__{year}.parquet` | Canonical PIT data (single year) |
@@ -302,9 +302,9 @@ erDiagram
 | PIT registry | `data/curated/pit/pit_registry.parquet` | PIT year tracking |
 | PIT vintage registry | `data/curated/pit/pit_vintage_registry.parquet` | PIT vintage tracking |
 | CoC panels | `data/curated/panels/coc_panel__{start}_{end}.parquet` | Analysis-ready panels |
-| Tract population | `data/curated/acs/tract_population__{acs}__{tracts}.parquet` | ACS tract population |
-| CoC population rollup | `data/curated/acs/coc_population_rollup__{boundary}__{acs}__{tracts}__{weighting}.parquet` | Aggregated CoC population |
-| Population crosscheck | `data/curated/acs/acs_population_crosscheck__{boundary}__{acs}__{tracts}__{weighting}.parquet` | Validation report |
+| Tract population | `data/curated/acs/tract_population__{acs}__{tract}.parquet` | ACS tract population |
+| CoC population rollup | `data/curated/acs/coc_population_rollup__{boundary}__{acs}__{tract}__{weighting}.parquet` | Aggregated CoC population |
+| Population crosscheck | `data/curated/acs/acs_population_crosscheck__{boundary}__{acs}__{tract}__{weighting}.parquet` | Validation report |
 | Raw ZORI | `data/raw/zori/zori__{geography}__{date}.csv` | Downloaded Zillow CSV |
 | Normalized ZORI | `data/curated/zori/zori__{geography}.parquet` | Normalized ZORI data |
 | County weights | `data/curated/acs/county_weights__{acs}__{method}.parquet` | ACS county weights |

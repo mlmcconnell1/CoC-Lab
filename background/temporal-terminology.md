@@ -187,4 +187,4 @@ Panel files span multiple years and use a target boundary alignment:
 
 ---
 
-**Previous:** [[06-Data-Model]] | **Next:** [[08-...]]
+**Previous:** [[06-Data-Model]] | **Next:** [[08-Workflows]]
