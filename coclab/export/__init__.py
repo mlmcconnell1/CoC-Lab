@@ -1,4 +1,4 @@
-"""Export bundle utilities for CoC-PIT."""
+"""Export bundle utilities for CoC Lab."""
 
 from coclab.export.codebook import (
     VARIABLE_DESCRIPTIONS,

@@ -8,8 +8,8 @@ CoC Lab is a Python-based data and geospatial infrastructure for working with Co
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/coc-pit.git
-cd coc-pit
+git clone https://github.com/mlmcconnell1/CoC-Lab.git
+cd CoC-Lab
 
 # Install with uv (recommended)
 uv sync

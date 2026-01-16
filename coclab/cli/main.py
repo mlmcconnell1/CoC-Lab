@@ -42,7 +42,7 @@ from coclab.cli.zori import aggregate_zori, ingest_zori, zori_diagnostics
 
 
 def _check_working_directory() -> None:
-    """Warn if the current directory doesn't look like the CoC-PIT project root."""
+    """Warn if the current directory doesn't look like the CoC Lab project root."""
     cwd = Path.cwd()
     expected_markers = [
         cwd / "pyproject.toml",
@@ -54,7 +54,7 @@ def _check_working_directory() -> None:
     if missing:
         missing_names = ", ".join(p.name for p in missing)
         typer.echo(
-            f"Warning: Current directory may not be the CoC-PIT project root. "
+            f"Warning: Current directory may not be the CoC Lab project root. "
             f"Missing: {missing_names}",
             err=True,
         )

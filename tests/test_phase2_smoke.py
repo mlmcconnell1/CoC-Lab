@@ -1,4 +1,4 @@
-"""Phase 2 integration/smoke tests for CoC-PIT.
+"""Phase 2 integration/smoke tests for CoC Lab.
 
 These tests validate the crosswalk and measures modules work correctly
 with synthetic data that has known intersection properties.

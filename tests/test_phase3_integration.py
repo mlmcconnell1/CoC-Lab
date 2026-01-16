@@ -1,4 +1,4 @@
-"""Phase 3 Integration Tests for CoC-PIT.
+"""Phase 3 Integration Tests for CoC Lab.
 
 This module provides end-to-end integration tests that validate the entire
 Phase 3 pipeline works together correctly. These tests cover:

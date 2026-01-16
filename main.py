@@ -1,5 +1,5 @@
 def main():
-    print("Hello from coc-pit!")
+    print("Hello from CoC Lab!")
 
 
 if __name__ == "__main__":
