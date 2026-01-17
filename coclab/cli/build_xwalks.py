@@ -1,16 +1,24 @@
 """CLI command for building CoC crosswalks."""
 
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import click
 import geopandas as gpd
 import typer
 
+if TYPE_CHECKING:
+    import pandas as pd
+
 from coclab.measures.diagnostics import compute_crosswalk_diagnostics, summarize_diagnostics
 from coclab.registry.registry import latest_vintage, list_boundaries
 from coclab.xwalks.county import build_coc_county_crosswalk, save_county_crosswalk
-from coclab.xwalks.tract import build_coc_tract_crosswalk, save_crosswalk
+from coclab.xwalks.tract import (
+    add_population_weights,
+    build_coc_tract_crosswalk,
+    save_crosswalk,
+    validate_population_shares,
+)
 
 
 def build_xwalks(
@@ -46,6 +54,21 @@ def build_xwalks(
             help="Output directory for crosswalk files.",
         ),
     ] = Path("data/curated/xwalks"),
+    population_weights: Annotated[
+        bool,
+        typer.Option(
+            "--population-weights",
+            "-p",
+            help="Add population-based weighting to tract crosswalk.",
+        ),
+    ] = False,
+    auto_fetch: Annotated[
+        bool,
+        typer.Option(
+            "--auto-fetch",
+            help="Auto-fetch population data if not cached (needs --population-weights).",
+        ),
+    ] = False,
 ) -> None:
     """Build tract and county crosswalks for CoC boundaries.
 
@@ -55,9 +78,14 @@ def build_xwalks(
 
     Examples:
 
+        # Area-only (default)
         coclab build-xwalks --boundary 2025 --tracts 2023
 
-        coclab build-xwalks --boundary 2025 --tracts 2023 --counties 2023
+        # With population weights
+        coclab build-xwalks --boundary 2025 --tracts 2023 --population-weights
+
+        # Auto-fetch population data if missing
+        coclab build-xwalks --boundary 2025 --tracts 2023 --population-weights --auto-fetch
     """
     # Resolve county vintage
     county_vintage = counties or tracts
@@ -156,12 +184,22 @@ def build_xwalks(
             progress_callback=update_progress,
         )
 
+    # Add population weights if requested
+    has_pop_weights = False
+    if population_weights:
+        has_pop_weights = _apply_population_weights(
+            tract_xwalk=tract_xwalk,
+            tract_vintage=tracts,
+            auto_fetch=auto_fetch,
+        )
+
     # Save tract crosswalk
     tract_output = save_crosswalk(
         crosswalk=tract_xwalk,
         boundary_vintage=boundary,
         tract_vintage=str(tracts),
         output_dir=output_dir,
+        has_pop_weights=has_pop_weights,
     )
     typer.echo(f"Saved tract crosswalk to: {tract_output}")
 
@@ -218,3 +256,89 @@ def build_xwalks(
     typer.echo(f"Saved county crosswalk to: {county_output}")
 
     typer.echo("\nCrosswalk generation complete!")
+
+
+def _apply_population_weights(
+    tract_xwalk: "pd.DataFrame",
+    tract_vintage: int,
+    auto_fetch: bool,
+) -> bool:
+    """Load population data and apply population weights to tract crosswalk.
+
+    Modifies tract_xwalk in place.
+
+    Returns True if population weights were successfully applied.
+    """
+    import pandas as pd
+
+    from coclab.acs.ingest.tract_population import get_output_path, ingest_tract_population
+
+    # Determine ACS vintage to use (5-year ending in tract_vintage)
+    acs_vintage = f"{tract_vintage - 4}-{tract_vintage}"
+
+    # Try to load cached population data (new naming convention)
+    pop_path = get_output_path(acs_vintage, str(tract_vintage))
+
+    # Also check legacy naming convention
+    legacy_pop_path = Path(
+        f"data/curated/acs/tract_population__{acs_vintage}__{tract_vintage}.parquet"
+    )
+
+    if pop_path.exists():
+        typer.echo(f"Loading population data from: {pop_path}")
+        pop_df = pd.read_parquet(pop_path)
+    elif legacy_pop_path.exists():
+        typer.echo(f"Loading population data from: {legacy_pop_path}")
+        pop_df = pd.read_parquet(legacy_pop_path)
+    elif auto_fetch:
+        typer.echo(f"Fetching ACS population data ({acs_vintage})...")
+        pop_path = ingest_tract_population(
+            acs_vintage=acs_vintage,
+            tract_vintage=str(tract_vintage),
+        )
+        typer.echo(f"Saved population data to: {pop_path}")
+        pop_df = pd.read_parquet(pop_path)
+    else:
+        typer.echo(
+            f"Warning: Population data not found for ACS {acs_vintage}. "
+            f"Use --auto-fetch to download, or run:\n"
+            f"  coclab ingest-acs-population --acs-vintage {acs_vintage} "
+            f"--tract-vintage {tract_vintage}",
+            err=True,
+        )
+        return False
+
+    # Standardize column names (population data uses 'tract_geoid')
+    if "GEOID" in pop_df.columns and "tract_geoid" not in pop_df.columns:
+        pop_df = pop_df.rename(columns={"GEOID": "tract_geoid"})
+
+    # Apply population weights
+    typer.echo("Computing population-weighted shares...")
+    weighted_xwalk = add_population_weights(tract_xwalk, pop_df)
+
+    # Copy pop_share back to original dataframe (in-place modification)
+    tract_xwalk["pop_share"] = weighted_xwalk["pop_share"]
+
+    # Validate population shares
+    validation = validate_population_shares(tract_xwalk)
+    invalid_cocs = validation[~validation["is_valid"]]
+
+    if len(invalid_cocs) > 0:
+        typer.echo(
+            f"Warning: {len(invalid_cocs)} CoCs have pop_share sum outside [0.99, 1.01]:",
+            err=True,
+        )
+        for _, row in invalid_cocs.head(5).iterrows():
+            typer.echo(f"  {row['coc_id']}: {row['pop_share_sum']:.4f}", err=True)
+        if len(invalid_cocs) > 5:
+            typer.echo(f"  ... and {len(invalid_cocs) - 5} more", err=True)
+
+    # Log coverage statistics
+    total_tracts = tract_xwalk["tract_geoid"].nunique()
+    tracts_with_pop = tract_xwalk[tract_xwalk["pop_share"].notna()]["tract_geoid"].nunique()
+    coverage_pct = 100 * tracts_with_pop / total_tracts if total_tracts > 0 else 0
+    typer.echo(
+        f"Population coverage: {tracts_with_pop}/{total_tracts} tracts ({coverage_pct:.1f}%)"
+    )
+
+    return True
