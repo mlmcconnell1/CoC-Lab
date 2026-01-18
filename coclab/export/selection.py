@@ -1,5 +1,6 @@
 """Artifact selection and inference logic for export bundles."""
 
+import re
 from pathlib import Path
 
 from coclab.export.types import ArtifactRecord, BundleConfig, SelectionPlan
@@ -66,6 +67,79 @@ def _file_matches_vintage(filename: str, vintage: str | None) -> bool:
     if vintage is None:
         return True  # No filter, all files match
     return vintage in filename
+
+
+def _parse_year_range(year_range: str) -> tuple[int, int] | None:
+    """Parse a year range string like '2015-2024' into (start, end) tuple.
+
+    Args:
+        year_range: String in format 'YYYY-YYYY' or 'YYYY_YYYY'
+
+    Returns:
+        Tuple of (start_year, end_year) or None if parsing fails
+    """
+    # Handle both dash and underscore separators
+    match = re.match(r"(\d{4})[-_](\d{4})", year_range)
+    if match:
+        return int(match.group(1)), int(match.group(2))
+    # Also handle single year
+    if re.match(r"^\d{4}$", year_range):
+        year = int(year_range)
+        return year, year
+    return None
+
+
+def _extract_year_from_pit_filename(filename: str) -> int | None:
+    """Extract the year from a PIT filename.
+
+    Handles patterns like:
+    - pit_counts__2023.parquet
+    - pit__P2023.parquet
+    - pit_vintage__2024.parquet
+
+    Args:
+        filename: The filename to extract year from
+
+    Returns:
+        The year as an integer, or None if not found
+    """
+    # Match pit_counts__YYYY or pit__PYYYY or pit_vintage__YYYY
+    patterns = [
+        r"pit_counts__(\d{4})",
+        r"pit__P(\d{4})",
+        r"pit_vintage__(\d{4})",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, filename)
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def _select_pit_files_for_year_range(
+    files: list[Path], year_range: str
+) -> list[Path]:
+    """Select PIT files that fall within the specified year range.
+
+    Args:
+        files: List of candidate PIT file paths
+        year_range: Year range string like '2015-2024'
+
+    Returns:
+        List of files that contain data for years in the range
+    """
+    parsed = _parse_year_range(year_range)
+    if not parsed:
+        return files  # Can't parse, return all
+
+    start_year, end_year = parsed
+    matching = []
+    for f in files:
+        file_year = _extract_year_from_pit_filename(f.name)
+        if file_year is not None and start_year <= file_year <= end_year:
+            matching.append(f)
+
+    return matching
 
 
 def _select_latest_by_mtime(files: list[Path]) -> Path | None:
@@ -154,6 +228,14 @@ def _select_files_for_category(
     candidates = _find_matching_files(pattern, base_dir)
     if not candidates:
         return []
+
+    # Special handling for PIT: select all files within year range
+    if category == "pit" and config.years:
+        filtered = _select_pit_files_for_year_range(candidates, config.years)
+        if filtered:
+            # Return all matching PIT files, not just one
+            return [(f, True) for f in sorted(filtered)]
+        # Fall through to default behavior if no matches
 
     # Get relevant vintage keys for this category
     vintage_keys = CATEGORY_VINTAGES.get(category, [])
