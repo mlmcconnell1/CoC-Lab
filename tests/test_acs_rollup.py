@@ -368,11 +368,12 @@ class TestPathHelpers:
     def test_get_crosswalk_path_default(self):
         """Test default crosswalk path."""
         path = get_crosswalk_path("2025", "2023")
-        assert path == Path("data/curated/xwalks/coc_tract_xwalk__2025__2023.parquet")
+        assert path == Path("data/curated/xwalks/xwalk__B2025xT2023.parquet")
 
     def test_get_crosswalk_path_custom(self):
-        """Test custom crosswalk path."""
+        """Test custom crosswalk path falls back to legacy naming when file doesn't exist."""
         path = get_crosswalk_path("2025", "2023", base_dir="/tmp/xwalks")
+        # Falls back to legacy naming since no file exists at custom path
         assert path == Path("/tmp/xwalks/coc_tract_xwalk__2025__2023.parquet")
 
     def test_get_output_path_default(self):
