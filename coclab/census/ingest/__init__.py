@@ -9,6 +9,11 @@ from coclab.census.ingest.tiger_tracts import (
     ingest_tiger_tracts,
     save_tracts,
 )
+from coclab.census.ingest.tract_relationship import (
+    download_tract_relationship,
+    ingest_tract_relationship,
+    save_tract_relationship,
+)
 
 __all__ = [
     "download_tiger_tracts",
@@ -17,4 +22,7 @@ __all__ = [
     "download_tiger_counties",
     "ingest_tiger_counties",
     "save_counties",
+    "download_tract_relationship",
+    "ingest_tract_relationship",
+    "save_tract_relationship",
 ]

@@ -116,6 +116,22 @@ def county_xwalk_filename(boundary_vintage: str, county_vintage: str | int) -> s
     return f"xwalk__B{boundary_vintage}xC{county_vintage}.parquet"
 
 
+def tract_relationship_filename(
+    from_vintage: str | int = 2010,
+    to_vintage: str | int = 2020,
+) -> str:
+    """Generate filename for Census tract relationship file.
+
+    Args:
+        from_vintage: Source tract vintage (e.g., 2010)
+        to_vintage: Target tract vintage (e.g., 2020)
+
+    Returns:
+        Filename like 'tract_relationship__T2010xT2020.parquet'
+    """
+    return f"tract_relationship__T{from_vintage}xT{to_vintage}.parquet"
+
+
 # =============================================================================
 # Derived datasets (compound notation)
 # =============================================================================
