@@ -195,6 +195,14 @@ class TestReadCocBoundaries:
 class TestIngestHudExchange:
     """Integration tests for the full ingestion pipeline."""
 
+    @pytest.fixture(autouse=True)
+    def mock_registry(self, monkeypatch):
+        """Mock the registry to avoid temp directory rejection in tests."""
+        monkeypatch.setattr(
+            "coclab.registry.register_vintage",
+            lambda **kwargs: None,
+        )
+
     def test_ingest_with_skip_download(self):
         """Test ingestion with pre-downloaded data."""
         with tempfile.TemporaryDirectory() as tmpdir:
