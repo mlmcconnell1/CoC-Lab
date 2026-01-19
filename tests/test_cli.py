@@ -213,3 +213,80 @@ class TestHelpOutput:
         assert "--coc" in result.output
         assert "--vintage" in result.output
         assert "--output" in result.output
+
+    def test_crosscheck_population_help(self):
+        """Crosscheck-population help should show options."""
+        result = runner.invoke(app, ["crosscheck-population", "--help"])
+
+        assert result.exit_code == 0
+        assert "--boundary" in result.output
+        assert "--acs" in result.output
+        assert "--by-state" in result.output
+        assert "--warn-threshold" in result.output
+
+
+class TestCrosscheckPopulation:
+    """Tests for the 'crosscheck-population' command."""
+
+    def test_crosscheck_population_runs(self, tmp_path):
+        """Test that crosscheck-population runs with test data."""
+        import pandas as pd
+
+        # Create test crosswalk
+        xwalk_dir = tmp_path / "xwalks"
+        xwalk_dir.mkdir()
+        xwalk = pd.DataFrame(
+            {
+                "coc_id": ["CO-500", "CO-500", "CO-501"],
+                "tract_geoid": ["08001000100", "08001000200", "08005000100"],
+                "area_share": [1.0, 1.0, 1.0],
+                "pop_share": [0.5, 0.5, 1.0],
+            }
+        )
+        xwalk.to_parquet(xwalk_dir / "xwalk__B2025xT2023.parquet")
+
+        # Create test ACS data
+        acs_dir = tmp_path / "acs"
+        acs_dir.mkdir()
+        acs = pd.DataFrame(
+            {
+                "tract_geoid": ["08001000100", "08001000200", "08005000100"],
+                "total_population": [1000, 2000, 3000],
+                "tract_vintage": ["2023", "2023", "2023"],
+                "acs_vintage": ["2019-2023", "2019-2023", "2019-2023"],
+            }
+        )
+        acs.to_parquet(acs_dir / "tract_population__2019-2023__2023.parquet")
+
+        result = runner.invoke(
+            app,
+            [
+                "crosscheck-population",
+                "--xwalk-dir",
+                str(xwalk_dir),
+                "--acs-dir",
+                str(acs_dir),
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "POPULATION CROSSWALK SANITY CHECK" in result.output
+        assert "NATIONAL TOTAL" in result.output
+        assert "COC-AGGREGATED TOTAL" in result.output
+
+    def test_crosscheck_population_missing_files(self, tmp_path):
+        """Test that crosscheck-population fails gracefully with missing files."""
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+
+        result = runner.invoke(
+            app,
+            [
+                "crosscheck-population",
+                "--xwalk-dir",
+                str(empty_dir),
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "Error" in result.output or "No crosswalk" in result.output

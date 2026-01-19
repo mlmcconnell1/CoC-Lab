@@ -311,6 +311,104 @@ def fetch_all_states_tract_data(year: int, show_progress: bool = False) -> pd.Da
     return pd.concat(dfs, ignore_index=True)
 
 
+def _validate_geoid_overlap(
+    crosswalk: pd.DataFrame,
+    acs_data: pd.DataFrame,
+    min_overlap_threshold: float = 0.5,
+) -> None:
+    """Validate GEOID overlap between crosswalk and ACS data by state.
+
+    Detects tract vintage mismatches where crosswalk uses different tract
+    definitions than the ACS data (e.g., 2010 vs 2020 census tract GEOIDs).
+
+    This is a known issue for Connecticut, which changed from county-based
+    tract GEOIDs (09001xxxxx) to planning region-based GEOIDs (0911xxxxxx)
+    in the 2020 Census. Other states may have similar issues with tract
+    boundary changes between censuses.
+
+    Parameters
+    ----------
+    crosswalk : pd.DataFrame
+        Crosswalk with GEOID column.
+    acs_data : pd.DataFrame
+        ACS data with GEOID column.
+    min_overlap_threshold : float
+        Minimum fraction of crosswalk tracts that must match ACS data
+        before a warning is issued. Default is 0.5 (50%).
+
+    Warns
+    -----
+    UserWarning
+        If any state has less than min_overlap_threshold overlap between
+        crosswalk and ACS GEOIDs.
+    """
+    import logging
+    import warnings
+
+    logger = logging.getLogger(__name__)
+
+    if "GEOID" not in crosswalk.columns or "GEOID" not in acs_data.columns:
+        return  # Can't validate without GEOID columns
+
+    xwalk_geoids = set(crosswalk["GEOID"].dropna().unique())
+    acs_geoids = set(acs_data["GEOID"].dropna().unique())
+
+    if not xwalk_geoids or not acs_geoids:
+        return
+
+    # Extract state FIPS (first 2 characters) and check overlap by state
+    xwalk_by_state: dict[str, set[str]] = {}
+    for geoid in xwalk_geoids:
+        state = str(geoid)[:2]
+        if state not in xwalk_by_state:
+            xwalk_by_state[state] = set()
+        xwalk_by_state[state].add(geoid)
+
+    acs_by_state: dict[str, set[str]] = {}
+    for geoid in acs_geoids:
+        state = str(geoid)[:2]
+        if state not in acs_by_state:
+            acs_by_state[state] = set()
+        acs_by_state[state].add(geoid)
+
+    # Check overlap for each state present in crosswalk
+    low_overlap_states = []
+    for state, xwalk_tracts in xwalk_by_state.items():
+        acs_tracts = acs_by_state.get(state, set())
+        if not acs_tracts:
+            # No ACS data for this state at all
+            low_overlap_states.append((state, 0, len(xwalk_tracts), 0))
+            continue
+
+        overlap = xwalk_tracts.intersection(acs_tracts)
+        overlap_ratio = len(overlap) / len(xwalk_tracts) if xwalk_tracts else 0
+
+        if overlap_ratio < min_overlap_threshold:
+            low_overlap_states.append(
+                (state, overlap_ratio, len(xwalk_tracts), len(overlap))
+            )
+
+    if low_overlap_states:
+        # Format warning message
+        state_details = []
+        for state, ratio, total, matched in low_overlap_states:
+            state_details.append(
+                f"  State {state}: {matched}/{total} tracts matched ({ratio:.1%})"
+            )
+
+        warning_msg = (
+            "Low GEOID overlap detected between crosswalk and ACS data. "
+            "This typically indicates a tract vintage mismatch (e.g., crosswalk uses "
+            "2020 census tract definitions but ACS data uses 2010 definitions).\n"
+            "Affected states:\n" + "\n".join(state_details) + "\n"
+            "CoCs in these states will have low coverage_ratio and potentially "
+            "missing or underestimated population values."
+        )
+
+        logger.warning(warning_msg)
+        warnings.warn(warning_msg, UserWarning, stacklevel=3)
+
+
 def aggregate_to_coc(
     acs_data: pd.DataFrame,
     crosswalk: pd.DataFrame,
@@ -325,23 +423,44 @@ def aggregate_to_coc(
     crosswalk : pd.DataFrame
         Tract-to-CoC crosswalk with tract_geoid, coc_id, area_share, pop_share.
     weighting : {"area", "population"}
-        Weighting method for aggregation.
+        Weighting method for median value aggregation. For count variables
+        (population, poverty counts), area_share is always used to compute
+        actual totals. For median variables (income, rent), this parameter
+        controls whether medians are weighted by area overlap alone ("area")
+        or by population in overlapping areas ("population").
 
     Returns
     -------
     pd.DataFrame
         CoC-level aggregated measures.
-    """
-    # Determine weight column
-    weight_col = "area_share" if weighting == "area" else "pop_share"
 
-    if weight_col not in crosswalk.columns:
-        raise ValueError(f"Crosswalk missing required column: {weight_col}")
+    Notes
+    -----
+    Count variables (total_population, adult_population, etc.) always use
+    area_share weighting to produce actual population totals. Using pop_share
+    for counts would produce weighted averages instead of sums, since pop_share
+    is normalized to sum to 1.0 per CoC.
+
+    The weighting parameter only affects median variables, controlling whether
+    tract medians are weighted by geographic overlap or by population.
+    """
+    # For count variables, always use area_share to get actual totals
+    # For median variables, use the specified weighting method
+    median_weight_col = "area_share" if weighting == "area" else "pop_share"
+
+    if "area_share" not in crosswalk.columns:
+        raise ValueError("Crosswalk missing required column: area_share")
+    if weighting == "population" and "pop_share" not in crosswalk.columns:
+        raise ValueError("Crosswalk missing required column: pop_share")
 
     # Standardize GEOID column names
     xwalk = crosswalk.copy()
     if "tract_geoid" in xwalk.columns:
         xwalk = xwalk.rename(columns={"tract_geoid": "GEOID"})
+
+    # Validate GEOID overlap between crosswalk and ACS data
+    # This detects tract vintage mismatches (e.g., 2010 vs 2020 census tract definitions)
+    _validate_geoid_overlap(xwalk, acs_data)
 
     # Join ACS data with crosswalk
     merged = xwalk.merge(acs_data, on="GEOID", how="left")
@@ -365,14 +484,17 @@ def aggregate_to_coc(
     for coc_id, group in merged.groupby("coc_id"):
         row = {"coc_id": coc_id}
 
-        # Weighted sums for population counts
+        # Weighted sums for population counts - ALWAYS use area_share
+        # This computes actual population totals (sum of tract_pop * area_share)
+        # Using pop_share here would give weighted averages, not totals
         for col in sum_cols:
             if col in group.columns:
-                weighted = group[col].fillna(0) * group[weight_col].fillna(0)
+                weighted = group[col].fillna(0) * group["area_share"].fillna(0)
                 row[col] = weighted.sum()
 
-        # Weighted averages for median values (weight by population)
-        pop_weights = group["total_population"].fillna(0) * group[weight_col].fillna(0)
+        # Weighted averages for median values
+        # Use the specified weighting method (area or population)
+        pop_weights = group["total_population"].fillna(0) * group[median_weight_col].fillna(0)
 
         for col in avg_cols:
             if col in group.columns:

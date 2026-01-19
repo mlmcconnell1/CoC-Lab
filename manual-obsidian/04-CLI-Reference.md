@@ -19,6 +19,7 @@ flowchart LR
     coclab --> rollup-acs-population
     coclab --> crosscheck-acs-population
     coclab --> crosscheck-pit-vintages
+    coclab --> crosscheck-population
     coclab --> verify-acs-population
     coclab --> xwalk-diagnostics
     coclab --> panel-diagnostics
@@ -47,6 +48,7 @@ flowchart LR
     rollup-acs-population --> ROLLUP[Aggregate tract pop to CoC]
     crosscheck-acs-population --> XCHECK[Validate rollup vs measures]
     crosscheck-pit-vintages --> PITXCHECK[Compare PIT across vintages]
+    crosscheck-population --> POPCHECK[Validate CoC pop vs national]
     verify-acs-population --> VERIFY[Full pipeline: ingest→rollup→check]
     ingest-zori --> ZORI_ING[Download & normalize ZORI data]
     aggregate-zori --> ZORI_AGG[Aggregate ZORI to CoC level]
@@ -292,6 +294,65 @@ coclab crosscheck-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 -
 **Output:**
 - Console report with top 25 worst deltas
 - `data/curated/acs/acs_population_crosscheck__{boundary}__{acs}__{tracts}__{weighting}.parquet`
+
+## `coclab crosscheck-population`
+
+Cross-check population totals from crosswalk aggregation against ACS national totals. Validates that CoC-aggregated population approximately equals the national ACS total, helping identify crosswalk coverage issues, double-counting, or data quality problems.
+
+```bash
+# Basic crosscheck (auto-detects latest vintages)
+coclab crosscheck-population
+
+# Specify vintages
+coclab crosscheck-population --boundary 2025 --acs 2019-2023
+
+# Show state-level breakdown
+coclab crosscheck-population --by-state
+
+# Adjust warning threshold
+coclab crosscheck-population --warn-threshold 0.10
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--boundary`, `-b` | CoC boundary vintage | Latest |
+| `--acs`, `-a` | ACS 5-year vintage | Latest |
+| `--tracts`, `-t` | Census tract vintage | ACS end year |
+| `--xwalk-dir` | Directory containing crosswalk files | `data/curated/xwalks` |
+| `--acs-dir` | Directory containing ACS tract files | `data/curated/acs` |
+| `--by-state`, `-s` | Show detailed state-level comparison | False |
+| `--warn-threshold`, `-w` | Warning threshold for ratio deviation from 1.0 | 0.05 (5%) |
+
+**Diagnostics Computed:**
+1. **National total** - Sum of all tract populations from ACS
+2. **Crosswalk statistics** - Tract counts, CoC counts, coverage gaps
+3. **CoC-aggregated total** - `sum(tract_pop × area_share)` across all CoCs
+4. **Ratio validation** - CoC/National ratio with pass/fail status
+5. **Area_share validation** - Detects overlaps (>1.01) and partial coverage (<0.99)
+6. **State-level comparison** (with `--by-state`) - Identifies states with coverage issues
+
+**Exit Codes:**
+- `0` - Ratio within threshold
+- `1` - Ratio exceeds threshold (potential data issue)
+
+**Example Output:**
+```
+POPULATION CROSSWALK SANITY CHECK
+======================================================================
+1. NATIONAL TOTAL (sum of all tracts): 335,559,225
+
+2. CROSSWALK STATISTICS:
+   Unique tracts in crosswalk:    85,275
+   Unique CoCs:                   387
+
+3. COC-AGGREGATED TOTAL: 330,903,210
+   Ratio (CoC/National):     0.9861
+   Status: OK (within 5% threshold)
+
+4. AREA_SHARE VALIDATION:
+   Tracts with sum > 1.01 (potential overlap): 0
+   Tracts with sum < 0.99 (partial coverage):  4,696
+```
 
 ## `coclab crosscheck-pit-vintages`
 

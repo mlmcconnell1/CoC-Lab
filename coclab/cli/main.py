@@ -16,6 +16,7 @@ from coclab.cli.build_xwalks import build_xwalks
 from coclab.cli.compare_vintages import compare_vintages
 from coclab.cli.crosscheck_acs_population import crosscheck_acs_population
 from coclab.cli.crosscheck_pit_vintages import crosscheck_pit_vintages
+from coclab.cli.crosscheck_population import crosscheck_population
 from coclab.cli.diagnostics import diagnostics
 from coclab.cli.export_bundle import export_bundle
 from coclab.cli.ingest_acs_population import ingest_acs_population
@@ -403,6 +404,7 @@ app.command("check-boundaries")(check_boundaries)
 app.command("compare-vintages")(compare_vintages)
 app.command("crosscheck-acs-population")(crosscheck_acs_population)
 app.command("crosscheck-pit-vintages")(crosscheck_pit_vintages)
+app.command("crosscheck-population")(crosscheck_population)
 app.command("delete-boundaries")(delete_boundaries)
 app.command("export-bundle")(export_bundle)
 app.command("ingest-acs-population")(ingest_acs_population)

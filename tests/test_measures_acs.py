@@ -196,7 +196,12 @@ class TestAggregateToCoC:
         assert co501["total_population"] == 3000  # 3000 * 1.0
 
     def test_population_weighted_aggregation(self):
-        """Test aggregation with population weighting."""
+        """Test aggregation with population weighting.
+
+        Count variables (total_population, etc.) should ALWAYS use area_share
+        to produce actual population totals. The weighting parameter only
+        affects median value aggregation.
+        """
         acs_data = pd.DataFrame(
             {
                 "GEOID": ["08001000100", "08001000200"],
@@ -221,9 +226,67 @@ class TestAggregateToCoC:
 
         assert len(result) == 1
         co500 = result.iloc[0]
-        # 1000 * 0.4 + 2000 * 0.6 = 400 + 1200 = 1600
-        assert co500["total_population"] == 1600
+
+        # Count variables use area_share (not pop_share) to get actual totals
+        # 1000 * 1.0 + 2000 * 1.0 = 3000
+        assert co500["total_population"] == 3000
+        assert co500["adult_population"] == 2400  # 800 + 1600
+        assert co500["population_below_poverty"] == 300  # 100 + 200
+
+        # Median values use pop_share for weighting
+        # Income: (50000 * 1000 * 0.4 + 60000 * 2000 * 0.6) / (1000 * 0.4 + 2000 * 0.6)
+        #       = (20M + 72M) / (400 + 1200) = 92M / 1600 = 57500
+        expected_income = (50000 * 1000 * 0.4 + 60000 * 2000 * 0.6) / (1000 * 0.4 + 2000 * 0.6)
+        assert abs(co500["median_household_income"] - expected_income) < 0.01
+
         assert co500["weighting_method"] == "population"
+
+    def test_count_vars_always_use_area_share(self):
+        """Test that count variables use area_share regardless of weighting parameter.
+
+        This is a regression test for the bug where pop_share was used for count
+        variables when weighting='population', which produced weighted averages
+        instead of actual population totals.
+        """
+        acs_data = pd.DataFrame(
+            {
+                "GEOID": ["08001000100", "08001000200"],
+                "total_population": [1000, 2000],
+                "adult_population": [800, 1600],
+                "population_below_poverty": [100, 200],
+                "median_household_income": [50000, 60000],
+                "median_gross_rent": [1000, 1200],
+            }
+        )
+
+        # Different area_share and pop_share to verify correct one is used
+        crosswalk = pd.DataFrame(
+            {
+                "tract_geoid": ["08001000100", "08001000200"],
+                "coc_id": ["CO-500", "CO-500"],
+                "area_share": [0.5, 0.5],  # 50% of each tract
+                "pop_share": [0.33, 0.67],  # Normalized to sum to 1.0
+            }
+        )
+
+        # With area weighting
+        result_area = aggregate_to_coc(acs_data, crosswalk, weighting="area")
+        # With population weighting
+        result_pop = aggregate_to_coc(acs_data, crosswalk, weighting="population")
+
+        # Both should give same count totals (using area_share)
+        # 1000 * 0.5 + 2000 * 0.5 = 1500
+        assert result_area.iloc[0]["total_population"] == 1500
+        assert result_pop.iloc[0]["total_population"] == 1500
+
+        # Adult population: 800 * 0.5 + 1600 * 0.5 = 1200
+        assert result_area.iloc[0]["adult_population"] == 1200
+        assert result_pop.iloc[0]["adult_population"] == 1200
+
+        # If pop_share were used (the old bug), we'd get:
+        # 1000 * 0.33 + 2000 * 0.67 = 330 + 1340 = 1670 (different!)
+        # Verify we're NOT getting this buggy value
+        assert result_pop.iloc[0]["total_population"] != 1670
 
     def test_coverage_ratio_calculation(self):
         """Test that coverage_ratio correctly computes area-weighted coverage."""
@@ -346,3 +409,84 @@ class TestACSSchemaMeasures:
 
         for col in required_columns:
             assert col in result.columns, f"Missing required column: {col}"
+
+
+class TestGEOIDValidation:
+    """Tests for GEOID overlap validation between crosswalk and ACS data."""
+
+    def test_warns_on_low_geoid_overlap(self):
+        """Test that warning is raised when crosswalk and ACS GEOIDs don't match."""
+        import warnings
+
+        # ACS data with Connecticut old-style GEOIDs (county-based: 09001)
+        acs_data = pd.DataFrame(
+            {
+                "GEOID": ["09001000100", "09001000200"],  # Old CT format
+                "total_population": [1000, 2000],
+                "adult_population": [800, 1600],
+                "population_below_poverty": [100, 200],
+                "median_household_income": [50000, 60000],
+                "median_gross_rent": [1000, 1200],
+            }
+        )
+
+        # Crosswalk with Connecticut new-style GEOIDs (planning region: 09110)
+        crosswalk = pd.DataFrame(
+            {
+                "tract_geoid": ["09110000100", "09110000200"],  # New CT format
+                "coc_id": ["CT-500", "CT-500"],
+                "area_share": [1.0, 1.0],
+                "pop_share": [0.5, 0.5],
+            }
+        )
+
+        # Should warn about low GEOID overlap
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = aggregate_to_coc(acs_data, crosswalk, weighting="area")
+
+            # Check that a warning was raised
+            assert len(w) == 1
+            assert "Low GEOID overlap" in str(w[0].message)
+            assert "State 09" in str(w[0].message)
+
+        # Result should still be computed, but with zero coverage
+        assert len(result) == 1
+        assert result.iloc[0]["coverage_ratio"] == 0.0
+        # Population should be 0 since no tracts matched
+        assert result.iloc[0]["total_population"] == 0
+
+    def test_no_warning_when_geoids_match(self):
+        """Test that no warning is raised when GEOIDs match correctly."""
+        import warnings
+
+        acs_data = pd.DataFrame(
+            {
+                "GEOID": ["08001000100", "08001000200"],
+                "total_population": [1000, 2000],
+                "adult_population": [800, 1600],
+                "population_below_poverty": [100, 200],
+                "median_household_income": [50000, 60000],
+                "median_gross_rent": [1000, 1200],
+            }
+        )
+
+        crosswalk = pd.DataFrame(
+            {
+                "tract_geoid": ["08001000100", "08001000200"],
+                "coc_id": ["CO-500", "CO-500"],
+                "area_share": [1.0, 1.0],
+                "pop_share": [0.5, 0.5],
+            }
+        )
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = aggregate_to_coc(acs_data, crosswalk, weighting="area")
+
+            # No GEOID overlap warnings should be raised
+            geoid_warnings = [x for x in w if "GEOID overlap" in str(x.message)]
+            assert len(geoid_warnings) == 0
+
+        # Verify correct results
+        assert result.iloc[0]["total_population"] == 3000
