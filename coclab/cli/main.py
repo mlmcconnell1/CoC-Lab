@@ -21,6 +21,7 @@ from coclab.cli.diagnostics import diagnostics
 from coclab.cli.export_bundle import export_bundle
 from coclab.cli.ingest_acs_population import ingest_acs_population
 from coclab.cli.ingest_census import ingest_census
+from coclab.cli.ingest_nhgis import ingest_nhgis
 from coclab.cli.ingest_pit import ingest_pit
 from coclab.cli.ingest_pit_vintage import ingest_pit_vintage
 from coclab.cli.ingest_tract_relationship import ingest_tract_relationship
@@ -410,6 +411,7 @@ app.command("export-bundle")(export_bundle)
 app.command("ingest-acs-population")(ingest_acs_population)
 app.command("ingest-boundaries")(ingest_boundaries)
 app.command("ingest-census")(ingest_census)
+app.command("ingest-nhgis")(ingest_nhgis)
 app.command("ingest-pit")(ingest_pit)
 app.command("ingest-pit-vintage")(ingest_pit_vintage)
 app.command("ingest-tract-relationship")(ingest_tract_relationship)

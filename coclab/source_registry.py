@@ -61,6 +61,7 @@ SourceType = Literal[
     "boundary",  # HUD CoC boundaries
     "census_tract",  # TIGER tract geometries
     "census_county",  # TIGER county geometries
+    "nhgis_tract",  # NHGIS tract geometries
     "acs_tract",  # ACS tract-level data
     "acs_county",  # ACS county-level data
     "pit",  # HUD PIT counts
