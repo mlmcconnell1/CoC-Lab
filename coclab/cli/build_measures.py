@@ -58,11 +58,18 @@ def build_measures(
         ),
     ] = Path("data/curated/measures"),
 ) -> None:
-    """Build CoC-level demographic measures from ACS data.
+    """Build CoC-level demographic measures from ACS 5-year estimates.
 
-    Fetches ACS 5-year estimates from the Census API and aggregates
-    them to CoC level using tract crosswalks. Produces measures
-    including total population, median income, and poverty rates.
+    Fetches tract-level data from the Census API and aggregates to CoC
+    level using tract crosswalks. Produces a measures file containing:
+
+    - total_population: Total population (B01003)
+    - adult_population: Population 18+ (derived from B01001)
+    - median_household_income: Median household income (B19013)
+    - median_gross_rent: Median gross rent (B25064)
+    - population_below_poverty: Population below 100% poverty (C17002)
+    - poverty_universe: Population for whom poverty is determined (C17002)
+    - coverage_ratio: Fraction of CoC area with valid tract data
 
     Examples:
 

@@ -43,7 +43,7 @@ flowchart LR
     list-boundaries --> LIST[List boundary vintages]
     show --> MAP[Render interactive map]
     build-xwalks --> XWALK[Create tract/county crosswalks]
-    build-measures --> MEAS[Aggregate ACS data to CoC]
+    build-measures --> MEAS[Build demographic measures from ACS]
     build-panel --> PANEL[Assemble CoC × year panels]
     rollup-acs-population --> ROLLUP[Aggregate tract pop to CoC]
     crosscheck-acs-population --> XCHECK[Validate rollup vs measures]
@@ -112,7 +112,19 @@ coclab ingest-zori --geography county
 
 ## `coclab build-measures`
 
-Aggregate ACS 5-year estimates to CoC level using tract crosswalks.
+Build CoC-level demographic measures from ACS 5-year estimates. Fetches tract-level data from the Census API and aggregates to CoC level using tract crosswalks.
+
+**Measures produced:**
+
+| Column | ACS Table | Description |
+|--------|-----------|-------------|
+| `total_population` | B01003 | Total population |
+| `adult_population` | B01001 | Population 18+ (derived from age groups) |
+| `median_household_income` | B19013 | Median household income ($) |
+| `median_gross_rent` | B25064 | Median gross rent ($) |
+| `population_below_poverty` | C17002 | Population below 100% poverty level |
+| `poverty_universe` | C17002 | Population for whom poverty is determined |
+| `coverage_ratio` | — | Fraction of CoC area with valid tract data |
 
 ```bash
 # Build measures with area weighting
