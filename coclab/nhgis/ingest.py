@@ -165,17 +165,34 @@ def _download_and_extract(
     # Read raw content for hashing
     raw_content = zip_path.read_bytes()
 
-    # Extract the zip
+    # Extract the zip and log contents
     extract_dir = download_dir / "extracted"
     extract_dir.mkdir(exist_ok=True)
 
     with zipfile.ZipFile(zip_path, "r") as zf:
+        zip_contents = zf.namelist()
+        logger.info(f"Zip contains {len(zip_contents)} entries: {zip_contents[:10]}")
         zf.extractall(extract_dir)
+
+    # Check for nested zips and extract them
+    nested_zips = list(extract_dir.rglob("*.zip"))
+    for nested_zip in nested_zips:
+        nested_extract_dir = nested_zip.parent / nested_zip.stem
+        nested_extract_dir.mkdir(exist_ok=True)
+        with zipfile.ZipFile(nested_zip, "r") as nzf:
+            logger.info(f"Extracting nested zip {nested_zip.name} with {len(nzf.namelist())} entries")
+            nzf.extractall(nested_extract_dir)
 
     # Find the shapefile - NHGIS nests files in subdirectories
     shp_files = list(extract_dir.rglob("*.shp"))
     if not shp_files:
-        raise NhgisExtractError("No shapefile found in extracted content")
+        # Debug: list what we actually got
+        all_files = list(extract_dir.rglob("*"))
+        file_list = [str(f.relative_to(extract_dir)) for f in all_files if f.is_file()]
+        raise NhgisExtractError(
+            f"No shapefile found in extracted content. Files found: {file_list[:20]}"
+            + (f" ... and {len(file_list) - 20} more" if len(file_list) > 20 else "")
+        )
 
     # Return the first (should be only) shapefile
     return shp_files[0], raw_content
