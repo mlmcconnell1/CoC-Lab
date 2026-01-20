@@ -8,6 +8,7 @@ The `coclab` command provides access to all core functionality.
 flowchart LR
     coclab --> ingest-boundaries
     coclab --> ingest-census
+    coclab --> ingest-nhgis
     coclab --> ingest-pit
     coclab --> ingest-pit-vintage
     coclab --> ingest-acs-population
@@ -37,6 +38,7 @@ flowchart LR
     ingest --> |"--source hud_exchange"| HUD_EX[Download annual vintage]
     ingest --> |"--source hud_opendata"| HUD_OD[Fetch current snapshot]
     ingest-census --> TIGER[Download TIGER geometries]
+    ingest-nhgis --> NHGIS[Download NHGIS tract shapefiles]
     ingest-pit --> PIT[Download & parse PIT counts]
     ingest-pit-vintage --> PITVINT[Parse all years from vintage]
     ingest-acs-population --> ACSPOP[Fetch tract population]
@@ -526,6 +528,55 @@ coclab ingest-census --year 2023 --force
 | `--type`, `-t` | `tracts`, `counties`, or `all` | `all` |
 | `--force` | Re-download even if file exists | False |
 
+## `coclab ingest-nhgis`
+
+Download census tract shapefiles from NHGIS (National Historical Geographic Information System) via the IPUMS API. This is especially useful for 2010 tracts, which TIGER distributes as 3,000+ county-level files that must be downloaded individually.
+
+**Environment Variable:**
+
+| Variable | Description |
+|----------|-------------|
+| `IPUMS_API_KEY` | Required. Your IPUMS API key. Get one at https://account.ipums.org/api_keys |
+
+```bash
+# Download 2010 and 2020 tracts
+coclab ingest-nhgis --year 2010 --year 2020
+
+# Custom poll interval (check every 5 minutes instead of 2)
+coclab ingest-nhgis --year 2010 --poll-interval 5
+
+# Pass API key directly (not recommended for scripts)
+coclab ingest-nhgis --year 2020 --api-key your_key_here
+
+# Force re-download even if file exists
+coclab ingest-nhgis --year 2010 --force
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--year`, `-y` | Census year(s) to download (2010, 2020). Can specify multiple. | Required |
+| `--api-key` | IPUMS API key. Prefer using `IPUMS_API_KEY` env var. | From env |
+| `--poll-interval` | Minutes between status checks while waiting | 2 |
+| `--max-wait` | Maximum minutes to wait for extract completion | 60 |
+| `--force` | Re-download even if file already exists | False |
+
+**Supported Years:** 2010, 2020
+
+**Workflow:**
+1. Submits an extract request to NHGIS via the IPUMS API
+2. Polls the API at the specified interval until the extract is ready
+3. Downloads and extracts the shapefile
+4. Normalizes to the standard tract schema (matching TIGER output)
+5. Saves as GeoParquet and registers in source registry
+
+**Output:**
+- `data/curated/census/tracts__T{year}.parquet`
+- Same schema as TIGER tracts: `geo_vintage`, `geoid`, `geometry`, `source`, `ingested_at`
+
+**Why NHGIS over TIGER?**
+
+For 2010 tracts, Census TIGER distributes data as county-level files (one per county, ~3,200 files). NHGIS provides pre-assembled national shapefiles, making ingestion much simpler. For 2020+ tracts, TIGER provides state-level files which are more manageable, but NHGIS remains a convenient single-file alternative.
+
 ## `coclab ingest-pit`
 
 Download and parse PIT (Point-in-Time) count data from HUD Exchange.
@@ -817,6 +868,7 @@ coclab source-status --type zori
 - `boundary` - HUD CoC boundaries
 - `census_tract` - TIGER tract geometries
 - `census_county` - TIGER county geometries
+- `nhgis_tract` - NHGIS tract geometries
 - `acs_tract` - ACS tract-level data
 - `acs_county` - ACS county-level data
 - `pit` - HUD PIT counts

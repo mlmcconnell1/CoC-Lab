@@ -137,6 +137,35 @@ TIGER/Line county geometry ingestion.
 - `STATEFP` - State FIPS code
 - `geometry` - Polygon/MultiPolygon in EPSG:4326
 
+## nhgis/ingest.py
+
+NHGIS tract shapefile ingestion via ipumspy.
+
+**Environment Variable:**
+- `IPUMS_API_KEY` - Required IPUMS API key
+
+**Functions:**
+| Function | Purpose |
+|----------|---------|
+| `ingest_nhgis_tracts()` | Full pipeline: submit extract, poll, download, normalize |
+| `_create_extract()` | Build NHGIS extract definition for tract shapefiles |
+| `_wait_for_extract()` | Poll API until extract completes |
+| `_download_and_extract()` | Download and unzip completed extract |
+| `_normalize_to_schema()` | Convert NHGIS schema to TIGER-compatible format |
+
+**Supported Years:** 2010, 2020
+
+**NHGIS Shapefile Names:**
+- 2010: `us_tract_2010_tl2010`
+- 2020: `us_tract_2020_tl2020`
+
+**Output Schema:**
+- `geo_vintage` - Census year as string
+- `geoid` - 11-digit tract FIPS code
+- `geometry` - Polygon/MultiPolygon in EPSG:4326
+- `source` - Always `nhgis`
+- `ingested_at` - UTC timestamp
+
 ## xwalks/tract.py
 
 CoC-to-census-tract crosswalk builder.
