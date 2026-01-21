@@ -29,6 +29,7 @@ from coclab.cli.list_census import list_census
 from coclab.cli.list_measures import list_measures
 from coclab.cli.list_xwalks import list_xwalks
 from coclab.cli.panel_diagnostics import panel_diagnostics
+from coclab.cli.registry_rebuild import registry_rebuild
 from coclab.cli.rollup_acs_population import rollup_acs_population
 from coclab.cli.show_measures import show_measures
 from coclab.cli.verify_acs_population import verify_acs_population
@@ -421,6 +422,7 @@ app.command("list-census")(list_census)
 app.command("list-measures")(list_measures)
 app.command("list-xwalks")(list_xwalks)
 app.command("panel-diagnostics")(panel_diagnostics)
+app.command("registry-rebuild")(registry_rebuild)
 app.command("rollup-acs-population")(rollup_acs_population)
 app.command("show")(show)
 app.command("show-measures")(show_measures)
