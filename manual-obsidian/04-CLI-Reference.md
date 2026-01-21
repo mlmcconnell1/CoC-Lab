@@ -22,8 +22,9 @@ flowchart LR
     coclab --> crosscheck-pit-vintages
     coclab --> crosscheck-population
     coclab --> verify-acs-population
-    coclab --> xwalk-diagnostics
-    coclab --> panel-diagnostics
+    coclab --> diagnostics-panel
+    coclab --> diagnostics-xwalk
+    coclab --> diagnostics-zori
     coclab --> list-census
     coclab --> list-xwalks
     coclab --> list-measures
@@ -31,7 +32,6 @@ flowchart LR
     coclab --> compare-vintages
     coclab --> ingest-zori
     coclab --> aggregate-zori
-    coclab --> zori-diagnostics
     coclab --> source-status
     coclab --> export-bundle
 
@@ -54,9 +54,9 @@ flowchart LR
     verify-acs-population --> VERIFY[Full pipeline: ingest→rollup→check]
     ingest-zori --> ZORI_ING[Download & normalize ZORI data]
     aggregate-zori --> ZORI_AGG[Aggregate ZORI to CoC level]
-    zori-diagnostics --> ZORI_DIAG[ZORI coverage diagnostics]
-    xwalk-diagnostics --> DIAG[Crosswalk quality checks]
-    panel-diagnostics --> PDIAG[Panel quality & sensitivity]
+    diagnostics-panel --> PDIAG[Panel quality & sensitivity]
+    diagnostics-xwalk --> DIAG[Crosswalk quality checks]
+    diagnostics-zori --> ZORI_DIAG[ZORI coverage diagnostics]
     list-census --> LCENSUS[List census geometry files]
     list-xwalks --> LXWALK[List crosswalk files]
     list-measures --> LMEAS[List measure files]
@@ -408,6 +408,83 @@ If tab totals match but individual CoCs differ, the changes are likely due to Co
 - MA-519 will show as "removed"
 - Tab totals will remain identical
 
+## `coclab diagnostics-panel`
+
+Run diagnostics and sensitivity checks on panel files.
+
+```bash
+# Run diagnostics on a panel
+coclab diagnostics-panel --panel data/curated/panels/coc_panel__2018_2024.parquet
+
+# Export diagnostics to CSV files
+coclab diagnostics-panel --panel panel.parquet --output-dir ./diagnostics/ --format csv
+
+# Print text summary only
+coclab diagnostics-panel --panel panel.parquet --format text
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--panel`, `-p` | Path to panel Parquet file | Required |
+| `--output-dir`, `-o` | Directory for CSV exports | None |
+| `--format`, `-f` | `text` or `csv` | `text` |
+
+**Diagnostics Included:**
+- Coverage ratio distribution over time
+- Boundary change flags by CoC/year
+- Missingness summaries per column
+- Panel structure validation
+
+## `coclab diagnostics-xwalk`
+
+Run crosswalk quality diagnostics.
+
+```bash
+# Basic diagnostics
+coclab diagnostics-xwalk --crosswalk data/curated/xwalks/xwalk__B2025xT2023.parquet
+
+# Show problem CoCs
+coclab diagnostics-xwalk -x crosswalk.parquet --show-problems
+
+# Custom thresholds and CSV export
+coclab diagnostics-xwalk -x crosswalk.parquet --coverage-threshold 0.90 -o diagnostics.csv
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--crosswalk`, `-x` | Path to crosswalk parquet file | Required |
+| `--coverage-threshold` | Coverage threshold for flagging | 0.95 |
+| `--max-contribution` | Max tract contribution threshold | 0.8 |
+| `--show-problems` | Show problem CoCs | False |
+| `--output`, `-o` | Save diagnostics to CSV | None |
+
+## `coclab diagnostics-zori`
+
+Summarize CoC ZORI coverage, missingness, and quality metrics.
+
+```bash
+# Run diagnostics on CoC ZORI file
+coclab diagnostics-zori --coc-zori data/curated/zori/coc_zori__county__b2025.parquet
+
+# Save diagnostics to file
+coclab diagnostics-zori --coc-zori coc_zori.parquet --output diagnostics.csv
+
+# Custom thresholds
+coclab diagnostics-zori --coc-zori coc_zori.parquet --coverage-threshold 0.85
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--coc-zori` | Path to CoC-level ZORI parquet file | Required |
+| `--output`, `-o` | Save diagnostics to CSV or parquet | None |
+| `--coverage-threshold` | Threshold for flagging low coverage | 0.90 |
+| `--dominance-threshold` | Threshold for flagging high dominance | 0.80 |
+
+**Output:**
+- Console summary with coverage statistics
+- Per-CoC diagnostic flags (low coverage, high dominance)
+- Optional CSV/parquet export
+
 ## `coclab export-bundle`
 
 Export an analysis-ready bundle with MANIFEST.json for downstream analysis repositories.
@@ -534,8 +611,8 @@ Download census tract shapefiles from NHGIS (National Historical Geographic Info
 
 **Environment Variable:**
 
-| Variable | Description |
-|----------|-------------|
+| Variable        | Description                                                                 |
+| --------------- | --------------------------------------------------------------------------- |
 | `IPUMS_API_KEY` | Required. Your IPUMS API key. Get one at https://account.ipums.org/api_keys |
 
 ```bash
@@ -746,33 +823,6 @@ coclab list-xwalks --type tract
 | `--type`, `-t` | `tract`, `county`, or `all` | `all` |
 | `--dir`, `-d` | Directory to scan | `data/curated/xwalks` |
 
-## `coclab panel-diagnostics`
-
-Run diagnostics and sensitivity checks on panel files.
-
-```bash
-# Run diagnostics on a panel
-coclab panel-diagnostics --panel data/curated/panels/coc_panel__2018_2024.parquet
-
-# Export diagnostics to CSV files
-coclab panel-diagnostics --panel panel.parquet --output-dir ./diagnostics/ --format csv
-
-# Print text summary only
-coclab panel-diagnostics --panel panel.parquet --format text
-```
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--panel`, `-p` | Path to panel Parquet file | Required |
-| `--output-dir`, `-o` | Directory for CSV exports | None |
-| `--format`, `-f` | `text` or `csv` | `text` |
-
-**Diagnostics Included:**
-- Coverage ratio distribution over time
-- Boundary change flags by CoC/year
-- Missingness summaries per column
-- Panel structure validation
-
 ## `coclab rollup-acs-population`
 
 Build CoC population rollup by aggregating tract population to CoC using existing crosswalks.
@@ -904,56 +954,6 @@ coclab verify-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --wei
 **Exit Codes:**
 - `0` - No errors (warnings allowed)
 - `2` - Errors found (threshold exceeded)
-
-## `coclab xwalk-diagnostics`
-
-Run crosswalk quality diagnostics.
-
-```bash
-# Basic diagnostics
-coclab xwalk-diagnostics --crosswalk data/curated/xwalks/xwalk__B2025xT2023.parquet
-
-# Show problem CoCs
-coclab xwalk-diagnostics -x crosswalk.parquet --show-problems
-
-# Custom thresholds and CSV export
-coclab xwalk-diagnostics -x crosswalk.parquet --coverage-threshold 0.90 -o diagnostics.csv
-```
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--crosswalk`, `-x` | Path to crosswalk parquet file | Required |
-| `--coverage-threshold` | Coverage threshold for flagging | 0.95 |
-| `--max-contribution` | Max tract contribution threshold | 0.8 |
-| `--show-problems` | Show problem CoCs | False |
-| `--output`, `-o` | Save diagnostics to CSV | None |
-
-## `coclab zori-diagnostics`
-
-Summarize CoC ZORI coverage, missingness, and quality metrics.
-
-```bash
-# Run diagnostics on CoC ZORI file
-coclab zori-diagnostics --coc-zori data/curated/zori/coc_zori__county__b2025.parquet
-
-# Save diagnostics to file
-coclab zori-diagnostics --coc-zori coc_zori.parquet --output diagnostics.csv
-
-# Custom thresholds
-coclab zori-diagnostics --coc-zori coc_zori.parquet --coverage-threshold 0.85
-```
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--coc-zori` | Path to CoC-level ZORI parquet file | Required |
-| `--output`, `-o` | Save diagnostics to CSV or parquet | None |
-| `--coverage-threshold` | Threshold for flagging low coverage | 0.90 |
-| `--dominance-threshold` | Threshold for flagging high dominance | 0.80 |
-
-**Output:**
-- Console summary with coverage statistics
-- Per-CoC diagnostic flags (low coverage, high dominance)
-- Optional CSV/parquet export
 
 ---
 
