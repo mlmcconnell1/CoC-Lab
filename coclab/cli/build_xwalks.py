@@ -1,14 +1,11 @@
 """CLI command for building CoC crosswalks."""
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Literal
 
 import click
 import geopandas as gpd
 import typer
-
-if TYPE_CHECKING:
-    import pandas as pd
 
 from coclab.measures.diagnostics import compute_crosswalk_diagnostics, summarize_diagnostics
 from coclab.registry.registry import latest_vintage, list_boundaries
@@ -19,6 +16,11 @@ from coclab.xwalks.tract import (
     save_crosswalk,
     validate_population_shares,
 )
+
+if TYPE_CHECKING:
+    import pandas as pd
+
+XwalkType = Literal["tracts", "counties", "all"]
 
 
 def build_xwalks(
@@ -46,6 +48,13 @@ def build_xwalks(
             help="Census county vintage year. Defaults to same as tracts.",
         ),
     ] = None,
+    xwalk_type: Annotated[
+        XwalkType,
+        typer.Option(
+            "--type",
+            help="Which crosswalks to build: 'tracts', 'counties', or 'all'.",
+        ),
+    ] = "all",
     output_dir: Annotated[
         Path,
         typer.Option(
@@ -86,9 +95,19 @@ def build_xwalks(
 
         # Auto-fetch population data if missing
         coclab build-xwalks --boundary 2025 --tracts 2023 --population-weights --auto-fetch
+
+        # Build only county crosswalk
+        coclab build-xwalks --boundary 2025 --type counties --counties 2020
+
+        # Build only tract crosswalk
+        coclab build-xwalks --boundary 2025 --type tracts --tracts 2023
     """
-    # Resolve county vintage
-    county_vintage = counties or tracts
+    # Determine what to build
+    build_tracts = xwalk_type in ("tracts", "all")
+    build_counties = xwalk_type in ("counties", "all")
+
+    # Resolve county vintage (defaults to tracts vintage if not specified)
+    county_vintage = counties if counties is not None else tracts
 
     # Resolve boundary vintage from registry
     if boundary is None:
@@ -133,80 +152,87 @@ def build_xwalks(
         )
         raise typer.Exit(1) from e
 
-    # Load tract geometries (try new naming, then legacy)
-    from coclab.naming import tract_filename
+    # Build tract crosswalk if requested
+    if build_tracts:
+        # Load tract geometries (try new naming, then legacy)
+        from coclab.naming import tract_filename
 
-    tract_path = Path("data/curated/census") / tract_filename(tracts)
-    legacy_tract_path = Path(f"data/curated/census/tracts__{tracts}.parquet")
+        tract_path = Path("data/curated/census") / tract_filename(tracts)
+        legacy_tract_path = Path(f"data/curated/census/tracts__{tracts}.parquet")
 
-    if not tract_path.exists():
-        if legacy_tract_path.exists():
-            tract_path = legacy_tract_path
-        else:
+        if not tract_path.exists():
+            if legacy_tract_path.exists():
+                tract_path = legacy_tract_path
+            else:
+                typer.echo(
+                    f"Error: Tract file not found: {tract_path}. "
+                    f"Run 'coclab ingest-census --year {tracts} --type tracts' first.",
+                    err=True,
+                )
+                raise typer.Exit(1)
+
+        typer.echo(f"Loading census tracts (vintage: {tracts})...")
+        try:
+            tract_gdf = gpd.read_parquet(tract_path)
+        except Exception as e:
             typer.echo(
-                f"Error: Tract file not found: {tract_path}. "
-                f"Run 'coclab ingest-census --year {tracts} --type tracts' first.",
+                f"Error: Failed to read tract file {tract_path}: {e}",
                 err=True,
             )
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
 
-    typer.echo(f"Loading census tracts (vintage: {tracts})...")
-    try:
-        tract_gdf = gpd.read_parquet(tract_path)
-    except Exception as e:
-        typer.echo(
-            f"Error: Failed to read tract file {tract_path}: {e}",
-            err=True,
-        )
-        raise typer.Exit(1) from e
+        # Standardize column names for tract crosswalk builder
+        # The tract module expects 'GEOID', but tiger_tracts saves as 'geoid'
+        if "geoid" in tract_gdf.columns and "GEOID" not in tract_gdf.columns:
+            tract_gdf = tract_gdf.rename(columns={"geoid": "GEOID"})
 
-    # Standardize column names for tract crosswalk builder
-    # The tract module expects 'GEOID', but tiger_tracts saves as 'geoid'
-    if "geoid" in tract_gdf.columns and "GEOID" not in tract_gdf.columns:
-        tract_gdf = tract_gdf.rename(columns={"geoid": "GEOID"})
+        # Build tract crosswalk with progress bar
+        n_cocs = len(coc_gdf)
+        with click.progressbar(
+            length=n_cocs,
+            label="Building tract crosswalk",
+            show_pos=True,
+        ) as progress:
 
-    # Build tract crosswalk with progress bar
-    n_cocs = len(coc_gdf)
-    with click.progressbar(
-        length=n_cocs,
-        label="Building tract crosswalk",
-        show_pos=True,
-    ) as progress:
+            def update_progress(completed: int, total: int) -> None:
+                progress.update(completed - progress.pos)
 
-        def update_progress(completed: int, total: int) -> None:
-            progress.update(completed - progress.pos)
+            tract_xwalk = build_coc_tract_crosswalk(
+                coc_gdf=coc_gdf,
+                tract_gdf=tract_gdf,
+                boundary_vintage=boundary,
+                tract_vintage=str(tracts),
+                progress_callback=update_progress,
+            )
 
-        tract_xwalk = build_coc_tract_crosswalk(
-            coc_gdf=coc_gdf,
-            tract_gdf=tract_gdf,
+        # Add population weights if requested
+        has_pop_weights = False
+        if population_weights:
+            has_pop_weights = _apply_population_weights(
+                tract_xwalk=tract_xwalk,
+                tract_vintage=tracts,
+                auto_fetch=auto_fetch,
+            )
+
+        # Save tract crosswalk
+        tract_output = save_crosswalk(
+            crosswalk=tract_xwalk,
             boundary_vintage=boundary,
             tract_vintage=str(tracts),
-            progress_callback=update_progress,
+            output_dir=output_dir,
+            has_pop_weights=has_pop_weights,
         )
+        typer.echo(f"Saved tract crosswalk to: {tract_output}")
 
-    # Add population weights if requested
-    has_pop_weights = False
-    if population_weights:
-        has_pop_weights = _apply_population_weights(
-            tract_xwalk=tract_xwalk,
-            tract_vintage=tracts,
-            auto_fetch=auto_fetch,
-        )
+        # Compute and display tract crosswalk diagnostics
+        typer.echo("")
+        tract_diagnostics = compute_crosswalk_diagnostics(tract_xwalk)
+        typer.echo(summarize_diagnostics(tract_diagnostics))
 
-    # Save tract crosswalk
-    tract_output = save_crosswalk(
-        crosswalk=tract_xwalk,
-        boundary_vintage=boundary,
-        tract_vintage=str(tracts),
-        output_dir=output_dir,
-        has_pop_weights=has_pop_weights,
-    )
-    typer.echo(f"Saved tract crosswalk to: {tract_output}")
-
-    # Compute and display tract crosswalk diagnostics
-    typer.echo("")
-    tract_diagnostics = compute_crosswalk_diagnostics(tract_xwalk)
-    typer.echo(summarize_diagnostics(tract_diagnostics))
+    # Build county crosswalk if requested
+    if not build_counties:
+        typer.echo("\nCrosswalk generation complete!")
+        return
 
     # Load county geometries (try new naming, then legacy)
     from coclab.naming import county_filename
