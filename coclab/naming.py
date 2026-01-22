@@ -458,6 +458,24 @@ def _normalize_acs_vintage(acs_vintage: str) -> str:
     return acs_vintage
 
 
+def expand_acs_vintage(acs_vintage: str) -> str:
+    """Expand ACS end year to full 5-year range for display.
+
+    Args:
+        acs_vintage: ACS vintage as end year ("2023") or range ("2019-2023")
+
+    Returns:
+        Full 5-year range, e.g., "2019-2023"
+    """
+    if "-" in acs_vintage:
+        # Already a range
+        return acs_vintage
+    # Single year - expand to 5-year range
+    end_year = int(acs_vintage)
+    start_year = end_year - 4
+    return f"{start_year}-{end_year}"
+
+
 def _abbreviate_weighting(weighting: str) -> str:
     """Abbreviate weighting method for filename.
 

@@ -7,6 +7,8 @@ from typing import Annotated
 import pandas as pd
 import typer
 
+from coclab.naming import expand_acs_vintage
+
 
 def format_file_size(size_bytes: int) -> str:
     """Format file size in human-readable format."""
@@ -138,7 +140,7 @@ def list_measures(
         rows.append(
             {
                 "boundary_vintage": boundary_vintage,
-                "acs_vintage": acs_vintage,
+                "acs_vintage": expand_acs_vintage(acs_vintage),
                 "cocs": row_count,
                 "weighting": weighting,
                 "size": file_size,
