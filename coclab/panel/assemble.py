@@ -477,8 +477,9 @@ def _load_zori_yearly(
 
     Notes
     -----
-    When auto-discovering, looks for files matching pattern:
-    coc_zori_yearly__*.parquet
+    When auto-discovering, looks for files matching patterns (in order):
+    1. zori_yearly__A*@B*xC*__w*__m*.parquet (new naming)
+    2. coc_zori_yearly__*.parquet (legacy naming)
 
     The coverage_ratio column from ZORI is renamed to zori_coverage_ratio
     to avoid collision with the ACS coverage_ratio column.
@@ -492,9 +493,16 @@ def _load_zori_yearly(
             return None
         logger.info(f"Loading ZORI yearly from explicit path: {path}")
     else:
-        # Auto-discover: look for coc_zori_yearly__* files
-        pattern = "coc_zori_yearly__*.parquet"
-        candidates = sorted(rents_dir.glob(pattern), reverse=True)
+        # Auto-discover: try new naming first, then legacy
+        # New naming: zori_yearly__A*@B*xC*__w*__m*.parquet
+        new_pattern = "zori_yearly__A*.parquet"
+        candidates = sorted(rents_dir.glob(new_pattern), reverse=True)
+
+        if not candidates:
+            # Fall back to legacy naming: coc_zori_yearly__*.parquet
+            legacy_pattern = "coc_zori_yearly__*.parquet"
+            candidates = sorted(rents_dir.glob(legacy_pattern), reverse=True)
+
         if not candidates:
             logger.info(f"No yearly ZORI files found in {rents_dir}")
             return None

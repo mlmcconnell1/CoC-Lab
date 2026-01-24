@@ -366,24 +366,29 @@ def get_rollup_path(
     """
     from coclab import naming
 
+    using_default = base_dir is None
     if base_dir is None:
         base_dir = DEFAULT_ACS_DIR
     else:
         base_dir = Path(base_dir)
 
-    # Try new naming convention first
-    # naming.rollup_path expects data root, not data/curated/acs
-    data_root = base_dir.parent.parent if base_dir.name == "acs" else base_dir
-    new_path = naming.rollup_path(boundary_vintage, acs_vintage, tract_vintage, weighting, data_root)
-    if new_path.exists():
-        return new_path
-
-    # Fall back to legacy naming for existing files
+    # Legacy filename (used for custom base_dir or when legacy file exists)
     legacy_filename = (
         f"coc_population_rollup__{boundary_vintage}__{acs_vintage}"
         f"__{tract_vintage}__{weighting}.parquet"
     )
     legacy_path = base_dir / legacy_filename
+
+    # For custom base_dir, always use legacy naming directly in that directory
+    if not using_default:
+        return legacy_path
+
+    # For default location, try new naming convention first
+    new_path = naming.rollup_path(boundary_vintage, acs_vintage, tract_vintage, weighting)
+    if new_path.exists():
+        return new_path
+
+    # Fall back to legacy naming for existing files
     if legacy_path.exists():
         return legacy_path
 

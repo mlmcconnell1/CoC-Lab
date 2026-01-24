@@ -130,13 +130,13 @@ class TestBuildXwalksCommand:
 
 
 class TestDiagnosticsCommand:
-    """Tests for the xwalk-diagnostics CLI command."""
+    """Tests for the diagnostics-xwalk CLI command."""
 
     def test_diagnostics_missing_crosswalk(self, tmp_path):
         """Should fail if crosswalk file is missing."""
         crosswalk_path = tmp_path / "missing.parquet"
 
-        result = runner.invoke(app, ["xwalk-diagnostics", "--crosswalk", str(crosswalk_path)])
+        result = runner.invoke(app, ["diagnostics-xwalk", "--crosswalk", str(crosswalk_path)])
 
         assert result.exit_code == 1
         assert "Crosswalk file not found" in result.output
@@ -177,7 +177,7 @@ class TestDiagnosticsCommand:
         result = runner.invoke(
             app,
             [
-                "xwalk-diagnostics",
+                "diagnostics-xwalk",
                 "--crosswalk",
                 str(crosswalk_path),
                 "--show-problems",
@@ -190,11 +190,11 @@ class TestDiagnosticsCommand:
 
 
 class TestBuildMeasuresCommand:
-    """Tests for the build-measures CLI command."""
+    """Tests for the aggregate-measures CLI command."""
 
     def test_build_measures_invalid_weighting(self):
         """Invalid weighting should fail."""
-        result = runner.invoke(app, ["build-measures", "--weighting", "invalid"])
+        result = runner.invoke(app, ["aggregate-measures", "--weighting", "invalid"])
 
         assert result.exit_code == 1
         assert "Invalid weighting method" in result.output
@@ -209,7 +209,7 @@ class TestBuildMeasuresCommand:
         result = runner.invoke(
             app,
             [
-                "build-measures",
+                "aggregate-measures",
                 "--acs",
                 "2019-2023",
                 "--xwalk-dir",
@@ -240,7 +240,7 @@ class TestBuildMeasuresCommand:
         result = runner.invoke(
             app,
             [
-                "build-measures",
+                "aggregate-measures",
                 "--acs",
                 "2019-2023",
                 "--xwalk-dir",

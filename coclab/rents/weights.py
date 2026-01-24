@@ -411,20 +411,26 @@ def get_county_weights_path(
     """
     from coclab import naming
 
+    using_default = base_dir is None
     if base_dir is None:
         base_dir = DEFAULT_DATA_DIR
     else:
         base_dir = Path(base_dir)
 
-    # Try new naming convention first
-    # naming.county_weights_path expects data root, not data/curated/acs
-    data_root = base_dir.parent.parent if base_dir.name == "acs" else base_dir
-    new_path = naming.county_weights_path(acs_vintage, method, data_root)
+    # Legacy filename (used for custom base_dir or when legacy file exists)
+    legacy_filename = f"county_weights__{acs_vintage}__{method}.parquet"
+    legacy_path = base_dir / legacy_filename
+
+    # For custom base_dir, always use legacy naming directly in that directory
+    if not using_default:
+        return legacy_path
+
+    # For default location, try new naming convention first
+    new_path = naming.county_weights_path(acs_vintage, method)
     if new_path.exists():
         return new_path
 
     # Fall back to legacy naming for existing files
-    legacy_path = base_dir / f"county_weights__{acs_vintage}__{method}.parquet"
     if legacy_path.exists():
         return legacy_path
 
