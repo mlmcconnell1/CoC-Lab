@@ -342,6 +342,10 @@ def get_rollup_path(
 ) -> Path:
     """Get the path to CoC population rollup file.
 
+    Supports both new temporal shorthand naming (rollup__A{acs}@B{boundary}xT{tract}__w{weight}.parquet)
+    and legacy naming (coc_population_rollup__{boundary}__{acs}__{tract}__{weight}.parquet).
+    Returns new naming path if it exists, otherwise returns legacy naming path.
+
     Parameters
     ----------
     boundary_vintage : str
@@ -360,15 +364,31 @@ def get_rollup_path(
     Path
         Path to rollup parquet file.
     """
+    from coclab import naming
+
     if base_dir is None:
         base_dir = DEFAULT_ACS_DIR
     else:
         base_dir = Path(base_dir)
-    filename = (
+
+    # Try new naming convention first
+    # naming.rollup_path expects data root, not data/curated/acs
+    data_root = base_dir.parent.parent if base_dir.name == "acs" else base_dir
+    new_path = naming.rollup_path(boundary_vintage, acs_vintage, tract_vintage, weighting, data_root)
+    if new_path.exists():
+        return new_path
+
+    # Fall back to legacy naming for existing files
+    legacy_filename = (
         f"coc_population_rollup__{boundary_vintage}__{acs_vintage}"
         f"__{tract_vintage}__{weighting}.parquet"
     )
-    return base_dir / filename
+    legacy_path = base_dir / legacy_filename
+    if legacy_path.exists():
+        return legacy_path
+
+    # Default to new naming for new files
+    return new_path
 
 
 def get_measures_path(

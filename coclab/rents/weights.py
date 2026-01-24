@@ -389,6 +389,11 @@ def get_county_weights_path(
 ) -> Path:
     """Get the canonical output path for county weights data.
 
+    Supports both new temporal shorthand naming (county_weights__A{year}__w{method}.parquet)
+    and legacy naming (county_weights__{vintage}__{method}.parquet). Returns new naming
+    path if it exists, otherwise returns legacy naming path (for backward compatibility
+    with existing files).
+
     Parameters
     ----------
     acs_vintage : str
@@ -401,13 +406,30 @@ def get_county_weights_path(
     Returns
     -------
     Path
-        Output path like 'data/curated/acs/county_weights__2019-2023__renter_households.parquet'.
+        Output path like 'data/curated/acs/county_weights__A2023__wrenter.parquet' (new)
+        or 'data/curated/acs/county_weights__2019-2023__renter_households.parquet' (legacy).
     """
+    from coclab import naming
+
     if base_dir is None:
         base_dir = DEFAULT_DATA_DIR
     else:
         base_dir = Path(base_dir)
-    return base_dir / f"county_weights__{acs_vintage}__{method}.parquet"
+
+    # Try new naming convention first
+    # naming.county_weights_path expects data root, not data/curated/acs
+    data_root = base_dir.parent.parent if base_dir.name == "acs" else base_dir
+    new_path = naming.county_weights_path(acs_vintage, method, data_root)
+    if new_path.exists():
+        return new_path
+
+    # Fall back to legacy naming for existing files
+    legacy_path = base_dir / f"county_weights__{acs_vintage}__{method}.parquet"
+    if legacy_path.exists():
+        return legacy_path
+
+    # Default to new naming for new files
+    return new_path
 
 
 def build_county_weights(

@@ -410,18 +410,30 @@ class TestPathHelpers:
     """Tests for path helper functions."""
 
     def test_get_rollup_path_default(self):
-        """Test default rollup path."""
+        """Test default rollup path returns new naming convention."""
         path = get_rollup_path("2025", "2019-2023", "2023", "area")
-        expected = Path(
-            "data/curated/acs/coc_population_rollup__2025__2019-2023__2023__area.parquet"
-        )
+        # New naming: rollup__A{acs}@B{boundary}xT{tract}__w{weight}.parquet
+        expected = Path("data/curated/acs/rollup__A2023@B2025xT2023__warea.parquet")
         assert path == expected
 
-    def test_get_rollup_path_custom(self):
-        """Test custom rollup path."""
-        path = get_rollup_path("2025", "2019-2023", "2023", "area", base_dir="/tmp/acs")
-        expected = Path("/tmp/acs/coc_population_rollup__2025__2019-2023__2023__area.parquet")
+    def test_get_rollup_path_custom(self, tmp_path):
+        """Test custom rollup path returns new naming convention."""
+        acs_dir = tmp_path / "curated" / "acs"
+        acs_dir.mkdir(parents=True)
+        path = get_rollup_path("2025", "2019-2023", "2023", "area", base_dir=acs_dir)
+        expected = tmp_path / "curated" / "acs" / "rollup__A2023@B2025xT2023__warea.parquet"
         assert path == expected
+
+    def test_get_rollup_path_fallback_to_legacy(self, tmp_path):
+        """Test that rollup path falls back to legacy naming when legacy file exists."""
+        acs_dir = tmp_path / "curated" / "acs"
+        acs_dir.mkdir(parents=True)
+        # Create a file with legacy naming
+        legacy_file = acs_dir / "coc_population_rollup__2025__2019-2023__2023__area.parquet"
+        legacy_file.write_bytes(b"test")
+
+        path = get_rollup_path("2025", "2019-2023", "2023", "area", base_dir=acs_dir)
+        assert path == legacy_file
 
     def test_get_measures_path_fallback_to_legacy(self, tmp_path):
         """Test that measures path falls back to legacy naming when no files exist."""

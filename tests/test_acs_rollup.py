@@ -365,10 +365,20 @@ class TestPathHelpers:
         path = get_tract_population_path("2019-2023", "2023", base_dir="/tmp/test")
         assert path == Path("/tmp/test/tract_population__2019-2023__2023.parquet")
 
-    def test_get_crosswalk_path_default(self):
-        """Test default crosswalk path."""
+    def test_get_crosswalk_path_fallback_to_legacy(self):
+        """Test crosswalk path falls back to legacy naming when no file exists."""
+        # For a vintage combo that doesn't exist, should fall back to legacy
         path = get_crosswalk_path("2025", "2023")
-        assert path == Path("data/curated/xwalks/xwalk__B2025xT2023.parquet")
+        assert path == Path("data/curated/xwalks/coc_tract_xwalk__2025__2023.parquet")
+
+    def test_get_crosswalk_path_prefers_new_naming(self, tmp_path):
+        """Test crosswalk path prefers new naming when file exists."""
+        # Create a file with new naming
+        new_file = tmp_path / "xwalk__B2025xT2023.parquet"
+        new_file.write_bytes(b"test")
+
+        path = get_crosswalk_path("2025", "2023", base_dir=tmp_path)
+        assert path == new_file
 
     def test_get_crosswalk_path_custom(self):
         """Test custom crosswalk path falls back to legacy naming when file doesn't exist."""
