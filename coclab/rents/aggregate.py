@@ -82,6 +82,7 @@ from coclab.geo.ct_planning_regions import (
     translate_weights_planning_to_legacy,
     translate_zori_legacy_to_planning,
 )
+from coclab.naming import county_xwalk_path
 
 logger = logging.getLogger(__name__)
 
@@ -187,30 +188,43 @@ def load_zori(
     return df
 
 
-def get_xwalk_path(boundary: str, xwalk_dir: Path | str | None = None) -> Path:
+def get_xwalk_path(
+    boundary: str,
+    counties: str,
+    xwalk_dir: Path | str | None = None,
+) -> Path:
     """Get canonical path for CoC-county crosswalk.
 
     Parameters
     ----------
     boundary : str
         CoC boundary vintage (e.g., "2025").
+    counties : str
+        County vintage year (e.g., "2023").
     xwalk_dir : Path or str, optional
         Base directory for crosswalks. Defaults to 'data/curated/xwalks'.
 
     Returns
     -------
     Path
-        Path like 'data/curated/xwalks/coc_county_xwalk__2025.parquet'.
+        Path like 'data/curated/xwalks/xwalk__B2025xC2023.parquet'.
     """
+    # Use the canonical naming function from coclab.naming
+    # county_xwalk_path expects base_dir to be the data root (e.g., "data")
+    # so we need to extract it from xwalk_dir if provided
     if xwalk_dir is None:
-        xwalk_dir = DEFAULT_XWALK_DIR
+        return county_xwalk_path(boundary, counties)
     else:
+        # xwalk_dir is like "data/curated/xwalks", we need "data"
         xwalk_dir = Path(xwalk_dir)
-    return xwalk_dir / f"coc_county_xwalk__{boundary}.parquet"
+        # Go up two levels: xwalks -> curated -> data
+        base_dir = xwalk_dir.parent.parent
+        return county_xwalk_path(boundary, counties, base_dir)
 
 
 def load_crosswalk(
     boundary: str,
+    counties: str,
     xwalk_path: Path | str | None = None,
     xwalk_dir: Path | str | None = None,
 ) -> pd.DataFrame:
@@ -220,6 +234,8 @@ def load_crosswalk(
     ----------
     boundary : str
         CoC boundary vintage (e.g., "2025").
+    counties : str
+        County vintage year (e.g., "2023").
     xwalk_path : Path or str, optional
         Explicit path to crosswalk parquet file. If None, uses default path.
     xwalk_dir : Path or str, optional
@@ -238,12 +254,12 @@ def load_crosswalk(
     if xwalk_path is not None:
         path = Path(xwalk_path)
     else:
-        path = get_xwalk_path(boundary, xwalk_dir)
+        path = get_xwalk_path(boundary, counties, xwalk_dir)
 
     if not path.exists():
         raise FileNotFoundError(
             f"CoC-county crosswalk not found: {path}. "
-            f"Run 'coclab build-xwalks --boundary {boundary} --counties <year>' first."
+            f"Run 'coclab build-xwalks --boundary {boundary} --counties {counties}' first."
         )
 
     logger.info(f"Loading crosswalk from {path}")
@@ -763,7 +779,7 @@ def aggregate_zori_to_coc(
 
     # Load input data
     zori_df = load_zori(geography, zori_path, output_dir)
-    xwalk_df = load_crosswalk(boundary, xwalk_path, xwalk_dir)
+    xwalk_df = load_crosswalk(boundary, counties, xwalk_path, xwalk_dir)
     weights_df = load_weights(acs_vintage, weighting, weights_dir)
 
     zori_df, weights_df = _align_ct_geographies(zori_df, xwalk_df, weights_df, counties)
