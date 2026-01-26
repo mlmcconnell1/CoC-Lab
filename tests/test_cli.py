@@ -78,6 +78,32 @@ class TestIngestCommand:
         mock_ingest.assert_called_once_with(snapshot_tag="custom_snapshot")
 
 
+class TestNestedIngestCommand:
+    """Tests for the nested 'ingest boundaries' command."""
+
+    @patch("coclab.ingest.hud_exchange_gis.ingest_hud_exchange")
+    def test_ingest_boundaries_nested_hud_exchange(self, mock_ingest):
+        """Nested ingest boundaries should call ingest_hud_exchange."""
+        mock_ingest.return_value = Path("data/curated/coc_boundaries/coc_boundaries__2025.parquet")
+
+        result = runner.invoke(
+            app,
+            [
+                "ingest",
+                "boundaries",
+                "--source",
+                "hud_exchange",
+                "--vintage",
+                "2025",
+                "--force",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "Successfully ingested" in result.output
+        mock_ingest.assert_called_once_with("2025", show_progress=True)
+
+
 class TestListBoundariesCommand:
     """Tests for the 'list-boundaries' command."""
 

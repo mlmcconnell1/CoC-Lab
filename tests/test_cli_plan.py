@@ -21,6 +21,13 @@ class TestCensusIngestCommand:
         assert result.exit_code == 1
         assert "Invalid type" in result.output
 
+    def test_ingest_census_invalid_type_nested(self):
+        """Nested ingest census invalid type should fail with an error."""
+        result = runner.invoke(app, ["ingest", "census", "--type", "invalid"])
+
+        assert result.exit_code == 1
+        assert "Invalid type" in result.output
+
     @patch("coclab.census.ingest.ingest_tiger_tracts")
     @patch("coclab.census.ingest.ingest_tiger_counties")
     def test_ingest_census_cached_skips_downloads(

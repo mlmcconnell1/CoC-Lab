@@ -23,6 +23,15 @@ class TestIngestPitCommand:
         assert "--force" in result.output
         assert "--parse-only" in result.output
 
+    def test_ingest_pit_help_nested(self):
+        """Nested help should show options."""
+        result = runner.invoke(app, ["ingest", "pit", "--help"])
+
+        assert result.exit_code == 0
+        assert "--year" in result.output
+        assert "--force" in result.output
+        assert "--parse-only" in result.output
+
     def test_ingest_pit_requires_year(self):
         """Should fail without --year option."""
         result = runner.invoke(app, ["ingest-pit"])
