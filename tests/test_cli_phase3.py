@@ -1,4 +1,4 @@
-"""Tests for the Phase 3 CLI commands (ingest pit, build-panel, diagnostics-panel)."""
+"""Tests for the Phase 3 CLI commands (ingest pit, build-panel, diagnostics panel)."""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -245,11 +245,11 @@ class TestBuildPanelCommand:
 
 
 class TestPanelDiagnosticsCommand:
-    """Tests for the 'diagnostics-panel' command."""
+    """Tests for the 'diagnostics panel' command."""
 
     def test_panel_diagnostics_help(self):
         """Help should show options."""
-        result = runner.invoke(app, ["diagnostics-panel", "--help"])
+        result = runner.invoke(app, ["diagnostics", "panel", "--help"])
 
         assert result.exit_code == 0
         assert "--panel" in result.output
@@ -258,7 +258,7 @@ class TestPanelDiagnosticsCommand:
 
     def test_panel_diagnostics_requires_panel(self):
         """Should fail without --panel option."""
-        result = runner.invoke(app, ["diagnostics-panel"])
+        result = runner.invoke(app, ["diagnostics", "panel"])
 
         # Typer shows error for missing required option
         assert result.exit_code != 0
@@ -267,7 +267,7 @@ class TestPanelDiagnosticsCommand:
         """Should fail if panel file does not exist."""
         result = runner.invoke(
             app,
-            ["diagnostics-panel", "--panel", str(tmp_path / "nonexistent.parquet")],
+            ["diagnostics", "panel", "--panel", str(tmp_path / "nonexistent.parquet")],
         )
 
         assert result.exit_code == 1
@@ -281,7 +281,7 @@ class TestPanelDiagnosticsCommand:
 
         result = runner.invoke(
             app,
-            ["diagnostics-panel", "--panel", str(panel_file), "--format", "invalid"],
+            ["diagnostics", "panel", "--panel", str(panel_file), "--format", "invalid"],
         )
 
         assert result.exit_code == 1
@@ -329,7 +329,7 @@ class TestPanelDiagnosticsCommand:
 
         result = runner.invoke(
             app,
-            ["diagnostics-panel", "--panel", str(panel_file), "--format", "text"],
+            ["diagnostics", "panel", "--panel", str(panel_file), "--format", "text"],
         )
 
         assert result.exit_code == 0
@@ -375,7 +375,8 @@ class TestPanelDiagnosticsCommand:
         result = runner.invoke(
             app,
             [
-                "diagnostics-panel",
+                "diagnostics",
+                "panel",
                 "--panel",
                 str(panel_file),
                 "--format",
@@ -400,7 +401,7 @@ class TestPhase3HelpOutput:
         assert result.exit_code == 0
         assert "ingest" in result.output
         assert "build-panel" in result.output
-        assert "diagnostics-panel" in result.output
+        assert "diagnostics" in result.output
 
     def test_ingest_pit_help_shows_examples(self):
         """Ingest pit help should show examples."""
@@ -419,7 +420,7 @@ class TestPhase3HelpOutput:
 
     def test_panel_diagnostics_help_shows_examples(self):
         """Panel-diagnostics help should show examples."""
-        result = runner.invoke(app, ["diagnostics-panel", "--help"])
+        result = runner.invoke(app, ["diagnostics", "panel", "--help"])
 
         assert result.exit_code == 0
-        assert "coclab diagnostics-panel --panel" in result.output
+        assert "coclab diagnostics panel --panel" in result.output

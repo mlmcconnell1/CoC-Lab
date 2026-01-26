@@ -91,6 +91,11 @@ validate_app = typer.Typer(
     help="Validate datasets and registries",
     no_args_is_help=True,
 )
+diagnostics_app = typer.Typer(
+    name="diagnostics",
+    help="Run diagnostics on datasets",
+    no_args_is_help=True,
+)
 
 
 @app.callback()
@@ -1096,6 +1101,143 @@ def validate_population_deprecated(
     )
 
 
+@wraps(panel_diagnostics)
+def diagnostics_panel_deprecated(
+    panel: Annotated[
+        Path,
+        typer.Option(
+            "--panel",
+            "-p",
+            help="Path to the panel Parquet file to analyze.",
+        ),
+    ],
+    output_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-dir",
+            "-o",
+            help="Directory to save diagnostic output files.",
+        ),
+    ] = None,
+    format_: Annotated[
+        str,
+        typer.Option(
+            "--format",
+            "-f",
+            help="Output format: 'text' (summary only), 'csv' (export CSVs).",
+        ),
+    ] = "text",
+) -> None:
+    """Deprecated: use `coclab diagnostics panel`."""
+    typer.echo(
+        "Warning: 'coclab diagnostics-panel' is deprecated; "
+        "use 'coclab diagnostics panel' instead.",
+        err=True,
+    )
+    panel_diagnostics(panel=panel, output_dir=output_dir, format_=format_)
+
+
+@wraps(diagnostics)
+def diagnostics_xwalk_deprecated(
+    crosswalk: Annotated[
+        Path,
+        typer.Option(
+            "--crosswalk",
+            "-x",
+            help="Path to crosswalk parquet file.",
+        ),
+    ],
+    coverage_threshold: Annotated[
+        float,
+        typer.Option(
+            "--coverage-threshold",
+            help="Coverage threshold for flagging problem CoCs.",
+        ),
+    ] = 0.95,
+    max_contribution: Annotated[
+        float,
+        typer.Option(
+            "--max-contribution",
+            help="Max tract contribution threshold for flagging.",
+        ),
+    ] = 0.8,
+    show_problems: Annotated[
+        bool,
+        typer.Option(
+            "--show-problems",
+            help="Only show problem CoCs.",
+        ),
+    ] = False,
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Optional: save diagnostics to CSV file.",
+        ),
+    ] = None,
+) -> None:
+    """Deprecated: use `coclab diagnostics xwalk`."""
+    typer.echo(
+        "Warning: 'coclab diagnostics-xwalk' is deprecated; "
+        "use 'coclab diagnostics xwalk' instead.",
+        err=True,
+    )
+    diagnostics(
+        crosswalk=crosswalk,
+        coverage_threshold=coverage_threshold,
+        max_contribution=max_contribution,
+        show_problems=show_problems,
+        output=output,
+    )
+
+
+@wraps(zori_diagnostics)
+def diagnostics_zori_deprecated(
+    coc_zori: Annotated[
+        Path,
+        typer.Option(
+            "--coc-zori",
+            help="Path to CoC-level ZORI parquet file.",
+        ),
+    ],
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Optional: save diagnostics to CSV or parquet file.",
+        ),
+    ] = None,
+    coverage_threshold: Annotated[
+        float,
+        typer.Option(
+            "--coverage-threshold",
+            help="Threshold for flagging low coverage (default 0.90).",
+        ),
+    ] = 0.90,
+    dominance_threshold: Annotated[
+        float,
+        typer.Option(
+            "--dominance-threshold",
+            help="Threshold for flagging high dominance (default 0.80).",
+        ),
+    ] = 0.80,
+) -> None:
+    """Deprecated: use `coclab diagnostics zori`."""
+    typer.echo(
+        "Warning: 'coclab diagnostics-zori' is deprecated; "
+        "use 'coclab diagnostics zori' instead.",
+        err=True,
+    )
+    zori_diagnostics(
+        coc_zori=coc_zori,
+        output=output,
+        coverage_threshold=coverage_threshold,
+        dominance_threshold=dominance_threshold,
+    )
+
+
 # -----------------------------------------------------------------------------
 # Register all commands alphabetically for consistent help output
 # -----------------------------------------------------------------------------
@@ -1110,13 +1252,14 @@ app.command("crosscheck-acs-population", hidden=True)(crosscheck_acs_population)
 app.command("crosscheck-pit-vintages", hidden=True)(crosscheck_pit_vintages)
 app.command("crosscheck-population", hidden=True)(crosscheck_population)
 app.command("delete-boundaries")(delete_boundaries)
-app.command("diagnostics-panel")(panel_diagnostics)
-app.command("diagnostics-xwalk")(diagnostics)
-app.command("diagnostics-zori")(zori_diagnostics)
+app.command("diagnostics-panel", hidden=True)(diagnostics_panel_deprecated)
+app.command("diagnostics-xwalk", hidden=True)(diagnostics_xwalk_deprecated)
+app.command("diagnostics-zori", hidden=True)(diagnostics_zori_deprecated)
 app.command("export-bundle")(export_bundle)
 app.add_typer(ingest_app, name="ingest")
 app.add_typer(list_app, name="list")
 app.add_typer(validate_app, name="validate")
+app.add_typer(diagnostics_app, name="diagnostics")
 app.command("ingest-acs-population", hidden=True)(ingest_acs_population_deprecated)
 app.command("ingest-boundaries", hidden=True)(ingest_boundaries_deprecated)
 app.command("ingest-census", hidden=True)(ingest_census_deprecated)
@@ -1156,6 +1299,9 @@ validate_app.command("acs-population")(validate_acs_population)
 validate_app.command("boundaries")(validate_boundaries)
 validate_app.command("pit-vintages")(validate_pit_vintages)
 validate_app.command("population")(validate_population)
+diagnostics_app.command("panel")(panel_diagnostics)
+diagnostics_app.command("xwalk")(diagnostics)
+diagnostics_app.command("zori")(zori_diagnostics)
 
 
 if __name__ == "__main__":

@@ -395,9 +395,9 @@ def zori_diagnostics(
 
     Examples:
 
-        coclab zori-diagnostics --coc-zori coc_zori__county__b2025.parquet
+        coclab diagnostics zori --coc-zori coc_zori__county__b2025.parquet
 
-        coclab zori-diagnostics --coc-zori coc_zori.parquet --output diagnostics.csv
+        coclab diagnostics zori --coc-zori coc_zori.parquet --output diagnostics.csv
     """
     # Validate input file exists
     if not coc_zori.exists():

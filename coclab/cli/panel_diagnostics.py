@@ -39,13 +39,13 @@ def panel_diagnostics(
 
     Examples:
 
-        coclab diagnostics-panel --panel data/curated/panel/coc_panel__2018_2024.parquet
+        coclab diagnostics panel --panel data/curated/panel/coc_panel__2018_2024.parquet
 
-        coclab diagnostics-panel --panel panel.parquet --output-dir ./diagnostics/
+        coclab diagnostics panel --panel panel.parquet --output-dir ./diagnostics/
 
-        coclab diagnostics-panel --panel panel.parquet --format csv
+        coclab diagnostics panel --panel panel.parquet --format csv
 
-        coclab diagnostics-panel --panel panel.parquet --format text
+        coclab diagnostics panel --panel panel.parquet --format text
     """
     import pandas as pd
 

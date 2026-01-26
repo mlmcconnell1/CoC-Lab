@@ -207,13 +207,13 @@ class TestBuildXwalksCommand:
 
 
 class TestDiagnosticsCommand:
-    """Tests for the diagnostics-xwalk CLI command."""
+    """Tests for the diagnostics xwalk CLI command."""
 
     def test_diagnostics_missing_crosswalk(self, tmp_path):
         """Should fail if crosswalk file is missing."""
         crosswalk_path = tmp_path / "missing.parquet"
 
-        result = runner.invoke(app, ["diagnostics-xwalk", "--crosswalk", str(crosswalk_path)])
+        result = runner.invoke(app, ["diagnostics", "xwalk", "--crosswalk", str(crosswalk_path)])
 
         assert result.exit_code == 1
         assert "Crosswalk file not found" in result.output
@@ -254,7 +254,8 @@ class TestDiagnosticsCommand:
         result = runner.invoke(
             app,
             [
-                "diagnostics-xwalk",
+                "diagnostics",
+                "xwalk",
                 "--crosswalk",
                 str(crosswalk_path),
                 "--show-problems",

@@ -9,6 +9,7 @@ flowchart LR
     coclab --> ingest
     coclab --> list
     coclab --> validate
+    coclab --> diagnostics
     ingest --> boundaries
     ingest --> census
     ingest --> nhgis
@@ -24,9 +25,6 @@ flowchart LR
     coclab --> build-panel
     coclab --> rollup-acs-population
     coclab --> verify-acs-population
-    coclab --> diagnostics-panel
-    coclab --> diagnostics-xwalk
-    coclab --> diagnostics-zori
     coclab --> show-measures
     coclab --> compare-vintages
     coclab --> aggregate-zori
@@ -51,6 +49,9 @@ flowchart LR
     validate --> validate-acs-population
     validate --> validate-pit-vintages
     validate --> validate-population
+    diagnostics --> diagnostics-panel
+    diagnostics --> diagnostics-xwalk
+    diagnostics --> diagnostics-zori
     validate-boundaries --> BOUNDCHK[Validate boundary registry health]
     delete-boundaries --> BOUNDDEL[Remove boundary registry entry]
     show --> MAP[Render interactive map]
@@ -85,6 +86,9 @@ Legacy `list-*` commands remain as deprecated passthroughs for backward compatib
 
 **Validate grouping:** The canonical form is `coclab validate <subcommand>` (e.g., `coclab validate boundaries`).
 Legacy `validate-*` commands remain as deprecated passthroughs for backward compatibility.
+
+**Diagnostics grouping:** The canonical form is `coclab diagnostics <subcommand>` (e.g., `coclab diagnostics panel`).
+Legacy `diagnostics-*` commands remain as deprecated passthroughs for backward compatibility.
 
 ## `coclab aggregate-measures`
 
@@ -459,19 +463,19 @@ If tab totals match but individual CoCs differ, the changes are likely due to Co
 - MA-519 will show as "removed"
 - Tab totals will remain identical
 
-## `coclab diagnostics-panel`
+## `coclab diagnostics panel`
 
 Run diagnostics and sensitivity checks on panel files.
 
 ```bash
 # Run diagnostics on a panel
-coclab diagnostics-panel --panel data/curated/panels/coc_panel__2018_2024.parquet
+coclab diagnostics panel --panel data/curated/panels/coc_panel__2018_2024.parquet
 
 # Export diagnostics to CSV files
-coclab diagnostics-panel --panel panel.parquet --output-dir ./diagnostics/ --format csv
+coclab diagnostics panel --panel panel.parquet --output-dir ./diagnostics/ --format csv
 
 # Print text summary only
-coclab diagnostics-panel --panel panel.parquet --format text
+coclab diagnostics panel --panel panel.parquet --format text
 ```
 
 | Option | Description | Default |
@@ -486,19 +490,19 @@ coclab diagnostics-panel --panel panel.parquet --format text
 - Missingness summaries per column
 - Panel structure validation
 
-## `coclab diagnostics-xwalk`
+## `coclab diagnostics xwalk`
 
 Run crosswalk quality diagnostics.
 
 ```bash
 # Basic diagnostics
-coclab diagnostics-xwalk --crosswalk data/curated/xwalks/xwalk__B2025xT2023.parquet
+coclab diagnostics xwalk --crosswalk data/curated/xwalks/xwalk__B2025xT2023.parquet
 
 # Show problem CoCs
-coclab diagnostics-xwalk -x crosswalk.parquet --show-problems
+coclab diagnostics xwalk -x crosswalk.parquet --show-problems
 
 # Custom thresholds and CSV export
-coclab diagnostics-xwalk -x crosswalk.parquet --coverage-threshold 0.90 -o diagnostics.csv
+coclab diagnostics xwalk -x crosswalk.parquet --coverage-threshold 0.90 -o diagnostics.csv
 ```
 
 | Option | Description | Default |
@@ -509,19 +513,19 @@ coclab diagnostics-xwalk -x crosswalk.parquet --coverage-threshold 0.90 -o diagn
 | `--show-problems` | Show problem CoCs | False |
 | `--output`, `-o` | Save diagnostics to CSV | None |
 
-## `coclab diagnostics-zori`
+## `coclab diagnostics zori`
 
 Summarize CoC ZORI coverage, missingness, and quality metrics.
 
 ```bash
 # Run diagnostics on CoC ZORI file
-coclab diagnostics-zori --coc-zori data/curated/zori/coc_zori__county__b2025.parquet
+coclab diagnostics zori --coc-zori data/curated/zori/coc_zori__county__b2025.parquet
 
 # Save diagnostics to file
-coclab diagnostics-zori --coc-zori coc_zori.parquet --output diagnostics.csv
+coclab diagnostics zori --coc-zori coc_zori.parquet --output diagnostics.csv
 
 # Custom thresholds
-coclab diagnostics-zori --coc-zori coc_zori.parquet --coverage-threshold 0.85
+coclab diagnostics zori --coc-zori coc_zori.parquet --coverage-threshold 0.85
 ```
 
 | Option | Description | Default |
