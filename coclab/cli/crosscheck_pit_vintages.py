@@ -1,4 +1,4 @@
-"""CLI command for cross-checking PIT counts between two vintage releases."""
+"""CLI command for validating PIT counts between two vintage releases."""
 
 from pathlib import Path
 from typing import Annotated
@@ -9,7 +9,7 @@ import typer
 from coclab.pit.registry import get_pit_vintage_path, list_pit_vintages
 
 
-def crosscheck_pit_vintages(
+def _run_pit_vintages_validation(
     vintage1: Annotated[
         str,
         typer.Option(
@@ -50,7 +50,7 @@ def crosscheck_pit_vintages(
         ),
     ] = None,
 ) -> None:
-    """Compare PIT counts between two vintage releases.
+    """Validate PIT counts between two vintage releases.
 
     Compares the total, sheltered, and unsheltered counts for years
     that appear in both vintage files. This helps identify when HUD
@@ -58,11 +58,11 @@ def crosscheck_pit_vintages(
 
     Examples:
 
-        coclab crosscheck-pit-vintages --vintage1 2023 --vintage2 2024
+        coclab validate-pit-vintages --vintage1 2023 --vintage2 2024
 
-        coclab crosscheck-pit-vintages -v1 2023 -v2 2024 --year 2020
+        coclab validate-pit-vintages -v1 2023 -v2 2024 --year 2020
 
-        coclab crosscheck-pit-vintages -v1 2023 -v2 2024 -o comparison.csv
+        coclab validate-pit-vintages -v1 2023 -v2 2024 -o comparison.csv
     """
     # Look up vintage paths in registry
     vintages = list_pit_vintages()
@@ -411,7 +411,6 @@ def crosscheck_pit_vintages(
                 "unsheltered_delta",
             ]
         ].copy()
-
         output_df.insert(0, "vintage1", vintage1)
         output_df.insert(1, "vintage2", vintage2)
         output_df = output_df.sort_values(["pit_year", "coc_id"])
@@ -424,3 +423,110 @@ def crosscheck_pit_vintages(
     if len(changed) > 0 or len(added) > 0 or len(removed) > 0:
         raise typer.Exit(0)  # Changes found but not an error
     raise typer.Exit(0)
+
+
+def validate_pit_vintages(
+    vintage1: Annotated[
+        str,
+        typer.Option(
+            "--vintage1",
+            "-v1",
+            help="First (older) PIT vintage to compare.",
+        ),
+    ],
+    vintage2: Annotated[
+        str,
+        typer.Option(
+            "--vintage2",
+            "-v2",
+            help="Second (newer) PIT vintage to compare.",
+        ),
+    ],
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Optional: save detailed comparison to CSV.",
+        ),
+    ] = None,
+    show_unchanged: Annotated[
+        bool,
+        typer.Option(
+            "--show-unchanged",
+            help="Also show CoC-years with no changes.",
+        ),
+    ] = False,
+    year: Annotated[
+        int | None,
+        typer.Option(
+            "--year",
+            "-y",
+            help="Filter to a specific PIT year (e.g., 2020).",
+        ),
+    ] = None,
+) -> None:
+    """Validate PIT counts between two vintage releases."""
+    _run_pit_vintages_validation(
+        vintage1=vintage1,
+        vintage2=vintage2,
+        output=output,
+        show_unchanged=show_unchanged,
+        year=year,
+    )
+
+
+def crosscheck_pit_vintages(
+    vintage1: Annotated[
+        str,
+        typer.Option(
+            "--vintage1",
+            "-v1",
+            help="First (older) PIT vintage to compare.",
+        ),
+    ],
+    vintage2: Annotated[
+        str,
+        typer.Option(
+            "--vintage2",
+            "-v2",
+            help="Second (newer) PIT vintage to compare.",
+        ),
+    ],
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Optional: save detailed comparison to CSV.",
+        ),
+    ] = None,
+    show_unchanged: Annotated[
+        bool,
+        typer.Option(
+            "--show-unchanged",
+            help="Also show CoC-years with no changes.",
+        ),
+    ] = False,
+    year: Annotated[
+        int | None,
+        typer.Option(
+            "--year",
+            "-y",
+            help="Filter to a specific PIT year (e.g., 2020).",
+        ),
+    ] = None,
+) -> None:
+    """Deprecated: use validate-pit-vintages."""
+    typer.echo(
+        "Warning: 'coclab crosscheck-pit-vintages' is deprecated; "
+        "use 'coclab validate-pit-vintages' instead.",
+        err=True,
+    )
+    validate_pit_vintages(
+        vintage1=vintage1,
+        vintage2=vintage2,
+        output=output,
+        show_unchanged=show_unchanged,
+        year=year,
+    )

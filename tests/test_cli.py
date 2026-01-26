@@ -214,9 +214,9 @@ class TestHelpOutput:
         assert "--vintage" in result.output
         assert "--output" in result.output
 
-    def test_crosscheck_population_help(self):
-        """Crosscheck-population help should show options."""
-        result = runner.invoke(app, ["crosscheck-population", "--help"])
+    def test_validate_population_help(self):
+        """Validate-population help should show options."""
+        result = runner.invoke(app, ["validate-population", "--help"])
 
         assert result.exit_code == 0
         assert "--boundary" in result.output
@@ -225,11 +225,11 @@ class TestHelpOutput:
         assert "--warn-threshold" in result.output
 
 
-class TestCrosscheckPopulation:
-    """Tests for the 'crosscheck-population' command."""
+class TestValidatePopulation:
+    """Tests for the 'validate-population' command."""
 
-    def test_crosscheck_population_runs(self, tmp_path):
-        """Test that crosscheck-population runs with test data."""
+    def test_validate_population_runs(self, tmp_path):
+        """Test that validate-population runs with test data."""
         import pandas as pd
 
         # Create test crosswalk
@@ -261,7 +261,7 @@ class TestCrosscheckPopulation:
         result = runner.invoke(
             app,
             [
-                "crosscheck-population",
+                "validate-population",
                 "--xwalk-dir",
                 str(xwalk_dir),
                 "--acs-dir",
@@ -270,19 +270,19 @@ class TestCrosscheckPopulation:
         )
 
         assert result.exit_code == 0
-        assert "POPULATION CROSSWALK SANITY CHECK" in result.output
+        assert "POPULATION CROSSWALK VALIDATION" in result.output
         assert "NATIONAL TOTAL" in result.output
         assert "COC-AGGREGATED TOTAL" in result.output
 
-    def test_crosscheck_population_missing_files(self, tmp_path):
-        """Test that crosscheck-population fails gracefully with missing files."""
+    def test_validate_population_missing_files(self, tmp_path):
+        """Test that validate-population fails gracefully with missing files."""
         empty_dir = tmp_path / "empty"
         empty_dir.mkdir()
 
         result = runner.invoke(
             app,
             [
-                "crosscheck-population",
+                "validate-population",
                 "--xwalk-dir",
                 str(empty_dir),
             ],

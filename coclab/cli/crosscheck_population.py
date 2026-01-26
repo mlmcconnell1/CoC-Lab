@@ -1,4 +1,4 @@
-"""CLI command for cross-checking population totals from crosswalk aggregation."""
+"""CLI command for validating population totals from crosswalk aggregation."""
 
 from pathlib import Path
 from typing import Annotated
@@ -6,7 +6,7 @@ from typing import Annotated
 import typer
 
 
-def crosscheck_population(
+def _run_population_validation(
     boundary: Annotated[
         str | None,
         typer.Option(
@@ -62,7 +62,7 @@ def crosscheck_population(
         ),
     ] = 0.05,
 ) -> None:
-    """Cross-check population totals from crosswalk aggregation against ACS national totals.
+    """Validate population totals from crosswalk aggregation against ACS national totals.
 
     Validates that CoC-aggregated population approximately equals the national
     ACS total, helping identify crosswalk coverage issues, double-counting,
@@ -77,13 +77,13 @@ def crosscheck_population(
 
     Examples:
 
-        coclab crosscheck-population
+        coclab validate-population
 
-        coclab crosscheck-population --boundary 2025 --acs 2019-2023
+        coclab validate-population --boundary 2025 --acs 2019-2023
 
-        coclab crosscheck-population --by-state
+        coclab validate-population --by-state
 
-        coclab crosscheck-population --warn-threshold 0.10
+        coclab validate-population --warn-threshold 0.10
     """
     import pandas as pd
 
@@ -134,7 +134,7 @@ def crosscheck_population(
         acs_vintage = acs
 
     typer.echo("=" * 70)
-    typer.echo("POPULATION CROSSWALK SANITY CHECK")
+    typer.echo("POPULATION CROSSWALK VALIDATION")
     typer.echo("=" * 70)
     typer.echo("")
     typer.echo("Configuration:")
@@ -284,3 +284,144 @@ def crosscheck_population(
             f"{warn_threshold:.0%} from 1.0"
         )
         raise typer.Exit(1)
+
+
+def validate_population(
+    boundary: Annotated[
+        str | None,
+        typer.Option(
+            "--boundary",
+            "-b",
+            help="CoC boundary vintage (e.g., '2025'). Uses latest if not specified.",
+        ),
+    ] = None,
+    acs: Annotated[
+        str | None,
+        typer.Option(
+            "--acs",
+            "-a",
+            help="ACS 5-year estimate vintage (e.g., '2019-2023'). Uses latest if not specified.",
+        ),
+    ] = None,
+    tracts: Annotated[
+        str | None,
+        typer.Option(
+            "--tracts",
+            "-t",
+            help="Census tract vintage (e.g., '2023'). Defaults to ACS year.",
+        ),
+    ] = None,
+    xwalk_dir: Annotated[
+        Path,
+        typer.Option(
+            "--xwalk-dir",
+            help="Directory containing crosswalk files.",
+        ),
+    ] = Path("data/curated/xwalks"),
+    acs_dir: Annotated[
+        Path,
+        typer.Option(
+            "--acs-dir",
+            help="Directory containing ACS tract population files.",
+        ),
+    ] = Path("data/curated/acs"),
+    by_state: Annotated[
+        bool,
+        typer.Option(
+            "--by-state",
+            "-s",
+            help="Show detailed state-level comparison.",
+        ),
+    ] = False,
+    warn_threshold: Annotated[
+        float,
+        typer.Option(
+            "--warn-threshold",
+            "-w",
+            help="Warning threshold for CoC/ACS ratio deviation from 1.0 (default: 0.05 = 5%).",
+        ),
+    ] = 0.05,
+) -> None:
+    """Validate population totals from crosswalk aggregation."""
+    _run_population_validation(
+        boundary=boundary,
+        acs=acs,
+        tracts=tracts,
+        xwalk_dir=xwalk_dir,
+        acs_dir=acs_dir,
+        by_state=by_state,
+        warn_threshold=warn_threshold,
+    )
+
+
+def crosscheck_population(
+    boundary: Annotated[
+        str | None,
+        typer.Option(
+            "--boundary",
+            "-b",
+            help="CoC boundary vintage (e.g., '2025'). Uses latest if not specified.",
+        ),
+    ] = None,
+    acs: Annotated[
+        str | None,
+        typer.Option(
+            "--acs",
+            "-a",
+            help="ACS 5-year estimate vintage (e.g., '2019-2023'). Uses latest if not specified.",
+        ),
+    ] = None,
+    tracts: Annotated[
+        str | None,
+        typer.Option(
+            "--tracts",
+            "-t",
+            help="Census tract vintage (e.g., '2023'). Defaults to ACS year.",
+        ),
+    ] = None,
+    xwalk_dir: Annotated[
+        Path,
+        typer.Option(
+            "--xwalk-dir",
+            help="Directory containing crosswalk files.",
+        ),
+    ] = Path("data/curated/xwalks"),
+    acs_dir: Annotated[
+        Path,
+        typer.Option(
+            "--acs-dir",
+            help="Directory containing ACS tract population files.",
+        ),
+    ] = Path("data/curated/acs"),
+    by_state: Annotated[
+        bool,
+        typer.Option(
+            "--by-state",
+            "-s",
+            help="Show detailed state-level comparison.",
+        ),
+    ] = False,
+    warn_threshold: Annotated[
+        float,
+        typer.Option(
+            "--warn-threshold",
+            "-w",
+            help="Warning threshold for CoC/ACS ratio deviation from 1.0 (default: 0.05 = 5%).",
+        ),
+    ] = 0.05,
+) -> None:
+    """Deprecated: use validate-population."""
+    typer.echo(
+        "Warning: 'coclab crosscheck-population' is deprecated; "
+        "use 'coclab validate-population' instead.",
+        err=True,
+    )
+    validate_population(
+        boundary=boundary,
+        acs=acs,
+        tracts=tracts,
+        xwalk_dir=xwalk_dir,
+        acs_dir=acs_dir,
+        by_state=by_state,
+        warn_threshold=warn_threshold,
+    )

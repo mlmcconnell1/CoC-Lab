@@ -1,4 +1,4 @@
-"""CLI command for one-shot ACS population verification (ingest + rollup + crosscheck)."""
+"""CLI command for one-shot ACS population verification (ingest + rollup + validate)."""
 
 from typing import Annotated, Literal
 
@@ -67,7 +67,7 @@ def verify_acs_population(
         ),
     ] = 0.95,
 ) -> None:
-    """One-shot ACS population verification: ingest, rollup, and crosscheck.
+    """One-shot ACS population verification: ingest, rollup, and validate.
 
     Runs the complete ACS population verification pipeline:
     1. Ingest tract population from ACS (if not cached or --force)
@@ -203,13 +203,13 @@ def verify_acs_population(
             save_report=True,
         )
     except FileNotFoundError as e:
-        typer.echo(f"Error in crosscheck: {e}", err=True)
+        typer.echo(f"Error in validation: {e}", err=True)
         raise typer.Exit(1) from e
     except Exception as e:
-        typer.echo(f"Error in crosscheck: {e}", err=True)
+        typer.echo(f"Error in validation: {e}", err=True)
         raise typer.Exit(1) from e
 
-    # Print the crosscheck report and get exit code
+    # Print the validation report and get exit code
     exit_code = print_crosscheck_report(result)
 
     raise typer.Exit(exit_code)

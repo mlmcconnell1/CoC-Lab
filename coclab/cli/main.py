@@ -14,9 +14,9 @@ from coclab.cli.build_measures import build_measures
 from coclab.cli.build_panel import build_panel_cmd
 from coclab.cli.build_xwalks import build_xwalks
 from coclab.cli.compare_vintages import compare_vintages
-from coclab.cli.crosscheck_acs_population import crosscheck_acs_population
-from coclab.cli.crosscheck_pit_vintages import crosscheck_pit_vintages
-from coclab.cli.crosscheck_population import crosscheck_population
+from coclab.cli.crosscheck_acs_population import crosscheck_acs_population, validate_acs_population
+from coclab.cli.crosscheck_pit_vintages import crosscheck_pit_vintages, validate_pit_vintages
+from coclab.cli.crosscheck_population import crosscheck_population, validate_population
 from coclab.cli.diagnostics import diagnostics
 from coclab.cli.export_bundle import export_bundle
 from coclab.cli.ingest_acs_population import ingest_acs_population
@@ -263,7 +263,7 @@ def list_boundaries_cmd() -> None:
 
 
 def check_boundaries() -> None:
-    """Check boundary registry health for issues.
+    """Validate boundary registry health for issues.
 
     Scans all registry entries for:
     - Paths in temporary directories (may disappear after process exit)
@@ -272,7 +272,7 @@ def check_boundaries() -> None:
 
     Examples:
 
-        coclab check-boundaries
+        coclab validate-boundaries
     """
     from coclab.registry import check_registry_health
 
@@ -287,6 +287,21 @@ def check_boundaries() -> None:
             err=True,
         )
         raise typer.Exit(1)
+
+
+def validate_boundaries() -> None:
+    """Validate boundary registry health for issues."""
+    check_boundaries()
+
+
+def check_boundaries_deprecated() -> None:
+    """Deprecated: use validate-boundaries."""
+    typer.echo(
+        "Warning: 'coclab check-boundaries' is deprecated; "
+        "use 'coclab validate-boundaries' instead.",
+        err=True,
+    )
+    check_boundaries()
 
 
 def show(
@@ -402,7 +417,7 @@ app.command("aggregate-measures")(build_measures)
 app.command("aggregate-zori")(aggregate_zori)
 app.command("build-panel")(build_panel_cmd)
 app.command("build-xwalks")(build_xwalks)
-app.command("check-boundaries")(check_boundaries)
+app.command("check-boundaries")(check_boundaries_deprecated)
 app.command("compare-vintages")(compare_vintages)
 app.command("crosscheck-acs-population")(crosscheck_acs_population)
 app.command("crosscheck-pit-vintages")(crosscheck_pit_vintages)
@@ -429,6 +444,10 @@ app.command("rollup-acs-population")(rollup_acs_population)
 app.command("show")(show)
 app.command("show-measures")(show_measures)
 app.command("source-status")(source_status)
+app.command("validate-acs-population")(validate_acs_population)
+app.command("validate-boundaries")(validate_boundaries)
+app.command("validate-pit-vintages")(validate_pit_vintages)
+app.command("validate-population")(validate_population)
 app.command("verify-acs-population")(verify_acs_population)
 
 

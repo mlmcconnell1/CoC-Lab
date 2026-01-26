@@ -14,16 +14,16 @@ flowchart LR
     coclab --> ingest-acs-population
     coclab --> ingest-tract-relationship
     coclab --> list-boundaries
-    coclab --> check-boundaries
+    coclab --> validate-boundaries
     coclab --> delete-boundaries
     coclab --> show
     coclab --> build-xwalks
     coclab --> aggregate-measures
     coclab --> build-panel
     coclab --> rollup-acs-population
-    coclab --> crosscheck-acs-population
-    coclab --> crosscheck-pit-vintages
-    coclab --> crosscheck-population
+    coclab --> validate-acs-population
+    coclab --> validate-pit-vintages
+    coclab --> validate-population
     coclab --> verify-acs-population
     coclab --> diagnostics-panel
     coclab --> diagnostics-xwalk
@@ -48,17 +48,17 @@ flowchart LR
     ingest-acs-population --> ACSPOP[Fetch tract population]
     ingest-tract-relationship --> TRACTREL[Download 2010↔2020 tract relationship]
     list-boundaries --> LIST[List boundary vintages]
-    check-boundaries --> BOUNDCHK[Check boundary registry health]
+    validate-boundaries --> BOUNDCHK[Validate boundary registry health]
     delete-boundaries --> BOUNDDEL[Remove boundary registry entry]
     show --> MAP[Render interactive map]
     build-xwalks --> XWALK[Create tract/county crosswalks]
     aggregate-measures --> MEAS[Aggregate demographic measures from ACS]
     build-panel --> PANEL[Assemble CoC × year panels]
     rollup-acs-population --> ROLLUP[Aggregate tract pop to CoC]
-    crosscheck-acs-population --> XCHECK[Validate rollup vs measures]
-    crosscheck-pit-vintages --> PITXCHECK[Compare PIT across vintages]
-    crosscheck-population --> POPCHECK[Validate CoC pop vs national]
-    verify-acs-population --> VERIFY[Full pipeline: ingest→rollup→check]
+    validate-acs-population --> XCHECK[Validate rollup vs measures]
+    validate-pit-vintages --> PITXCHECK[Validate PIT across vintages]
+    validate-population --> POPCHECK[Validate CoC pop vs national]
+    verify-acs-population --> VERIFY[Full pipeline: ingest→rollup→validate]
     ingest-zori --> ZORI_ING[Download & normalize ZORI data]
     aggregate-zori --> ZORI_AGG[Aggregate ZORI to CoC level]
     diagnostics-panel --> PDIAG[Panel quality & sensitivity]
@@ -240,12 +240,12 @@ data/curated/panel/panel__Y2018-2024@B2025.parquet
 The filename does not change when `--include-zori` is enabled; the presence of ZORI
 columns in the data indicates rent integration.
 
-## `coclab check-boundaries`
+## `coclab validate-boundaries`
 
-Check the boundary registry for missing files, invalid paths, or temporary-directory entries.
+Validate the boundary registry for missing files, invalid paths, or temporary-directory entries.
 
 ```bash
-coclab check-boundaries
+coclab validate-boundaries
 ```
 
 Returns a health report. Exits with code `1` if problems are detected.
@@ -317,16 +317,16 @@ coclab compare-vintages -v1 2024 -v2 2025 -o diff_report.csv
 - Summary counts of added, removed, changed, unchanged CoCs
 - Lists of affected CoC IDs by category
 
-## `coclab crosscheck-acs-population`
+## `coclab validate-acs-population`
 
-Cross-check population rollup against existing CoC measures (`total_population` from `coc_measures`).
+Validate population rollup against existing CoC measures (`total_population` from `coc_measures`).
 
 ```bash
-# Basic crosscheck
-coclab crosscheck-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting area
+# Basic validation
+coclab validate-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting area
 
 # With custom thresholds
-coclab crosscheck-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting area \
+coclab validate-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting area \
     --warn-pct 0.02 --error-pct 0.10 --min-coverage 0.90
 ```
 
@@ -348,22 +348,22 @@ coclab crosscheck-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 -
 - Console report with top 25 worst deltas
 - `data/curated/acs/acs_population_crosscheck__{boundary}__{acs}__{tracts}__{weighting}.parquet`
 
-## `coclab crosscheck-population`
+## `coclab validate-population`
 
-Cross-check population totals from crosswalk aggregation against ACS national totals. Validates that CoC-aggregated population approximately equals the national ACS total, helping identify crosswalk coverage issues, double-counting, or data quality problems.
+Validate population totals from crosswalk aggregation against ACS national totals. Ensures that CoC-aggregated population approximately equals the national ACS total, helping identify crosswalk coverage issues, double-counting, or data quality problems.
 
 ```bash
-# Basic crosscheck (auto-detects latest vintages)
-coclab crosscheck-population
+# Basic validation (auto-detects latest vintages)
+coclab validate-population
 
 # Specify vintages
-coclab crosscheck-population --boundary 2025 --acs 2019-2023
+coclab validate-population --boundary 2025 --acs 2019-2023
 
 # Show state-level breakdown
-coclab crosscheck-population --by-state
+coclab validate-population --by-state
 
 # Adjust warning threshold
-coclab crosscheck-population --warn-threshold 0.10
+coclab validate-population --warn-threshold 0.10
 ```
 
 | Option | Description | Default |
@@ -390,7 +390,7 @@ coclab crosscheck-population --warn-threshold 0.10
 
 **Example Output:**
 ```
-POPULATION CROSSWALK SANITY CHECK
+POPULATION CROSSWALK VALIDATION
 ======================================================================
 1. NATIONAL TOTAL (sum of all tracts): 335,559,225
 
@@ -407,22 +407,22 @@ POPULATION CROSSWALK SANITY CHECK
    Tracts with sum < 0.99 (partial coverage):  4,696
 ```
 
-## `coclab crosscheck-pit-vintages`
+## `coclab validate-pit-vintages`
 
 Compare PIT counts between two vintage releases to detect historical data revisions. This helps identify when HUD has revised historical PIT data between releases (e.g., due to CoC mergers or data corrections).
 
 ```bash
 # Compare 2023 and 2024 vintages
-coclab crosscheck-pit-vintages --vintage1 2023 --vintage2 2024
+coclab validate-pit-vintages --vintage1 2023 --vintage2 2024
 
 # Filter to a specific year
-coclab crosscheck-pit-vintages -v1 2023 -v2 2024 --year 2020
+coclab validate-pit-vintages -v1 2023 -v2 2024 --year 2020
 
 # Save detailed comparison to CSV
-coclab crosscheck-pit-vintages -v1 2023 -v2 2024 -o comparison.csv
+coclab validate-pit-vintages -v1 2023 -v2 2024 -o comparison.csv
 
 # Show unchanged records too
-coclab crosscheck-pit-vintages -v1 2023 -v2 2024 --show-unchanged
+coclab validate-pit-vintages -v1 2023 -v2 2024 --show-unchanged
 ```
 
 | Option | Description | Default |
@@ -1003,7 +1003,7 @@ When `--check-changes` is used, the command identifies sources where the upstrea
 
 ## `coclab verify-acs-population`
 
-One-shot command that runs: ingest → rollup → crosscheck.
+One-shot command that runs: ingest → rollup → validate.
 
 ```bash
 # Full verification pipeline
