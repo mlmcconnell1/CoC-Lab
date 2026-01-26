@@ -5,6 +5,7 @@ computing measures, and visualizing boundaries.
 """
 
 import warnings
+from functools import wraps
 from pathlib import Path
 from typing import Annotated
 
@@ -33,6 +34,7 @@ from coclab.cli.registry_rebuild import registry_rebuild
 from coclab.cli.rollup_acs_population import rollup_acs_population
 from coclab.cli.show_measures import show_measures
 from coclab.cli.verify_acs_population import verify_acs_population
+from coclab.cli.zori import DEFAULT_OUTPUT_DIR, DEFAULT_RAW_DIR
 from coclab.cli.zori import aggregate_zori, ingest_zori, zori_diagnostics
 
 # Suppress known PyArrow warnings on macOS (sysctlbyname failures in sandboxed environments)
@@ -69,11 +71,25 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
+ingest_app = typer.Typer(
+    name="ingest",
+    help="Ingest raw and curated datasets",
+    no_args_is_help=True,
+)
+ingest_app = typer.Typer(
+    name="ingest",
+    help="Ingest raw and curated datasets",
+    no_args_is_help=True,
+)
+
 
 @app.callback()
 def main_callback() -> None:
     """Check working directory before running any command."""
     _check_working_directory()
+
+
+app.add_typer(ingest_app, name="ingest")
 
 
 # -----------------------------------------------------------------------------
@@ -178,6 +194,368 @@ def ingest_boundaries(
             err=True,
         )
         raise typer.Exit(1)
+
+
+@wraps(ingest_boundaries)
+def ingest_boundaries_deprecated(
+    source: Annotated[
+        str,
+        typer.Option(
+            "--source",
+            "-s",
+            help="Data source: 'hud_exchange' or 'hud_opendata'",
+        ),
+    ],
+    vintage: Annotated[
+        str | None,
+        typer.Option(
+            "--vintage",
+            "-v",
+            help="Boundary vintage year (e.g., '2025') for hud_exchange source",
+        ),
+    ] = None,
+    snapshot: Annotated[
+        str,
+        typer.Option(
+            "--snapshot",
+            help="Snapshot tag for hud_opendata source (default: 'latest')",
+        ),
+    ] = "latest",
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            "-f",
+            help="Force re-ingest even if vintage already exists",
+        ),
+    ] = False,
+) -> None:
+    """Deprecated: use `coclab ingest boundaries`."""
+    typer.echo(
+        "Warning: 'coclab ingest-boundaries' is deprecated; "
+        "use 'coclab ingest boundaries' instead.",
+        err=True,
+    )
+    ingest_boundaries(
+        source=source,
+        vintage=vintage,
+        snapshot=snapshot,
+        force=force,
+    )
+
+
+@wraps(ingest_acs_population)
+def ingest_acs_population_deprecated(
+    acs: Annotated[
+        str,
+        typer.Option(
+            "--acs",
+            "-a",
+            help="ACS 5-year estimate vintage (e.g., '2019-2023').",
+        ),
+    ],
+    tracts: Annotated[
+        str,
+        typer.Option(
+            "--tracts",
+            "-t",
+            help="Census tract vintage (e.g., '2023').",
+        ),
+    ],
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="Re-ingest even if cached file exists.",
+        ),
+    ] = False,
+    translate: Annotated[
+        bool,
+        typer.Option(
+            "--translate/--no-translate",
+            help="Auto-translate from 2010 to 2020 tract geography if needed.",
+        ),
+    ] = True,
+) -> None:
+    """Deprecated: use `coclab ingest acs-population`."""
+    typer.echo(
+        "Warning: 'coclab ingest-acs-population' is deprecated; "
+        "use 'coclab ingest acs-population' instead.",
+        err=True,
+    )
+    ingest_acs_population(
+        acs=acs,
+        tracts=tracts,
+        force=force,
+        translate=translate,
+    )
+
+
+@wraps(ingest_census)
+def ingest_census_deprecated(
+    year: Annotated[
+        int,
+        typer.Option(
+            "--year",
+            "-y",
+            help="TIGER vintage year (e.g., 2023).",
+        ),
+    ] = 2023,
+    type_: Annotated[
+        str,
+        typer.Option(
+            "--type",
+            "-t",
+            help="What to download: 'tracts', 'counties', or 'all'.",
+        ),
+    ] = "all",
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="Re-download even if file already exists.",
+        ),
+    ] = False,
+) -> None:
+    """Deprecated: use `coclab ingest census`."""
+    typer.echo(
+        "Warning: 'coclab ingest-census' is deprecated; use 'coclab ingest census' instead.",
+        err=True,
+    )
+    ingest_census(
+        year=year,
+        type_=type_,
+        force=force,
+    )
+
+
+@wraps(ingest_nhgis)
+def ingest_nhgis_deprecated(
+    years: Annotated[
+        list[int],
+        typer.Option(
+            "--year",
+            "-y",
+            help="Census year(s) to download (2010, 2020). Can specify multiple.",
+        ),
+    ],
+    geo_type: Annotated[
+        str,
+        typer.Option(
+            "--type",
+            "-t",
+            help="Geography type(s) to download: 'tracts', 'counties', or 'all'.",
+        ),
+    ] = "all",
+    api_key: Annotated[
+        str | None,
+        typer.Option(
+            "--api-key",
+            envvar="IPUMS_API_KEY",
+            help="IPUMS API key. Can also set IPUMS_API_KEY environment variable.",
+        ),
+    ] = None,
+    poll_interval: Annotated[
+        int,
+        typer.Option(
+            "--poll-interval",
+            help="Minutes between status checks while waiting for extract.",
+        ),
+    ] = 2,
+    max_wait: Annotated[
+        int,
+        typer.Option(
+            "--max-wait",
+            help="Maximum minutes to wait for extract completion.",
+        ),
+    ] = 60,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="Re-download even if file already exists.",
+        ),
+    ] = False,
+) -> None:
+    """Deprecated: use `coclab ingest nhgis`."""
+    typer.echo(
+        "Warning: 'coclab ingest-nhgis' is deprecated; use 'coclab ingest nhgis' instead.",
+        err=True,
+    )
+    ingest_nhgis(
+        years=years,
+        geo_type=geo_type,  # type: ignore[arg-type]
+        api_key=api_key,
+        poll_interval=poll_interval,
+        max_wait=max_wait,
+        force=force,
+    )
+
+
+@wraps(ingest_pit)
+def ingest_pit_deprecated(
+    year: Annotated[
+        int,
+        typer.Option(
+            "--year",
+            "-y",
+            help="PIT survey year to ingest (e.g., 2024).",
+        ),
+    ],
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="Re-download and re-process even if files exist.",
+        ),
+    ] = False,
+    parse_only: Annotated[
+        bool,
+        typer.Option(
+            "--parse-only",
+            help="Skip download if file exists, only parse and process.",
+        ),
+    ] = False,
+) -> None:
+    """Deprecated: use `coclab ingest pit`."""
+    typer.echo(
+        "Warning: 'coclab ingest-pit' is deprecated; use 'coclab ingest pit' instead.",
+        err=True,
+    )
+    ingest_pit(
+        year=year,
+        force=force,
+        parse_only=parse_only,
+    )
+
+
+@wraps(ingest_pit_vintage)
+def ingest_pit_vintage_deprecated(
+    vintage: Annotated[
+        int,
+        typer.Option(
+            "--vintage",
+            "-v",
+            help="PIT vintage year to ingest (e.g., 2024). This is the release year.",
+        ),
+    ],
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="Re-download and re-process even if files exist.",
+        ),
+    ] = False,
+    parse_only: Annotated[
+        bool,
+        typer.Option(
+            "--parse-only",
+            help="Skip download if file exists, only parse and process.",
+        ),
+    ] = False,
+) -> None:
+    """Deprecated: use `coclab ingest pit-vintage`."""
+    typer.echo(
+        "Warning: 'coclab ingest-pit-vintage' is deprecated; "
+        "use 'coclab ingest pit-vintage' instead.",
+        err=True,
+    )
+    ingest_pit_vintage(
+        vintage=vintage,
+        force=force,
+        parse_only=parse_only,
+    )
+
+
+@wraps(ingest_tract_relationship)
+def ingest_tract_relationship_deprecated(
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            "-f",
+            help="Re-download even if file already exists.",
+        ),
+    ] = False,
+) -> None:
+    """Deprecated: use `coclab ingest tract-relationship`."""
+    typer.echo(
+        "Warning: 'coclab ingest-tract-relationship' is deprecated; "
+        "use 'coclab ingest tract-relationship' instead.",
+        err=True,
+    )
+    ingest_tract_relationship(force=force)
+
+
+@wraps(ingest_zori)
+def ingest_zori_deprecated(
+    geography: Annotated[
+        str,
+        typer.Option(
+            "--geography",
+            "-g",
+            help="Geography level: 'county' or 'zip' (county recommended for v1).",
+        ),
+    ] = "county",
+    url: Annotated[
+        str | None,
+        typer.Option(
+            "--url",
+            help="Override download URL for ZORI data.",
+        ),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            "-f",
+            help="Re-download and reprocess even if cached.",
+        ),
+    ] = False,
+    output_dir: Annotated[
+        Path,
+        typer.Option(
+            "--output-dir",
+            "-o",
+            help="Output directory for curated parquet.",
+        ),
+    ] = DEFAULT_OUTPUT_DIR,
+    raw_dir: Annotated[
+        Path,
+        typer.Option(
+            "--raw-dir",
+            help="Directory for raw downloads.",
+        ),
+    ] = DEFAULT_RAW_DIR,
+    start: Annotated[
+        str | None,
+        typer.Option(
+            "--start",
+            help="Filter to dates >= start (YYYY-MM-DD). Does not truncate raw archive.",
+        ),
+    ] = None,
+    end: Annotated[
+        str | None,
+        typer.Option(
+            "--end",
+            help="Filter to dates <= end (YYYY-MM-DD). Does not truncate raw archive.",
+        ),
+    ] = None,
+) -> None:
+    """Deprecated: use `coclab ingest zori`."""
+    typer.echo(
+        "Warning: 'coclab ingest-zori' is deprecated; use 'coclab ingest zori' instead.",
+        err=True,
+    )
+    ingest_zori(
+        geography=geography,
+        url=url,
+        force=force,
+        output_dir=output_dir,
+        raw_dir=raw_dir,
+        start=start,
+        end=end,
+    )
 
 
 def delete_boundaries(
@@ -427,14 +805,14 @@ app.command("diagnostics-panel")(panel_diagnostics)
 app.command("diagnostics-xwalk")(diagnostics)
 app.command("diagnostics-zori")(zori_diagnostics)
 app.command("export-bundle")(export_bundle)
-app.command("ingest-acs-population")(ingest_acs_population)
-app.command("ingest-boundaries")(ingest_boundaries)
-app.command("ingest-census")(ingest_census)
-app.command("ingest-nhgis")(ingest_nhgis)
-app.command("ingest-pit")(ingest_pit)
-app.command("ingest-pit-vintage")(ingest_pit_vintage)
-app.command("ingest-tract-relationship")(ingest_tract_relationship)
-app.command("ingest-zori")(ingest_zori)
+app.command("ingest-acs-population")(ingest_acs_population_deprecated)
+app.command("ingest-boundaries")(ingest_boundaries_deprecated)
+app.command("ingest-census")(ingest_census_deprecated)
+app.command("ingest-nhgis")(ingest_nhgis_deprecated)
+app.command("ingest-pit")(ingest_pit_deprecated)
+app.command("ingest-pit-vintage")(ingest_pit_vintage_deprecated)
+app.command("ingest-tract-relationship")(ingest_tract_relationship_deprecated)
+app.command("ingest-zori")(ingest_zori_deprecated)
 app.command("list-boundaries")(list_boundaries_cmd)
 app.command("list-census")(list_census)
 app.command("list-measures")(list_measures)
@@ -449,6 +827,15 @@ app.command("validate-boundaries")(validate_boundaries)
 app.command("validate-pit-vintages")(validate_pit_vintages)
 app.command("validate-population")(validate_population)
 app.command("verify-acs-population")(verify_acs_population)
+
+ingest_app.command("acs-population")(ingest_acs_population)
+ingest_app.command("boundaries")(ingest_boundaries)
+ingest_app.command("census")(ingest_census)
+ingest_app.command("nhgis")(ingest_nhgis)
+ingest_app.command("pit")(ingest_pit)
+ingest_app.command("pit-vintage")(ingest_pit_vintage)
+ingest_app.command("tract-relationship")(ingest_tract_relationship)
+ingest_app.command("zori")(ingest_zori)
 
 
 if __name__ == "__main__":

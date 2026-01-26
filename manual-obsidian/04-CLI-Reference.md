@@ -6,13 +6,15 @@ The `coclab` command provides access to all core functionality.
 
 ```mermaid
 flowchart LR
-    coclab --> ingest-boundaries
-    coclab --> ingest-census
-    coclab --> ingest-nhgis
-    coclab --> ingest-pit
-    coclab --> ingest-pit-vintage
-    coclab --> ingest-acs-population
-    coclab --> ingest-tract-relationship
+    coclab --> ingest
+    ingest --> boundaries
+    ingest --> census
+    ingest --> nhgis
+    ingest --> pit
+    ingest --> pit-vintage
+    ingest --> acs-population
+    ingest --> tract-relationship
+    ingest --> zori
     coclab --> list-boundaries
     coclab --> validate-boundaries
     coclab --> delete-boundaries
@@ -33,20 +35,19 @@ flowchart LR
     coclab --> list-measures
     coclab --> show-measures
     coclab --> compare-vintages
-    coclab --> ingest-zori
     coclab --> aggregate-zori
     coclab --> source-status
     coclab --> export-bundle
     coclab --> registry-rebuild
 
-    ingest --> |"--source hud_exchange"| HUD_EX[Download annual vintage]
-    ingest --> |"--source hud_opendata"| HUD_OD[Fetch current snapshot]
-    ingest-census --> TIGER[Download TIGER geometries]
-    ingest-nhgis --> NHGIS[Download NHGIS tract shapefiles]
-    ingest-pit --> PIT[Download & parse PIT counts]
-    ingest-pit-vintage --> PITVINT[Parse all years from vintage]
-    ingest-acs-population --> ACSPOP[Fetch tract population]
-    ingest-tract-relationship --> TRACTREL[Download 2010↔2020 tract relationship]
+    boundaries --> |"--source hud_exchange"| HUD_EX[Download annual vintage]
+    boundaries --> |"--source hud_opendata"| HUD_OD[Fetch current snapshot]
+    census --> TIGER[Download TIGER geometries]
+    nhgis --> NHGIS[Download NHGIS tract shapefiles]
+    pit --> PIT[Download & parse PIT counts]
+    pit-vintage --> PITVINT[Parse all years from vintage]
+    acs-population --> ACSPOP[Fetch tract population]
+    tract-relationship --> TRACTREL[Download 2010↔2020 tract relationship]
     list-boundaries --> LIST[List boundary vintages]
     validate-boundaries --> BOUNDCHK[Validate boundary registry health]
     delete-boundaries --> BOUNDDEL[Remove boundary registry entry]
@@ -59,7 +60,7 @@ flowchart LR
     validate-pit-vintages --> PITXCHECK[Validate PIT across vintages]
     validate-population --> POPCHECK[Validate CoC pop vs national]
     verify-acs-population --> VERIFY[Full pipeline: ingest→rollup→validate]
-    ingest-zori --> ZORI_ING[Download & normalize ZORI data]
+    zori --> ZORI_ING[Download & normalize ZORI data]
     aggregate-zori --> ZORI_AGG[Aggregate ZORI to CoC level]
     diagnostics-panel --> PDIAG[Panel quality & sensitivity]
     diagnostics-xwalk --> DIAG[Crosswalk quality checks]
@@ -73,6 +74,9 @@ flowchart LR
     export-bundle --> EXPORT[Create analysis-ready bundle]
     registry-rebuild --> REGREBUILD[Rebuild source registry from local files]
 ```
+
+**Ingest grouping:** The canonical form is `coclab ingest <subcommand>` (e.g., `coclab ingest boundaries`).
+Legacy `ingest-*` commands remain as deprecated passthroughs for backward compatibility.
 
 ## `coclab aggregate-measures`
 
@@ -142,10 +146,10 @@ coclab aggregate-zori -b 2025 -c 2023 --acs 2019-2023 -w housing_units
 
 **Prerequisites:**
 ```bash
-coclab ingest-boundaries --source hud_exchange --vintage 2025
-coclab ingest-census --year 2023 --type counties
+coclab ingest boundaries --source hud_exchange --vintage 2025
+coclab ingest census --year 2023 --type counties
 coclab build-xwalks --boundary 2025 --counties 2023
-coclab ingest-zori --geography county
+coclab ingest zori --geography county
 ```
 
 **Exit Codes:**
@@ -580,16 +584,16 @@ coclab export-bundle --name archive --compress
 | `3` | Filesystem failure (cannot create export directory, copy failure) |
 | `4` | Manifest failure (hashing/metadata extraction failure) |
 
-## `coclab ingest-acs-population`
+## `coclab ingest acs-population`
 
 Ingest tract-level population data from ACS 5-year estimates (Census API table B01003).
 
 ```bash
 # Ingest tract population for ACS 2019-2023 using 2023 tract geometries
-coclab ingest-acs-population --acs 2019-2023 --tracts 2023
+coclab ingest acs-population --acs 2019-2023 --tracts 2023
 
 # Force re-fetch even if cached file exists
-coclab ingest-acs-population --acs 2019-2023 --tracts 2023 --force
+coclab ingest acs-population --acs 2019-2023 --tracts 2023 --force
 ```
 
 | Option | Description | Default |
@@ -602,35 +606,35 @@ coclab ingest-acs-population --acs 2019-2023 --tracts 2023 --force
 - `data/curated/acs/tract_population__{acs}__{tracts}.parquet`
 - Contains: tract_geoid, acs_vintage, tract_vintage, total_population, moe_total_population, data_source, source_ref, ingested_at
 
-## `coclab ingest-tract-relationship`
+## `coclab ingest tract-relationship`
 
 Download the Census Bureau tract-to-tract relationship file (2010↔2020). This
 file is required to translate ACS data from 2010 tract geography to 2020 tract
 geography.
 
 ```bash
-coclab ingest-tract-relationship
+coclab ingest tract-relationship
 
 # Force a re-download even if cached
-coclab ingest-tract-relationship --force
+coclab ingest tract-relationship --force
 ```
 
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--force`, `-f` | Re-download even if file exists | False |
 
-## `coclab ingest-boundaries`
+## `coclab ingest boundaries`
 
 Ingest CoC boundary data from HUD sources.
 
 **From HUD Exchange (annual vintages):**
 ```bash
-coclab ingest-boundaries --source hud_exchange --vintage 2025
+coclab ingest boundaries --source hud_exchange --vintage 2025
 ```
 
 **From HUD Open Data (current snapshot):**
 ```bash
-coclab ingest-boundaries --source hud_opendata --snapshot latest
+coclab ingest boundaries --source hud_opendata --snapshot latest
 ```
 
 | Option       | Description                                    | Default                     |
@@ -640,19 +644,19 @@ coclab ingest-boundaries --source hud_opendata --snapshot latest
 | `--snapshot` | Snapshot tag for Open Data                     | `latest`                    |
 | `--force`    | Re-ingest even if vintage already exists       | False                       |
 
-## `coclab ingest-census`
+## `coclab ingest census`
 
 Download TIGER census geometries (tracts and/or counties).
 
 ```bash
 # Download both tracts and counties for 2023
-coclab ingest-census --year 2023
+coclab ingest census --year 2023
 
 # Download only tracts
-coclab ingest-census --year 2023 --type tracts
+coclab ingest census --year 2023 --type tracts
 
 # Force re-download even if files exist
-coclab ingest-census --year 2023 --force
+coclab ingest census --year 2023 --force
 ```
 
 | Option | Description | Default |
@@ -661,7 +665,7 @@ coclab ingest-census --year 2023 --force
 | `--type`, `-t` | `tracts`, `counties`, or `all` | `all` |
 | `--force` | Re-download even if file exists | False |
 
-## `coclab ingest-nhgis`
+## `coclab ingest nhgis`
 
 Download census tract shapefiles from NHGIS (National Historical Geographic Information System) via the IPUMS API. This is especially useful for 2010 tracts, which TIGER distributes as 3,000+ county-level files that must be downloaded individually.
 
@@ -673,16 +677,16 @@ Download census tract shapefiles from NHGIS (National Historical Geographic Info
 
 ```bash
 # Download 2010 and 2020 tracts
-coclab ingest-nhgis --year 2010 --year 2020
+coclab ingest nhgis --year 2010 --year 2020
 
 # Custom poll interval (check every 5 minutes instead of 2)
-coclab ingest-nhgis --year 2010 --poll-interval 5
+coclab ingest nhgis --year 2010 --poll-interval 5
 
 # Pass API key directly (not recommended for scripts)
-coclab ingest-nhgis --year 2020 --api-key your_key_here
+coclab ingest nhgis --year 2020 --api-key your_key_here
 
 # Force re-download even if file exists
-coclab ingest-nhgis --year 2010 --force
+coclab ingest nhgis --year 2010 --force
 ```
 
 | Option | Description | Default |
@@ -710,19 +714,19 @@ coclab ingest-nhgis --year 2010 --force
 
 For 2010 tracts, Census TIGER distributes data as county-level files (one per county, ~3,200 files). NHGIS provides pre-assembled national shapefiles, making ingestion much simpler. For 2020+ tracts, TIGER provides state-level files which are more manageable, but NHGIS remains a convenient single-file alternative.
 
-## `coclab ingest-pit`
+## `coclab ingest pit`
 
 Download and parse PIT (Point-in-Time) count data from HUD Exchange.
 
 ```bash
 # Ingest PIT data for a specific year
-coclab ingest-pit --year 2024
+coclab ingest pit --year 2024
 
 # Force re-download even if file exists
-coclab ingest-pit --year 2024 --force
+coclab ingest pit --year 2024 --force
 
 # Parse only (skip download if file exists)
-coclab ingest-pit --year 2024 --parse-only
+coclab ingest pit --year 2024 --parse-only
 ```
 
 | Option | Description | Default |
@@ -738,21 +742,21 @@ coclab ingest-pit --year 2024 --parse-only
 4. Registers in PIT registry
 5. Runs QA validation checks
 
-## `coclab ingest-pit-vintage`
+## `coclab ingest pit-vintage`
 
-Ingest **all years** from a PIT vintage file. Unlike `ingest-pit` which extracts only a single year, this command parses every year tab from the HUD Excel file (e.g., 2007-2024 from the 2024 release).
+Ingest **all years** from a PIT vintage file. Unlike `ingest pit` which extracts only a single year, this command parses every year tab from the HUD Excel file (e.g., 2007-2024 from the 2024 release).
 
 This is useful for detecting when HUD revises historical PIT data between releases.
 
 ```bash
 # Ingest all years from the 2024 vintage
-coclab ingest-pit-vintage --vintage 2024
+coclab ingest pit-vintage --vintage 2024
 
 # Force re-download
-coclab ingest-pit-vintage --vintage 2024 --force
+coclab ingest pit-vintage --vintage 2024 --force
 
 # Parse existing file only
-coclab ingest-pit-vintage --vintage 2024 --parse-only
+coclab ingest pit-vintage --vintage 2024 --parse-only
 ```
 
 | Option | Description | Default |
@@ -765,19 +769,19 @@ coclab ingest-pit-vintage --vintage 2024 --parse-only
 - `data/curated/pit/pit_vintage__{vintage}.parquet` containing all years
 - Registered in PIT vintage registry
 
-## `coclab ingest-zori`
+## `coclab ingest zori`
 
 Download and normalize ZORI (Zillow Observed Rent Index) data from Zillow Economic Research.
 
 ```bash
 # Ingest county-level ZORI data
-coclab ingest-zori --geography county
+coclab ingest zori --geography county
 
 # Force re-download even if cached
-coclab ingest-zori --geography county --force
+coclab ingest zori --geography county --force
 
 # Filter to specific date range
-coclab ingest-zori --geography county --start 2020-01-01 --end 2024-12-31
+coclab ingest zori --geography county --start 2020-01-01 --end 2024-12-31
 ```
 
 | Option | Description | Default |

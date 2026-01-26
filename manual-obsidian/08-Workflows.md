@@ -12,7 +12,7 @@ sequenceDiagram
     participant Registry
     participant Storage
 
-    User->>CLI: coclab ingest-boundaries --source hud_exchange --vintage 2025
+    User->>CLI: coclab ingest boundaries --source hud_exchange --vintage 2025
     CLI->>Ingester: ingest_hud_exchange("2025")
     Ingester->>Storage: Download to data/raw/
     Ingester->>Ingester: Read shapefile/GDB
@@ -123,25 +123,25 @@ This section demonstrates the complete command sequence to build an analysis-rea
 
 ```bash
 # 1a. Ingest CoC boundaries for each year (2015-2024)
-coclab ingest-boundaries --source hud_exchange --vintage 2015
-coclab ingest-boundaries --source hud_exchange --vintage 2016
-coclab ingest-boundaries --source hud_exchange --vintage 2017
-coclab ingest-boundaries --source hud_exchange --vintage 2018
-coclab ingest-boundaries --source hud_exchange --vintage 2019
-coclab ingest-boundaries --source hud_exchange --vintage 2020
-coclab ingest-boundaries --source hud_exchange --vintage 2021
-coclab ingest-boundaries --source hud_exchange --vintage 2022
-coclab ingest-boundaries --source hud_exchange --vintage 2023
-coclab ingest-boundaries --source hud_exchange --vintage 2024
+coclab ingest boundaries --source hud_exchange --vintage 2015
+coclab ingest boundaries --source hud_exchange --vintage 2016
+coclab ingest boundaries --source hud_exchange --vintage 2017
+coclab ingest boundaries --source hud_exchange --vintage 2018
+coclab ingest boundaries --source hud_exchange --vintage 2019
+coclab ingest boundaries --source hud_exchange --vintage 2020
+coclab ingest boundaries --source hud_exchange --vintage 2021
+coclab ingest boundaries --source hud_exchange --vintage 2022
+coclab ingest boundaries --source hud_exchange --vintage 2023
+coclab ingest boundaries --source hud_exchange --vintage 2024
 
 # 1b. Ingest Census geometries (tracts and counties)
-coclab ingest-census --year 2023 --type all
+coclab ingest census --year 2023 --type all
 
 # 1c. Ingest PIT counts (one vintage contains all historical years)
-coclab ingest-pit-vintage --vintage 2024
+coclab ingest pit-vintage --vintage 2024
 
 # 1d. Ingest ZORI rent data
-coclab ingest-zori --geography county
+coclab ingest zori --geography county
 ```
 
 ### Phase 2: Build Crosswalks
