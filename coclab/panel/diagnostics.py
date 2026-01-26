@@ -196,7 +196,7 @@ def boundary_change_summary(panel_df: pd.DataFrame) -> pd.DataFrame:
     # Group by CoC and collect change years
     results = []
     for coc_id, group in changes.groupby("coc_id"):
-        years = sorted(group["year"].unique().tolist())
+        years = sorted(group["year"].dropna().unique().tolist())
         results.append(
             {
                 "coc_id": coc_id,
