@@ -71,7 +71,7 @@ class TestBuildXwalksCommand:
     @patch("coclab.cli.build_xwalks.save_crosswalk")
     @patch("coclab.cli.build_xwalks.compute_crosswalk_diagnostics")
     @patch("coclab.cli.build_xwalks.summarize_diagnostics")
-    def test_build_xwalks_success_skips_missing_counties(
+    def test_build_xwalks_success_skips_missing_counties_silently(
         self,
         mock_summarize,
         mock_diagnostics,
@@ -81,7 +81,7 @@ class TestBuildXwalksCommand:
         mock_list_boundaries,
         tmp_path,
     ):
-        """Build-xwalks should succeed and skip counties when missing."""
+        """Build-xwalks should succeed and silently skip counties when missing and not explicitly requested."""
         from datetime import UTC, datetime
 
         from coclab.registry.schema import RegistryEntry
@@ -120,11 +120,81 @@ class TestBuildXwalksCommand:
             )
             mock_summarize.return_value = "DIAGNOSTICS SUMMARY"
 
+            # Without --counties, missing county file should be silently skipped (no warning)
             result = runner.invoke(app, ["build-xwalks", "--boundary", "2025", "--tracts", "2023"])
 
         assert result.exit_code == 0
         assert "Saved tract crosswalk" in result.output
-        assert "Skipping county crosswalk" in result.output
+        # Should NOT warn when --counties is not explicitly specified
+        assert "Skipping county crosswalk" not in result.output
+        assert "Warning: County file not found" not in result.output
+        mock_build_crosswalk.assert_called_once()
+        mock_save_crosswalk.assert_called_once()
+
+    @patch("coclab.cli.build_xwalks.list_boundaries")
+    @patch("coclab.cli.build_xwalks.gpd.read_parquet")
+    @patch("coclab.cli.build_xwalks.build_coc_tract_crosswalk")
+    @patch("coclab.cli.build_xwalks.save_crosswalk")
+    @patch("coclab.cli.build_xwalks.compute_crosswalk_diagnostics")
+    @patch("coclab.cli.build_xwalks.summarize_diagnostics")
+    def test_build_xwalks_warns_when_counties_explicitly_requested_and_missing(
+        self,
+        mock_summarize,
+        mock_diagnostics,
+        mock_save_crosswalk,
+        mock_build_crosswalk,
+        mock_read_parquet,
+        mock_list_boundaries,
+        tmp_path,
+    ):
+        """Build-xwalks should warn when --counties is explicitly specified but file is missing."""
+        from datetime import UTC, datetime
+
+        from coclab.registry.schema import RegistryEntry
+
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            boundary_path = Path("data/curated/coc_boundaries/coc_boundaries__2025.parquet")
+            boundary_path.parent.mkdir(parents=True, exist_ok=True)
+            boundary_path.touch()
+
+            tracts_path = Path("data/curated/census/tracts__2023.parquet")
+            tracts_path.parent.mkdir(parents=True, exist_ok=True)
+            tracts_path.touch()
+
+            mock_list_boundaries.return_value = [
+                RegistryEntry(
+                    boundary_vintage="2025",
+                    source="hud_exchange",
+                    ingested_at=datetime(2025, 1, 1, tzinfo=UTC),
+                    path=boundary_path,
+                    feature_count=1,
+                    hash_of_file="abc123",
+                )
+            ]
+
+            mock_read_parquet.return_value = pd.DataFrame(
+                {"coc_id": ["CO-500"], "geometry": ["geom"]}
+            )
+            mock_build_crosswalk.return_value = pd.DataFrame(
+                {"coc_id": ["CO-500"], "intersection_area": [1.0]}
+            )
+            mock_save_crosswalk.return_value = Path(
+                "data/curated/xwalks/coc_tract_xwalk__2025__2023.parquet"
+            )
+            mock_diagnostics.return_value = pd.DataFrame(
+                {"coc_id": ["CO-500"], "coverage_ratio_area": [1.0]}
+            )
+            mock_summarize.return_value = "DIAGNOSTICS SUMMARY"
+
+            # WITH --counties, missing county file SHOULD produce a warning
+            result = runner.invoke(
+                app, ["build-xwalks", "--boundary", "2025", "--tracts", "2023", "--counties", "2023"]
+            )
+
+        assert result.exit_code == 0
+        assert "Saved tract crosswalk" in result.output
+        # Should warn when --counties is explicitly specified
+        assert "Warning: County file not found" in result.output
         mock_build_crosswalk.assert_called_once()
         mock_save_crosswalk.assert_called_once()
 

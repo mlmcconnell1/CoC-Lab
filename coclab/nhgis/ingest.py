@@ -35,6 +35,13 @@ NHGIS_TRACT_SHAPEFILES = {
     2020: "us_tract_2020_tl2020",
 }
 
+# Known NHGIS shapefile names for counties
+# Format: us_county_{census_year}_tl{tiger_year}
+NHGIS_COUNTY_SHAPEFILES = {
+    2010: "us_county_2010_tl2010",
+    2020: "us_county_2020_tl2020",
+}
+
 # Supported years
 SUPPORTED_YEARS = set(NHGIS_TRACT_SHAPEFILES.keys())
 
@@ -45,40 +52,49 @@ class NhgisExtractError(Exception):
     pass
 
 
-def _get_shapefile_name(year: int) -> str:
-    """Get the NHGIS shapefile name for a given census year.
+def _get_shapefile_name(year: int, geo_type: str = "tracts") -> str:
+    """Get the NHGIS shapefile name for a given census year and geography type.
 
     Args:
         year: Census year (2010 or 2020)
+        geo_type: Geography type ("tracts" or "counties")
 
     Returns:
         NHGIS shapefile identifier
 
     Raises:
-        ValueError: If year is not supported
+        ValueError: If year or geo_type is not supported
     """
-    if year not in NHGIS_TRACT_SHAPEFILES:
+    if geo_type == "tracts":
+        shapefile_map = NHGIS_TRACT_SHAPEFILES
+    elif geo_type == "counties":
+        shapefile_map = NHGIS_COUNTY_SHAPEFILES
+    else:
+        raise ValueError(f"Unsupported geo_type: {geo_type}. Use 'tracts' or 'counties'.")
+
+    if year not in shapefile_map:
         supported = ", ".join(str(y) for y in sorted(SUPPORTED_YEARS))
         raise ValueError(f"Year {year} not supported. Supported years: {supported}")
-    return NHGIS_TRACT_SHAPEFILES[year]
+    return shapefile_map[year]
 
 
-def _create_extract(year: int):
-    """Create an NHGIS extract definition for tract shapefiles.
+def _create_extract(year: int, geo_type: str = "tracts"):
+    """Create an NHGIS extract definition for shapefiles.
 
     Args:
         year: Census year
+        geo_type: Geography type ("tracts" or "counties")
 
     Returns:
         AggregateDataExtract object ready for submission
     """
     from ipumspy import AggregateDataExtract
 
-    shapefile_name = _get_shapefile_name(year)
+    shapefile_name = _get_shapefile_name(year, geo_type)
 
     extract = AggregateDataExtract(
         collection="nhgis",
-        description=f"Census tracts {year} for CoC Lab",
+        description=f"Census {geo_type} {year} for CoC Lab",
         shapefiles=[shapefile_name],
     )
 
@@ -377,5 +393,184 @@ def ingest_nhgis_tracts(
     )
 
     logger.info(f"Ingested {len(gdf)} NHGIS tracts for {year} to {output_path}")
+
+    return output_path
+
+
+def _normalize_county_to_schema(gdf: gpd.GeoDataFrame, year: int) -> gpd.GeoDataFrame:
+    """Normalize NHGIS county data to match TIGER county schema.
+
+    Args:
+        gdf: Raw GeoDataFrame from NHGIS shapefile
+        year: Census year
+
+    Returns:
+        GeoDataFrame with standardized schema matching TIGER counties
+    """
+    # NHGIS uses GISJOIN as the primary identifier, but also has GEOID
+    # Column names vary by year, handle both cases
+    geoid_col = None
+    for col in ["GEOID", "GEOID10", "GEOID20", "GISJOIN"]:
+        if col in gdf.columns:
+            geoid_col = col
+            break
+
+    if geoid_col is None:
+        raise ValueError(f"Could not find GEOID column. Available: {list(gdf.columns)}")
+
+    # GISJOIN has a different format for counties: G[SS][0][CCC]
+    # GEOID is the standard FIPS format we want (5 chars: SSCCC)
+    if geoid_col == "GISJOIN":
+        def gisjoin_to_county_geoid(gj: str) -> str:
+            # Remove 'G' prefix and internal zero
+            # G 01 0 001 -> 01001
+            if gj.startswith("G"):
+                gj = gj[1:]
+            # State (2 chars), skip 0, County (3 chars)
+            state = gj[0:2]
+            county = gj[3:6]
+            return f"{state}{county}"
+
+        geoid_values = gdf[geoid_col].apply(gisjoin_to_county_geoid)
+    else:
+        geoid_values = gdf[geoid_col].astype(str)
+
+    # Ensure GEOIDs are properly zero-padded (5 characters for counties)
+    geoid_values = geoid_values.str.zfill(5)
+
+    # Reproject to EPSG:4326 if needed
+    if gdf.crs and gdf.crs.to_epsg() != 4326:
+        gdf = gdf.to_crs(epsg=4326)
+
+    # Build standardized output matching TIGER schema
+    ingested_at = datetime.now(UTC)
+    result = gpd.GeoDataFrame(
+        {
+            "geo_vintage": str(year),
+            "geoid": geoid_values,
+            "geometry": gdf["geometry"],
+            "source": "nhgis",
+            "ingested_at": ingested_at,
+        },
+        crs="EPSG:4326",
+    )
+
+    return result
+
+
+def ingest_nhgis_counties(
+    year: int,
+    api_key: str,
+    poll_interval_minutes: int = 2,
+    max_wait_minutes: int = 60,
+    progress_callback=None,
+) -> Path:
+    """Ingest county boundaries from NHGIS.
+
+    Submits an extract request to NHGIS, waits for completion, downloads
+    the shapefile, and saves as GeoParquet with standardized schema.
+
+    Args:
+        year: Census year (2010 or 2020)
+        api_key: IPUMS API key
+        poll_interval_minutes: Minutes between status checks while waiting
+        max_wait_minutes: Maximum time to wait for extract completion
+        progress_callback: Optional callback(message) for progress updates
+
+    Returns:
+        Path to saved GeoParquet file
+
+    Raises:
+        ValueError: If year is not supported
+        NhgisExtractError: If extract fails
+    """
+    from ipumspy import IpumsApiClient
+
+    from coclab.naming import county_filename
+
+    if year not in SUPPORTED_YEARS:
+        supported = ", ".join(str(y) for y in sorted(SUPPORTED_YEARS))
+        raise ValueError(f"Year {year} not supported. Supported years: {supported}")
+
+    # Create API client
+    client = IpumsApiClient(api_key)
+
+    # Create extract definition
+    if progress_callback:
+        progress_callback(f"Creating extract for {year} counties...")
+
+    extract = _create_extract(year, geo_type="counties")
+
+    # Submit extract
+    if progress_callback:
+        progress_callback("Submitting extract to NHGIS...")
+
+    extract = client.submit_extract(extract)
+
+    if progress_callback:
+        progress_callback("Extract submitted, waiting for completion...")
+
+    # Wait for completion
+    _wait_for_extract(
+        client,
+        extract,
+        poll_interval_minutes=poll_interval_minutes,
+        max_wait_minutes=max_wait_minutes,
+        progress_callback=progress_callback,
+    )
+
+    if progress_callback:
+        progress_callback("Extract complete, downloading...")
+
+    # Download and process
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmppath = Path(tmpdir)
+
+        shp_path, raw_content = _download_and_extract(client, extract, tmppath)
+
+        if progress_callback:
+            progress_callback("Reading shapefile...")
+
+        # Read shapefile
+        gdf = gpd.read_file(shp_path)
+
+        if progress_callback:
+            progress_callback(f"Loaded {len(gdf)} counties, normalizing schema...")
+
+        # Normalize to standard schema
+        gdf = _normalize_county_to_schema(gdf, year)
+
+    # Compute hash of downloaded content
+    content_sha256 = hashlib.sha256(raw_content).hexdigest()
+    content_size = len(raw_content)
+
+    # Save to output
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = OUTPUT_DIR / county_filename(year)
+    gdf.to_parquet(output_path, index=False)
+
+    if progress_callback:
+        progress_callback(f"Saved {len(gdf)} counties to {output_path}")
+
+    # Register in source registry
+    shapefile_name = _get_shapefile_name(year, geo_type="counties")
+    source_url = f"nhgis://shapefiles/{shapefile_name}"
+
+    register_source(
+        source_type="nhgis_county",
+        source_url=source_url,
+        source_name=f"NHGIS Census Counties {year}",
+        raw_sha256=content_sha256,
+        file_size=content_size,
+        local_path=str(output_path),
+        metadata={
+            "year": year,
+            "shapefile": shapefile_name,
+            "county_count": len(gdf),
+            "source": "nhgis",
+        },
+    )
+
+    logger.info(f"Ingested {len(gdf)} NHGIS counties for {year} to {output_path}")
 
     return output_path

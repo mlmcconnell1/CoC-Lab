@@ -244,10 +244,15 @@ def build_xwalks(
         if legacy_county_path.exists():
             county_path = legacy_county_path
         else:
-            typer.echo(
-                f"Warning: County file not found: {county_path}. Skipping county crosswalk.",
-                err=True,
-            )
+            # Only warn if user explicitly requested counties via --counties or --type=counties
+            # If xwalk_type is "all" (default) and --counties wasn't specified, skip silently
+            counties_explicitly_requested = counties is not None or xwalk_type == "counties"
+            if counties_explicitly_requested:
+                typer.echo(
+                    f"Warning: County file not found: {county_path}. Skipping county crosswalk.",
+                    err=True,
+                )
+            typer.echo("\nCrosswalk generation complete!")
             return
 
     typer.echo(f"\nLoading census counties (vintage: {county_vintage})...")

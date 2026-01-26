@@ -33,7 +33,11 @@ def download_tiger_counties(year: int = 2023) -> tuple[gpd.GeoDataFrame, str, in
         - source: "tiger_line"
         - ingested_at: datetime
     """
-    url = f"{TIGER_BASE.format(year=year)}tl_{year}_us_county.zip"
+    # 2010 has a different URL structure: extra /2010/ subdirectory and county10 suffix
+    if year == 2010:
+        url = f"{TIGER_BASE.format(year=year)}2010/tl_2010_us_county10.zip"
+    else:
+        url = f"{TIGER_BASE.format(year=year)}tl_{year}_us_county.zip"
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmppath = Path(tmpdir)
@@ -132,7 +136,11 @@ def ingest_tiger_counties(year: int = 2023) -> Path:
     output_path = save_counties(gdf, year)
 
     # Register this download in source registry
-    url = f"{TIGER_BASE.format(year=year)}tl_{year}_us_county.zip"
+    # 2010 has a different URL structure
+    if year == 2010:
+        url = f"{TIGER_BASE.format(year=year)}2010/tl_2010_us_county10.zip"
+    else:
+        url = f"{TIGER_BASE.format(year=year)}tl_{year}_us_county.zip"
     register_source(
         source_type="census_county",
         source_url=url,
