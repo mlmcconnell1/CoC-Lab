@@ -10,6 +10,7 @@ flowchart LR
     coclab --> list
     coclab --> validate
     coclab --> diagnostics
+    coclab --> build
     ingest --> boundaries
     ingest --> census
     ingest --> nhgis
@@ -20,16 +21,11 @@ flowchart LR
     ingest --> zori
     coclab --> delete-boundaries
     coclab --> show
-    coclab --> build-xwalks
-    coclab --> aggregate-measures
-    coclab --> build-panel
     coclab --> rollup-acs-population
     coclab --> verify-acs-population
     coclab --> show-measures
     coclab --> compare-vintages
-    coclab --> aggregate-zori
     coclab --> source-status
-    coclab --> export-bundle
     coclab --> registry-rebuild
 
     boundaries --> |"--source hud_exchange"| HUD_EX[Download annual vintage]
@@ -52,19 +48,24 @@ flowchart LR
     diagnostics --> diagnostics-panel
     diagnostics --> diagnostics-xwalk
     diagnostics --> diagnostics-zori
+    build --> measures
+    build --> zori
+    build --> panel
+    build --> xwalks
+    build --> export
     validate-boundaries --> BOUNDCHK[Validate boundary registry health]
     delete-boundaries --> BOUNDDEL[Remove boundary registry entry]
     show --> MAP[Render interactive map]
-    build-xwalks --> XWALK[Create tract/county crosswalks]
-    aggregate-measures --> MEAS[Aggregate demographic measures from ACS]
-    build-panel --> PANEL[Assemble CoC × year panels]
+    xwalks --> XWALK[Create tract/county crosswalks]
+    measures --> MEAS[Aggregate demographic measures from ACS]
+    panel --> PANEL[Assemble CoC × year panels]
     rollup-acs-population --> ROLLUP[Aggregate tract pop to CoC]
     validate-acs-population --> XCHECK[Validate rollup vs measures]
     validate-pit-vintages --> PITXCHECK[Validate PIT across vintages]
     validate-population --> POPCHECK[Validate CoC pop vs national]
     verify-acs-population --> VERIFY[Full pipeline: ingest→rollup→validate]
     zori --> ZORI_ING[Download & normalize ZORI data]
-    aggregate-zori --> ZORI_AGG[Aggregate ZORI to CoC level]
+    zori --> ZORI_AGG[Aggregate ZORI to CoC level]
     diagnostics-panel --> PDIAG[Panel quality & sensitivity]
     diagnostics-xwalk --> DIAG[Crosswalk quality checks]
     diagnostics-zori --> ZORI_DIAG[ZORI coverage diagnostics]
@@ -74,7 +75,7 @@ flowchart LR
     show-measures --> SMEAS[Display CoC measures]
     compare-vintages --> COMP[Diff boundary vintages]
     source-status --> SRCSTAT[Display source registry status]
-    export-bundle --> EXPORT[Create analysis-ready bundle]
+    export --> EXPORT[Create analysis-ready bundle]
     registry-rebuild --> REGREBUILD[Rebuild source registry from local files]
 ```
 
@@ -90,7 +91,10 @@ Legacy `validate-*` commands remain as deprecated passthroughs for backward comp
 **Diagnostics grouping:** The canonical form is `coclab diagnostics <subcommand>` (e.g., `coclab diagnostics panel`).
 Legacy `diagnostics-*` commands remain as deprecated passthroughs for backward compatibility.
 
-## `coclab aggregate-measures`
+**Build grouping:** The canonical form is `coclab build <subcommand>` (e.g., `coclab build panel`).
+Legacy build/aggregate/export commands remain as deprecated passthroughs for backward compatibility.
+
+## `coclab build measures`
 
 Aggregate CoC-level demographic measures from ACS 5-year estimates. Fetches tract-level data from the Census API and aggregates to CoC level using tract crosswalks.
 
@@ -108,10 +112,10 @@ Aggregate CoC-level demographic measures from ACS 5-year estimates. Fetches trac
 
 ```bash
 # Aggregate measures with area weighting
-coclab aggregate-measures --boundary 2025 --acs 2019-2023
+coclab build measures --boundary 2025 --acs 2019-2023
 
 # Use population weighting instead
-coclab aggregate-measures --boundary 2025 --acs 2019-2023 --weighting population
+coclab build measures --boundary 2025 --acs 2019-2023 --weighting population
 ```
 
 | Option | Description | Default |
@@ -127,19 +131,19 @@ coclab aggregate-measures --boundary 2025 --acs 2019-2023 --weighting population
 - `measures__A{acs}@B{boundary}.parquet`
 - Summary statistics printed to console
 
-## `coclab aggregate-zori`
+## `coclab build zori`
 
 Aggregate ZORI data from county geography to CoC geography using area-weighted crosswalks and ACS-based demographic weights.
 
 ```bash
 # Basic aggregation with renter household weighting
-coclab aggregate-zori --boundary 2025 --counties 2023 --acs 2019-2023
+coclab build zori --boundary 2025 --counties 2023 --acs 2019-2023
 
 # With yearly output
-coclab aggregate-zori -b 2025 -c 2023 --acs 2019-2023 --to-yearly
+coclab build zori -b 2025 -c 2023 --acs 2019-2023 --to-yearly
 
 # Custom weighting method
-coclab aggregate-zori -b 2025 -c 2023 --acs 2019-2023 -w housing_units
+coclab build zori -b 2025 -c 2023 --acs 2019-2023 -w housing_units
 ```
 
 | Option | Description | Default |
@@ -160,7 +164,7 @@ coclab aggregate-zori -b 2025 -c 2023 --acs 2019-2023 -w housing_units
 ```bash
 coclab ingest boundaries --source hud_exchange --vintage 2025
 coclab ingest census --year 2023 --type counties
-coclab build-xwalks --boundary 2025 --counties 2023
+coclab build xwalks --boundary 2025 --counties 2023
 coclab ingest zori --geography county
 ```
 
@@ -176,28 +180,28 @@ coclab ingest zori --geography county
 Note: Filenames use temporal shorthand (end year of ACS vintage) and abbreviated weighting
 names; legacy `coc_zori__...` names may still exist in older runs.
 
-## `coclab build-panel`
+## `coclab build panel`
 
 Build analysis-ready CoC × year panels combining PIT counts with ACS measures. Optionally includes ZORI rent data for affordability analysis.
 
 ```bash
 # Build panel for date range
-coclab build-panel --start 2018 --end 2024
+coclab build panel --start 2018 --end 2024
 
 # Specify weighting method
-coclab build-panel --start 2018 --end 2024 --weighting population
+coclab build panel --start 2018 --end 2024 --weighting population
 
 # Custom output path
-coclab build-panel --start 2020 --end 2024 --output custom_panel.parquet
+coclab build panel --start 2020 --end 2024 --output custom_panel.parquet
 
 # Include ZORI rent data for rent-to-income affordability
-coclab build-panel --start 2018 --end 2024 --include-zori
+coclab build panel --start 2018 --end 2024 --include-zori
 
 # Custom ZORI coverage threshold (default 0.90)
-coclab build-panel --start 2018 --end 2024 --include-zori --zori-min-coverage 0.80
+coclab build panel --start 2018 --end 2024 --include-zori --zori-min-coverage 0.80
 
 # Explicit ZORI data path
-coclab build-panel --start 2018 --end 2024 --include-zori --zori-yearly-path data/curated/zori/zori_yearly__A2023@B2025xC2023__wrenter__mpit_january.parquet
+coclab build panel --start 2018 --end 2024 --include-zori --zori-yearly-path data/curated/zori/zori_yearly__A2023@B2025xC2023__wrenter__mpit_january.parquet
 ```
 
 | Option | Description | Default |
@@ -283,16 +287,16 @@ coclab delete-boundaries 2024 hud_exchange --yes
 | `source` | Source name (`hud_exchange`, `hud_opendata`) | Required |
 | `--yes`, `-y` | Skip confirmation | False |
 
-## `coclab build-xwalks`
+## `coclab build xwalks`
 
 Build area-weighted crosswalks linking CoC boundaries to census tracts and counties.
 
 ```bash
 # Build crosswalks for a specific boundary and tract vintage
-coclab build-xwalks --boundary 2025 --tracts 2023
+coclab build xwalks --boundary 2025 --tracts 2023
 
 # Also build county crosswalk
-coclab build-xwalks --boundary 2025 --tracts 2023 --counties 2023
+coclab build xwalks --boundary 2025 --tracts 2023 --counties 2023
 ```
 
 | Option | Description | Default |
@@ -540,20 +544,20 @@ coclab diagnostics zori --coc-zori coc_zori.parquet --coverage-threshold 0.85
 - Per-CoC diagnostic flags (low coverage, high dominance)
 - Optional CSV/parquet export
 
-## `coclab export-bundle`
+## `coclab build export`
 
 Export an analysis-ready bundle with MANIFEST.json for downstream analysis repositories.
 
 ```bash
 # Basic export with default options
-coclab export-bundle --name my_analysis --panel data/curated/panels/coc_panel.parquet
+coclab build export --name my_analysis --panel data/curated/panels/coc_panel.parquet
 
 # Include inputs and use specific vintages
-coclab export-bundle --name replication --include panel,manifest,codebook,inputs \
+coclab build export --name replication --include panel,manifest,codebook,inputs \
   --boundary-vintage 2025 --years 2011-2024
 
 # Create compressed archive
-coclab export-bundle --name archive --compress
+coclab build export --name archive --compress
 ```
 
 | Option | Description | Default |

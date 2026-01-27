@@ -134,23 +134,23 @@ def build_panel_cmd(
 
     Prerequisites for ZORI integration:
     - Run 'coclab ingest-zori' to download ZORI data
-    - Run 'coclab aggregate-zori --to-yearly' to create yearly CoC-level ZORI
+    - Run 'coclab build zori --to-yearly' to create yearly CoC-level ZORI
 
     Examples:
 
-        coclab build-panel --start 2018 --end 2024
+        coclab build panel --start 2018 --end 2024
 
-        coclab build-panel --start 2018 --end 2024 --weighting population
+        coclab build panel --start 2018 --end 2024 --weighting population
 
-        coclab build-panel --start 2018 --end 2024 --weighting area
+        coclab build panel --start 2018 --end 2024 --weighting area
 
-        coclab build-panel --start 2020 --end 2024 --output custom_panel.parquet
+        coclab build panel --start 2020 --end 2024 --output custom_panel.parquet
 
-        coclab build-panel --start 2018 --end 2024 --include-zori
+        coclab build panel --start 2018 --end 2024 --include-zori
 
-        coclab build-panel --start 2018 --end 2024 --include-zori --zori-min-coverage 0.85
+        coclab build panel --start 2018 --end 2024 --include-zori --zori-min-coverage 0.85
 
-        coclab build-panel --start 2018 --end 2024 --include-zori \\
+        coclab build panel --start 2018 --end 2024 --include-zori \\
             --zori-yearly-path data/curated/zori/coc_zori_yearly.parquet
     """
     from coclab.panel import AlignmentPolicy, build_panel, save_panel
@@ -193,9 +193,9 @@ def build_panel_cmd(
             )
             typer.echo("")
             typer.echo("To generate ZORI yearly data, run:")
-            typer.echo("  coclab ingest-zori --geography county")
+            typer.echo("  coclab ingest zori --geography county")
             typer.echo(
-                "  coclab aggregate-zori --boundary <VINTAGE> --counties <YEAR> "
+                "  coclab build zori --boundary <VINTAGE> --counties <YEAR> "
                 "--acs <ACS_VINTAGE> --to-yearly"
             )
             typer.echo("")

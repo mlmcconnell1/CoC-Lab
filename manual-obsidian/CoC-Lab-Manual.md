@@ -40,8 +40,8 @@
 **Common Tasks:**
 - Build a panel from scratch: [[08-Workflows#Typical Use Sequence Building a Panel from Scratch]]
 - Ingest CoC boundaries: [[04-CLI-Reference#coclab ingest boundaries]]
-- Build crosswalks: [[04-CLI-Reference#coclab build-xwalks]]
-- Export a bundle: [[04-CLI-Reference#coclab export-bundle]]
+- Build crosswalks: [[04-CLI-Reference#coclab build xwalks]]
+- Export a bundle: [[04-CLI-Reference#coclab build export]]
 
 **Key Concepts:**
 - Temporal notation and vintages: [[07-Temporal-Terminology]]

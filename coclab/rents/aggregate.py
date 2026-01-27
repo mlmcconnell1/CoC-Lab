@@ -259,7 +259,7 @@ def load_crosswalk(
     if not path.exists():
         raise FileNotFoundError(
             f"CoC-county crosswalk not found: {path}. "
-            f"Run 'coclab build-xwalks --boundary {boundary} --counties {counties}' first."
+            f"Run 'coclab build xwalks --boundary {boundary} --counties {counties}' first."
         )
 
     logger.info(f"Loading crosswalk from {path}")

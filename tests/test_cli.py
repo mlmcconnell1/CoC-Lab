@@ -221,12 +221,18 @@ class TestHelpOutput:
         assert "ingest" in result.output  # Nested subcommand group
         assert "list" in result.output
         assert "validate" in result.output
+        assert "build" in result.output
         assert "show" in result.output
         # Deprecated aliases should be hidden from help
         assert "ingest-boundaries" not in result.output
         assert "check-boundaries" not in result.output
         assert "list-boundaries" not in result.output
         assert "validate-population" not in result.output
+        assert "aggregate-measures" not in result.output
+        assert "aggregate-zori" not in result.output
+        assert "build-panel" not in result.output
+        assert "build-xwalks" not in result.output
+        assert "export-bundle" not in result.output
 
     def test_ingest_help(self):
         """Ingest help should show subcommands."""
@@ -247,6 +253,17 @@ class TestHelpOutput:
         assert "census" in result.output
         assert "measures" in result.output
         assert "xwalks" in result.output
+
+    def test_build_help(self):
+        """Build help should show subcommands."""
+        result = runner.invoke(app, ["build", "--help"])
+
+        assert result.exit_code == 0
+        assert "measures" in result.output
+        assert "zori" in result.output
+        assert "panel" in result.output
+        assert "xwalks" in result.output
+        assert "export" in result.output
 
     def test_ingest_boundaries_help(self):
         """Ingest boundaries help should show options."""

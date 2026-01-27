@@ -88,19 +88,19 @@ def build_xwalks(
     Examples:
 
         # Area-only (default)
-        coclab build-xwalks --boundary 2025 --tracts 2023
+        coclab build xwalks --boundary 2025 --tracts 2023
 
         # With population weights
-        coclab build-xwalks --boundary 2025 --tracts 2023 --population-weights
+        coclab build xwalks --boundary 2025 --tracts 2023 --population-weights
 
         # Auto-fetch population data if missing
-        coclab build-xwalks --boundary 2025 --tracts 2023 --population-weights --auto-fetch
+        coclab build xwalks --boundary 2025 --tracts 2023 --population-weights --auto-fetch
 
         # Build only county crosswalk
-        coclab build-xwalks --boundary 2025 --type counties --counties 2020
+        coclab build xwalks --boundary 2025 --type counties --counties 2020
 
         # Build only tract crosswalk
-        coclab build-xwalks --boundary 2025 --type tracts --tracts 2023
+        coclab build xwalks --boundary 2025 --type tracts --tracts 2023
     """
     # Determine what to build
     build_tracts = xwalk_type in ("tracts", "all")

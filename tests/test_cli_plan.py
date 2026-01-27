@@ -54,7 +54,7 @@ class TestCensusIngestCommand:
 
 
 class TestBuildXwalksCommand:
-    """Tests for the build-xwalks CLI command."""
+    """Tests for the build xwalks CLI command."""
 
     @patch("coclab.cli.build_xwalks.latest_vintage")
     @patch("coclab.cli.build_xwalks.list_boundaries")
@@ -67,7 +67,7 @@ class TestBuildXwalksCommand:
         mock_list_boundaries.return_value = []
         mock_latest_vintage.return_value = None
 
-        result = runner.invoke(app, ["build-xwalks"])
+        result = runner.invoke(app, ["build", "xwalks"])
 
         assert result.exit_code == 1
         assert "No boundary vintages found in registry" in result.output
@@ -88,7 +88,7 @@ class TestBuildXwalksCommand:
         mock_list_boundaries,
         tmp_path,
     ):
-        """Build-xwalks should succeed and silently skip counties when missing and not explicitly requested."""
+        """Build xwalks should succeed and silently skip counties when missing and not explicitly requested."""
         from datetime import UTC, datetime
 
         from coclab.registry.schema import RegistryEntry
@@ -128,7 +128,9 @@ class TestBuildXwalksCommand:
             mock_summarize.return_value = "DIAGNOSTICS SUMMARY"
 
             # Without --counties, missing county file should be silently skipped (no warning)
-            result = runner.invoke(app, ["build-xwalks", "--boundary", "2025", "--tracts", "2023"])
+            result = runner.invoke(
+                app, ["build", "xwalks", "--boundary", "2025", "--tracts", "2023"]
+            )
 
         assert result.exit_code == 0
         assert "Saved tract crosswalk" in result.output
@@ -154,7 +156,7 @@ class TestBuildXwalksCommand:
         mock_list_boundaries,
         tmp_path,
     ):
-        """Build-xwalks should warn when --counties is explicitly specified but file is missing."""
+        """Build xwalks should warn when --counties is explicitly specified but file is missing."""
         from datetime import UTC, datetime
 
         from coclab.registry.schema import RegistryEntry
@@ -195,7 +197,8 @@ class TestBuildXwalksCommand:
 
             # WITH --counties, missing county file SHOULD produce a warning
             result = runner.invoke(
-                app, ["build-xwalks", "--boundary", "2025", "--tracts", "2023", "--counties", "2023"]
+                app,
+                ["build", "xwalks", "--boundary", "2025", "--tracts", "2023", "--counties", "2023"],
             )
 
         assert result.exit_code == 0
@@ -268,11 +271,11 @@ class TestDiagnosticsCommand:
 
 
 class TestBuildMeasuresCommand:
-    """Tests for the aggregate-measures CLI command."""
+    """Tests for the build measures CLI command."""
 
     def test_build_measures_invalid_weighting(self):
         """Invalid weighting should fail."""
-        result = runner.invoke(app, ["aggregate-measures", "--weighting", "invalid"])
+        result = runner.invoke(app, ["build", "measures", "--weighting", "invalid"])
 
         assert result.exit_code == 1
         assert "Invalid weighting method" in result.output
@@ -287,7 +290,8 @@ class TestBuildMeasuresCommand:
         result = runner.invoke(
             app,
             [
-                "aggregate-measures",
+                "build",
+                "measures",
                 "--acs",
                 "2019-2023",
                 "--xwalk-dir",
@@ -318,7 +322,8 @@ class TestBuildMeasuresCommand:
         result = runner.invoke(
             app,
             [
-                "aggregate-measures",
+                "build",
+                "measures",
                 "--acs",
                 "2019-2023",
                 "--xwalk-dir",

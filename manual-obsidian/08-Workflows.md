@@ -85,7 +85,7 @@ sequenceDiagram
     participant Storage
 
     Note over User,Storage: Phase 1: Build Crosswalks
-    User->>CLI: coclab build-xwalks --boundary 2025 --tracts 2023
+    User->>CLI: coclab build xwalks --boundary 2025 --tracts 2023
     CLI->>Census: ingest_tiger_tracts(2023)
     Census->>Storage: Download TIGER shapefiles
     Census->>Storage: Save tracts__T2023.parquet
@@ -100,7 +100,7 @@ sequenceDiagram
     CLI-->>User: Crosswalk built (X tracts, Y CoCs)
 
     Note over User,Storage: Phase 2: Build ACS Measures
-    User->>CLI: coclab aggregate-measures --boundary 2025 --acs 2022
+    User->>CLI: coclab build measures --boundary 2025 --acs 2022
     CLI->>Storage: Load crosswalk
     CLI->>ACS: fetch_all_states_tract_data(2022)
     ACS->>ACS: Census API for each state
@@ -149,16 +149,16 @@ coclab ingest zori --geography county
 Build crosswalks for each boundary vintage against the 2023 Census geometries:
 
 ```bash
-coclab build-xwalks --boundary 2015 --tracts 2023 --counties 2023
-coclab build-xwalks --boundary 2016 --tracts 2023 --counties 2023
-coclab build-xwalks --boundary 2017 --tracts 2023 --counties 2023
-coclab build-xwalks --boundary 2018 --tracts 2023 --counties 2023
-coclab build-xwalks --boundary 2019 --tracts 2023 --counties 2023
-coclab build-xwalks --boundary 2020 --tracts 2023 --counties 2023
-coclab build-xwalks --boundary 2021 --tracts 2023 --counties 2023
-coclab build-xwalks --boundary 2022 --tracts 2023 --counties 2023
-coclab build-xwalks --boundary 2023 --tracts 2023 --counties 2023
-coclab build-xwalks --boundary 2024 --tracts 2023 --counties 2023
+coclab build xwalks --boundary 2015 --tracts 2023 --counties 2023
+coclab build xwalks --boundary 2016 --tracts 2023 --counties 2023
+coclab build xwalks --boundary 2017 --tracts 2023 --counties 2023
+coclab build xwalks --boundary 2018 --tracts 2023 --counties 2023
+coclab build xwalks --boundary 2019 --tracts 2023 --counties 2023
+coclab build xwalks --boundary 2020 --tracts 2023 --counties 2023
+coclab build xwalks --boundary 2021 --tracts 2023 --counties 2023
+coclab build xwalks --boundary 2022 --tracts 2023 --counties 2023
+coclab build xwalks --boundary 2023 --tracts 2023 --counties 2023
+coclab build xwalks --boundary 2024 --tracts 2023 --counties 2023
 ```
 
 ### Phase 3: Build ACS Measures
@@ -167,34 +167,34 @@ The default alignment policy maps PIT year Y → ACS vintage Y-1. Build measures
 
 ```bash
 # PIT 2015 → boundary 2015, ACS 2014 (2010-2014 estimates)
-coclab aggregate-measures --boundary 2015 --acs 2010-2014 --tracts 2023
+coclab build measures --boundary 2015 --acs 2010-2014 --tracts 2023
 
 # PIT 2016 → boundary 2016, ACS 2015 (2011-2015 estimates)
-coclab aggregate-measures --boundary 2016 --acs 2011-2015 --tracts 2023
+coclab build measures --boundary 2016 --acs 2011-2015 --tracts 2023
 
 # PIT 2017 → boundary 2017, ACS 2016 (2012-2016 estimates)
-coclab aggregate-measures --boundary 2017 --acs 2012-2016 --tracts 2023
+coclab build measures --boundary 2017 --acs 2012-2016 --tracts 2023
 
 # PIT 2018 → boundary 2018, ACS 2017 (2013-2017 estimates)
-coclab aggregate-measures --boundary 2018 --acs 2013-2017 --tracts 2023
+coclab build measures --boundary 2018 --acs 2013-2017 --tracts 2023
 
 # PIT 2019 → boundary 2019, ACS 2018 (2014-2018 estimates)
-coclab aggregate-measures --boundary 2019 --acs 2014-2018 --tracts 2023
+coclab build measures --boundary 2019 --acs 2014-2018 --tracts 2023
 
 # PIT 2020 → boundary 2020, ACS 2019 (2015-2019 estimates)
-coclab aggregate-measures --boundary 2020 --acs 2015-2019 --tracts 2023
+coclab build measures --boundary 2020 --acs 2015-2019 --tracts 2023
 
 # PIT 2021 → boundary 2021, ACS 2020 (2016-2020 estimates)
-coclab aggregate-measures --boundary 2021 --acs 2016-2020 --tracts 2023
+coclab build measures --boundary 2021 --acs 2016-2020 --tracts 2023
 
 # PIT 2022 → boundary 2022, ACS 2021 (2017-2021 estimates)
-coclab aggregate-measures --boundary 2022 --acs 2017-2021 --tracts 2023
+coclab build measures --boundary 2022 --acs 2017-2021 --tracts 2023
 
 # PIT 2023 → boundary 2023, ACS 2022 (2018-2022 estimates)
-coclab aggregate-measures --boundary 2023 --acs 2018-2022 --tracts 2023
+coclab build measures --boundary 2023 --acs 2018-2022 --tracts 2023
 
 # PIT 2024 → boundary 2024, ACS 2023 (2019-2023 estimates)
-coclab aggregate-measures --boundary 2024 --acs 2019-2023 --tracts 2023
+coclab build measures --boundary 2024 --acs 2019-2023 --tracts 2023
 ```
 
 ### Phase 4: Aggregate ZORI to CoC Level
@@ -202,7 +202,7 @@ coclab aggregate-measures --boundary 2024 --acs 2019-2023 --tracts 2023
 Aggregate county-level ZORI to CoC geography with yearly collapse:
 
 ```bash
-coclab aggregate-zori \
+coclab build zori \
   --boundary 2024 \
   --counties 2023 \
   --acs 2019-2023 \
@@ -215,7 +215,7 @@ coclab aggregate-zori \
 Assemble the CoC × year panel with ZORI integration:
 
 ```bash
-coclab build-panel \
+coclab build panel \
   --start 2015 \
   --end 2024 \
   --weighting population \
@@ -228,7 +228,7 @@ coclab build-panel \
 Create an analysis-ready export bundle:
 
 ```bash
-coclab export-bundle \
+coclab build export \
   --name coc_analysis_2015_2024 \
   --years 2015-2024 \
   --include panel,manifest,codebook,diagnostics \

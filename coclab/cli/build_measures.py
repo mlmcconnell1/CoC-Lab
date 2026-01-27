@@ -73,9 +73,9 @@ def build_measures(
 
     Examples:
 
-        coclab build-measures --boundary 2025 --acs 2019-2023
+        coclab build measures --boundary 2025 --acs 2019-2023
 
-        coclab build-measures --boundary 2025 --acs 2019-2023 --weighting population
+        coclab build measures --boundary 2025 --acs 2019-2023 --weighting population
     """
     # Validate weighting option
     if weighting not in ("area", "population"):
@@ -123,7 +123,7 @@ def build_measures(
         else:
             typer.echo(
                 f"Error: Crosswalk file not found: {xwalk_path}. "
-                f"Run 'coclab build-xwalks --boundary {boundary} --tracts {tract_vintage}' first.",
+                f"Run 'coclab build xwalks --boundary {boundary} --tracts {tract_vintage}' first.",
                 err=True,
             )
             raise typer.Exit(1)

@@ -199,12 +199,12 @@ def export_bundle(
 
     Examples:
 
-        coclab export-bundle --name my_analysis --panel \
+        coclab build export --name my_analysis --panel \
             data/curated/panel/coc_panel__2011_2023.parquet
 
-        coclab export-bundle --name replication --include panel,manifest,codebook,inputs
+        coclab build export --name replication --include panel,manifest,codebook,inputs
 
-        coclab export-bundle --name full_export --boundary-vintage 2025 --years 2011-2024
+        coclab build export --name full_export --boundary-vintage 2025 --years 2011-2024
     """
     # Parse include options
     include_set = _parse_include(include)

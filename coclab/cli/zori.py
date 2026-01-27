@@ -1,9 +1,9 @@
 """CLI commands for ZORI (Zillow Observed Rent Index) ingestion and aggregation.
 
 Provides Typer commands for:
-- ingest-zori: Download and normalize ZORI data from Zillow
-- aggregate-zori: Aggregate ZORI from county to CoC geography
-- zori-diagnostics: Summarize CoC ZORI coverage and quality
+- ingest zori: Download and normalize ZORI data from Zillow
+- build zori: Aggregate ZORI from county to CoC geography
+- diagnostics zori: Summarize CoC ZORI coverage and quality
 
 These commands implement Agent A from the ZORI spec (section 6).
 """
@@ -92,11 +92,11 @@ def ingest_zori(
 
     Examples:
 
-        coclab ingest-zori --geography county
+        coclab ingest zori --geography county
 
-        coclab ingest-zori --geography county --force
+        coclab ingest zori --geography county --force
 
-        coclab ingest-zori --geography county --start 2020-01-01 --end 2024-12-31
+        coclab ingest zori --geography county --start 2020-01-01 --end 2024-12-31
     """
     # Validate geography
     valid_geographies = {"county", "zip"}
@@ -240,10 +240,10 @@ def aggregate_zori(
     using area-weighted crosswalks and ACS-based demographic weights.
 
     Prerequisite commands:
-    - coclab ingest-boundaries --source hud_exchange --vintage <boundary>
-    - coclab ingest-census --year <counties> --type counties
-    - coclab build-xwalks --boundary <boundary> --counties <counties>
-    - coclab ingest-zori --geography county
+    - coclab ingest boundaries --source hud_exchange --vintage <boundary>
+    - coclab ingest census --year <counties> --type counties
+    - coclab build xwalks --boundary <boundary> --counties <counties>
+    - coclab ingest zori --geography county
 
     Exit codes:
     - 0: Success
@@ -252,11 +252,11 @@ def aggregate_zori(
 
     Examples:
 
-        coclab aggregate-zori --boundary 2025 --counties 2023 --acs 2019-2023
+        coclab build zori --boundary 2025 --counties 2023 --acs 2019-2023
 
-        coclab aggregate-zori -b 2025 -c 2023 --acs 2019-2023 -w renter_households --to-yearly
+        coclab build zori -b 2025 -c 2023 --acs 2019-2023 -w renter_households --to-yearly
 
-        coclab aggregate-zori -b 2025 -c 2023 --acs 2019-2023 --force
+        coclab build zori -b 2025 -c 2023 --acs 2019-2023 --force
     """
     # Validate weighting method
     valid_weightings = {"renter_households", "housing_units", "population", "equal"}
@@ -337,10 +337,10 @@ def aggregate_zori(
         typer.echo(f"Error: Missing input file: {e}", err=True)
         typer.echo("")
         typer.echo("Ensure you have run the prerequisite commands:")
-        typer.echo(f"  coclab ingest-boundaries --source hud_exchange --vintage {boundary}")
-        typer.echo(f"  coclab ingest-census --year {counties} --type counties")
-        typer.echo(f"  coclab build-xwalks --boundary {boundary} --counties {counties}")
-        typer.echo(f"  coclab ingest-zori --geography {geography}")
+        typer.echo(f"  coclab ingest boundaries --source hud_exchange --vintage {boundary}")
+        typer.echo(f"  coclab ingest census --year {counties} --type counties")
+        typer.echo(f"  coclab build xwalks --boundary {boundary} --counties {counties}")
+        typer.echo(f"  coclab ingest zori --geography {geography}")
         raise typer.Exit(2) from e
 
     except ValueError as e:

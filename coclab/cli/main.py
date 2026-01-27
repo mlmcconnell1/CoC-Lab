@@ -12,7 +12,7 @@ from typing import Annotated
 import typer
 
 from coclab.cli.build_measures import build_measures
-from coclab.cli.build_panel import build_panel_cmd
+from coclab.cli.build_panel import DEFAULT_ZORI_MIN_COVERAGE, build_panel_cmd
 from coclab.cli.build_xwalks import build_xwalks
 from coclab.cli.compare_vintages import compare_vintages
 from coclab.cli.crosscheck_acs_population import crosscheck_acs_population, validate_acs_population
@@ -94,6 +94,11 @@ validate_app = typer.Typer(
 diagnostics_app = typer.Typer(
     name="diagnostics",
     help="Run diagnostics on datasets",
+    no_args_is_help=True,
+)
+build_app = typer.Typer(
+    name="build",
+    help="Build datasets and bundles",
     no_args_is_help=True,
 )
 
@@ -1238,14 +1243,456 @@ def diagnostics_zori_deprecated(
     )
 
 
+@wraps(build_measures)
+def aggregate_measures_deprecated(
+    boundary: Annotated[
+        str | None,
+        typer.Option(
+            "--boundary",
+            "-b",
+            help="CoC boundary vintage (e.g., '2025'). Uses latest if not specified.",
+        ),
+    ] = None,
+    acs: Annotated[
+        str,
+        typer.Option(
+            "--acs",
+            "-a",
+            help="ACS 5-year estimate vintage (e.g., '2019-2023').",
+        ),
+    ] = "2018-2022",
+    tracts: Annotated[
+        int | None,
+        typer.Option(
+            "--tracts",
+            "-t",
+            help="Census tract vintage for crosswalk. Defaults to same as ACS year.",
+        ),
+    ] = None,
+    weighting: Annotated[
+        str,
+        typer.Option(
+            "--weighting",
+            "-w",
+            help="Weighting method: 'area' or 'population'.",
+        ),
+    ] = "area",
+    xwalk_dir: Annotated[
+        Path,
+        typer.Option(
+            "--xwalk-dir",
+            help="Directory containing crosswalk files.",
+        ),
+    ] = Path("data/curated/xwalks"),
+    output_dir: Annotated[
+        Path,
+        typer.Option(
+            "--output-dir",
+            "-o",
+            help="Output directory for measure files.",
+        ),
+    ] = Path("data/curated/measures"),
+) -> None:
+    """Deprecated: use `coclab build measures`."""
+    typer.echo(
+        "Warning: 'coclab aggregate-measures' is deprecated; "
+        "use 'coclab build measures' instead.",
+        err=True,
+    )
+    build_measures(
+        boundary=boundary,
+        acs=acs,
+        tracts=tracts,
+        weighting=weighting,
+        xwalk_dir=xwalk_dir,
+        output_dir=output_dir,
+    )
+
+
+@wraps(aggregate_zori)
+def aggregate_zori_deprecated(
+    boundary: Annotated[
+        str,
+        typer.Option(
+            "--boundary",
+            "-b",
+            help="CoC boundary vintage (e.g., '2025').",
+        ),
+    ],
+    counties: Annotated[
+        str,
+        typer.Option(
+            "--counties",
+            "-c",
+            help="TIGER county vintage year used by the crosswalk (e.g., '2023').",
+        ),
+    ],
+    acs: Annotated[
+        str,
+        typer.Option(
+            "--acs",
+            help="ACS 5-year vintage for weights (e.g., '2019-2023').",
+        ),
+    ],
+    geography: Annotated[
+        str,
+        typer.Option(
+            "--geography",
+            "-g",
+            help="Base geography type. Currently only 'county' is supported.",
+        ),
+    ] = "county",
+    zori_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--zori-path",
+            help="Explicit path to curated ZORI parquet file.",
+        ),
+    ] = None,
+    xwalk_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--xwalk-path",
+            help="Explicit crosswalk path. If omitted, inferred from boundary and counties.",
+        ),
+    ] = None,
+    weighting: Annotated[
+        str,
+        typer.Option(
+            "--weighting",
+            "-w",
+            help="Weighting: renter_households, housing_units, population, or equal.",
+        ),
+    ] = "renter_households",
+    output_dir: Annotated[
+        Path,
+        typer.Option(
+            "--output-dir",
+            "-o",
+            help="Output directory for CoC-level ZORI parquet.",
+        ),
+    ] = DEFAULT_OUTPUT_DIR,
+    to_yearly: Annotated[
+        bool,
+        typer.Option(
+            "--to-yearly",
+            help="Also emit a yearly collapsed file.",
+        ),
+    ] = False,
+    yearly_method: Annotated[
+        str,
+        typer.Option(
+            "--yearly-method",
+            help="Yearly collapse method: 'pit_january', 'calendar_mean', 'calendar_median'.",
+        ),
+    ] = "pit_january",
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            "-f",
+            help="Recompute outputs even if present.",
+        ),
+    ] = False,
+) -> None:
+    """Deprecated: use `coclab build zori`."""
+    typer.echo(
+        "Warning: 'coclab aggregate-zori' is deprecated; "
+        "use 'coclab build zori' instead.",
+        err=True,
+    )
+    aggregate_zori(
+        boundary=boundary,
+        counties=counties,
+        acs=acs,
+        geography=geography,
+        zori_path=zori_path,
+        xwalk_path=xwalk_path,
+        weighting=weighting,
+        output_dir=output_dir,
+        to_yearly=to_yearly,
+        yearly_method=yearly_method,
+        force=force,
+    )
+
+
+@wraps(build_panel_cmd)
+def build_panel_deprecated(
+    start: Annotated[
+        int,
+        typer.Option(
+            "--start",
+            "-s",
+            help="First PIT year to include in the panel (inclusive).",
+        ),
+    ],
+    end: Annotated[
+        int,
+        typer.Option(
+            "--end",
+            "-e",
+            help="Last PIT year to include in the panel (inclusive).",
+        ),
+    ],
+    weighting: Annotated[
+        str,
+        typer.Option(
+            "--weighting",
+            "-w",
+            help="Weighting method for ACS measures: 'population' or 'area'.",
+        ),
+    ] = "population",
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Custom output path for the panel Parquet file.",
+        ),
+    ] = None,
+    include_zori: Annotated[
+        bool,
+        typer.Option(
+            "--include-zori/--no-include-zori",
+            help="Include ZORI rent data and compute rent_to_income ratio.",
+        ),
+    ] = False,
+    zori_yearly_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--zori-yearly-path",
+            help="Explicit path to yearly ZORI parquet. If omitted, searches defaults.",
+        ),
+    ] = None,
+    zori_min_coverage: Annotated[
+        float,
+        typer.Option(
+            "--zori-min-coverage",
+            help="Minimum ZORI coverage ratio for eligibility (0.0-1.0).",
+        ),
+    ] = DEFAULT_ZORI_MIN_COVERAGE,
+) -> None:
+    """Deprecated: use `coclab build panel`."""
+    typer.echo(
+        "Warning: 'coclab build-panel' is deprecated; "
+        "use 'coclab build panel' instead.",
+        err=True,
+    )
+    build_panel_cmd(
+        start=start,
+        end=end,
+        weighting=weighting,
+        output=output,
+        include_zori=include_zori,
+        zori_yearly_path=zori_yearly_path,
+        zori_min_coverage=zori_min_coverage,
+    )
+
+
+@wraps(build_xwalks)
+def build_xwalks_deprecated(
+    boundary: Annotated[
+        str | None,
+        typer.Option(
+            "--boundary",
+            "-b",
+            help="CoC boundary vintage (e.g., '2025'). Uses latest if not specified.",
+        ),
+    ] = None,
+    tracts: Annotated[
+        str | None,
+        typer.Option(
+            "--tracts",
+            "-t",
+            help="Census tract vintage (e.g., '2023'). Defaults to latest.",
+        ),
+    ] = None,
+    counties: Annotated[
+        str | None,
+        typer.Option(
+            "--counties",
+            "-c",
+            help="County vintage (e.g., '2023'). Defaults to latest.",
+        ),
+    ] = None,
+    xwalk_type: Annotated[
+        str,
+        typer.Option(
+            "--type",
+            help="Crosswalk type to build: 'tracts', 'counties', or 'all'.",
+        ),
+    ] = "all",
+    output_dir: Annotated[
+        Path,
+        typer.Option(
+            "--output-dir",
+            "-o",
+            help="Output directory for crosswalk files.",
+        ),
+    ] = Path("data/curated/xwalks"),
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            "-f",
+            help="Force rebuild even if outputs already exist.",
+        ),
+    ] = False,
+    population_weights: Annotated[
+        bool,
+        typer.Option(
+            "--population-weights",
+            help="Compute population-weighted crosswalks.",
+        ),
+    ] = False,
+    auto_fetch: Annotated[
+        bool,
+        typer.Option(
+            "--auto-fetch",
+            help="Auto-fetch missing census/ACS inputs if possible.",
+        ),
+    ] = False,
+) -> None:
+    """Deprecated: use `coclab build xwalks`."""
+    typer.echo(
+        "Warning: 'coclab build-xwalks' is deprecated; "
+        "use 'coclab build xwalks' instead.",
+        err=True,
+    )
+    build_xwalks(
+        boundary=boundary,
+        tracts=tracts,
+        counties=counties,
+        xwalk_type=xwalk_type,
+        output_dir=output_dir,
+        force=force,
+        population_weights=population_weights,
+        auto_fetch=auto_fetch,
+    )
+
+
+@wraps(export_bundle)
+def export_bundle_deprecated(
+    name: Annotated[
+        str,
+        typer.Option(
+            "--name",
+            "-n",
+            help="Logical bundle name for metadata and documentation",
+        ),
+    ],
+    out_dir: Annotated[
+        Path,
+        typer.Option(
+            "--out-dir",
+            "-o",
+            help="Output directory where export-N folders are created",
+        ),
+    ] = Path("exports"),
+    panel: Annotated[
+        Path | None,
+        typer.Option(
+            "--panel",
+            "-p",
+            help="Explicit panel parquet path (inferred from curated if omitted)",
+        ),
+    ] = None,
+    include: Annotated[
+        str,
+        typer.Option(
+            "--include",
+            "-i",
+            help="Components to include (comma-separated)",
+        ),
+    ] = "panel,manifest,codebook,diagnostics",
+    boundary_vintage: Annotated[
+        str | None,
+        typer.Option(
+            "--boundary-vintage",
+            help="Boundary vintage (e.g., 2025)",
+        ),
+    ] = None,
+    tract_vintage: Annotated[
+        str | None,
+        typer.Option(
+            "--tract-vintage",
+            help="Census tract vintage (e.g., 2023)",
+        ),
+    ] = None,
+    county_vintage: Annotated[
+        str | None,
+        typer.Option(
+            "--county-vintage",
+            help="County vintage (e.g., 2023)",
+        ),
+    ] = None,
+    acs_vintage: Annotated[
+        str | None,
+        typer.Option(
+            "--acs-vintage",
+            help="ACS vintage (e.g., 2019-2023)",
+        ),
+    ] = None,
+    years: Annotated[
+        str | None,
+        typer.Option(
+            "--years",
+            help="Year range (e.g., 2011-2024)",
+        ),
+    ] = None,
+    copy_mode: Annotated[
+        str,
+        typer.Option(
+            "--copy-mode",
+            help="File copy mode: copy, hardlink, or symlink",
+        ),
+    ] = "copy",
+    compress: Annotated[
+        bool,
+        typer.Option(
+            "--compress",
+            help="Create .tar.gz archive of the bundle",
+        ),
+    ] = False,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            "-f",
+            help="Create bundle even if identical manifest exists",
+        ),
+    ] = False,
+) -> None:
+    """Deprecated: use `coclab build export`."""
+    typer.echo(
+        "Warning: 'coclab export-bundle' is deprecated; "
+        "use 'coclab build export' instead.",
+        err=True,
+    )
+    export_bundle(
+        name=name,
+        out_dir=out_dir,
+        panel=panel,
+        include=include,
+        boundary_vintage=boundary_vintage,
+        tract_vintage=tract_vintage,
+        county_vintage=county_vintage,
+        acs_vintage=acs_vintage,
+        years=years,
+        copy_mode=copy_mode,
+        compress=compress,
+        force=force,
+    )
+
+
 # -----------------------------------------------------------------------------
 # Register all commands alphabetically for consistent help output
 # -----------------------------------------------------------------------------
 
-app.command("aggregate-measures")(build_measures)
-app.command("aggregate-zori")(aggregate_zori)
-app.command("build-panel")(build_panel_cmd)
-app.command("build-xwalks")(build_xwalks)
+app.command("aggregate-measures", hidden=True)(aggregate_measures_deprecated)
+app.command("aggregate-zori", hidden=True)(aggregate_zori_deprecated)
+app.command("build-panel", hidden=True)(build_panel_deprecated)
+app.command("build-xwalks", hidden=True)(build_xwalks_deprecated)
 app.command("check-boundaries", hidden=True)(check_boundaries_deprecated)
 app.command("compare-vintages")(compare_vintages)
 app.command("crosscheck-acs-population", hidden=True)(crosscheck_acs_population)
@@ -1255,11 +1702,12 @@ app.command("delete-boundaries")(delete_boundaries)
 app.command("diagnostics-panel", hidden=True)(diagnostics_panel_deprecated)
 app.command("diagnostics-xwalk", hidden=True)(diagnostics_xwalk_deprecated)
 app.command("diagnostics-zori", hidden=True)(diagnostics_zori_deprecated)
-app.command("export-bundle")(export_bundle)
+app.command("export-bundle", hidden=True)(export_bundle_deprecated)
 app.add_typer(ingest_app, name="ingest")
 app.add_typer(list_app, name="list")
 app.add_typer(validate_app, name="validate")
 app.add_typer(diagnostics_app, name="diagnostics")
+app.add_typer(build_app, name="build")
 app.command("ingest-acs-population", hidden=True)(ingest_acs_population_deprecated)
 app.command("ingest-boundaries", hidden=True)(ingest_boundaries_deprecated)
 app.command("ingest-census", hidden=True)(ingest_census_deprecated)
@@ -1302,6 +1750,11 @@ validate_app.command("population")(validate_population)
 diagnostics_app.command("panel")(panel_diagnostics)
 diagnostics_app.command("xwalk")(diagnostics)
 diagnostics_app.command("zori")(zori_diagnostics)
+build_app.command("measures")(build_measures)
+build_app.command("zori")(aggregate_zori)
+build_app.command("panel")(build_panel_cmd)
+build_app.command("xwalks")(build_xwalks)
+build_app.command("export")(export_bundle)
 
 
 if __name__ == "__main__":

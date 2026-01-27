@@ -778,7 +778,7 @@ def build_panel(
         if zori_df is None:
             raise ValueError(
                 "ZORI integration requested but no ZORI yearly data available. "
-                "Run 'coclab aggregate-zori --to-yearly' first, or provide "
+                "Run 'coclab build zori --to-yearly' first, or provide "
                 "--zori-yearly-path explicitly."
             )
 

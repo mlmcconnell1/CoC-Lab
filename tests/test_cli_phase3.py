@@ -1,4 +1,4 @@
-"""Tests for the Phase 3 CLI commands (ingest pit, build-panel, diagnostics panel)."""
+"""Tests for the Phase 3 CLI commands (ingest pit, build panel, diagnostics panel)."""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -140,11 +140,11 @@ class TestIngestPitCommand:
 
 
 class TestBuildPanelCommand:
-    """Tests for the 'build-panel' command."""
+    """Tests for the 'build panel' command."""
 
     def test_build_panel_help(self):
         """Help should show options."""
-        result = runner.invoke(app, ["build-panel", "--help"])
+        result = runner.invoke(app, ["build", "panel", "--help"])
 
         assert result.exit_code == 0
         assert "--start" in result.output
@@ -154,7 +154,7 @@ class TestBuildPanelCommand:
 
     def test_build_panel_requires_years(self):
         """Should fail without year options."""
-        result = runner.invoke(app, ["build-panel"])
+        result = runner.invoke(app, ["build", "panel"])
 
         # Typer shows error for missing required options
         assert result.exit_code != 0
@@ -163,7 +163,7 @@ class TestBuildPanelCommand:
         """Should fail with invalid weighting method."""
         result = runner.invoke(
             app,
-            ["build-panel", "--start", "2020", "--end", "2024", "--weighting", "invalid"],
+            ["build", "panel", "--start", "2020", "--end", "2024", "--weighting", "invalid"],
         )
 
         assert result.exit_code == 1
@@ -171,7 +171,7 @@ class TestBuildPanelCommand:
 
     def test_build_panel_invalid_year_range(self):
         """Should fail if start > end."""
-        result = runner.invoke(app, ["build-panel", "--start", "2024", "--end", "2020"])
+        result = runner.invoke(app, ["build", "panel", "--start", "2024", "--end", "2020"])
 
         assert result.exit_code == 1
         assert "Start year" in result.output
@@ -193,7 +193,7 @@ class TestBuildPanelCommand:
         mock_build.return_value = mock_df
         mock_save.return_value = Path("data/curated/panel/coc_panel__2020_2021.parquet")
 
-        result = runner.invoke(app, ["build-panel", "--start", "2020", "--end", "2021"])
+        result = runner.invoke(app, ["build", "panel", "--start", "2020", "--end", "2021"])
 
         assert result.exit_code == 0
         assert "Building panel for 2020-2021" in result.output
@@ -205,7 +205,7 @@ class TestBuildPanelCommand:
         """Should warn if panel is empty."""
         mock_build.return_value = pd.DataFrame()
 
-        result = runner.invoke(app, ["build-panel", "--start", "2020", "--end", "2021"])
+        result = runner.invoke(app, ["build", "panel", "--start", "2020", "--end", "2021"])
 
         assert result.exit_code == 1
         assert "Panel is empty" in result.output
@@ -230,7 +230,8 @@ class TestBuildPanelCommand:
         result = runner.invoke(
             app,
             [
-                "build-panel",
+                "build",
+                "panel",
                 "--start",
                 "2020",
                 "--end",
@@ -400,7 +401,7 @@ class TestPhase3HelpOutput:
 
         assert result.exit_code == 0
         assert "ingest" in result.output
-        assert "build-panel" in result.output
+        assert "build" in result.output
         assert "diagnostics" in result.output
 
     def test_ingest_pit_help_shows_examples(self):
@@ -411,11 +412,11 @@ class TestPhase3HelpOutput:
         assert "coclab ingest pit --year 2024" in result.output
 
     def test_build_panel_help_shows_examples(self):
-        """Build-panel help should show examples."""
-        result = runner.invoke(app, ["build-panel", "--help"])
+        """Build panel help should show examples."""
+        result = runner.invoke(app, ["build", "panel", "--help"])
 
         assert result.exit_code == 0
-        assert "coclab build-panel --start" in result.output
+        assert "coclab build panel --start" in result.output
         assert "--weighting population" in result.output
 
     def test_panel_diagnostics_help_shows_examples(self):

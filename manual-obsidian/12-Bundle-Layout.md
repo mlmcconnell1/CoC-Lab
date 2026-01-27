@@ -1,6 +1,6 @@
 # Bundle Layout and MANIFEST.json
 
-The `coclab export-bundle` command creates self-contained, analysis-ready bundles for downstream repositories. This section documents the bundle structure and manifest schema.
+The `coclab build export` command creates self-contained, analysis-ready bundles for downstream repositories. This section documents the bundle structure and manifest schema.
 
 ## Bundle Directory Structure
 
