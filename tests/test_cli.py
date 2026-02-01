@@ -370,3 +370,107 @@ class TestValidatePopulation:
 
         assert result.exit_code == 1
         assert "Error" in result.output or "No crosswalk" in result.output
+
+
+class TestRegistryDeleteEntry:
+    """Tests for the 'registry delete-entry' command."""
+
+    @patch("coclab.registry.registry.delete_vintage")
+    @patch("coclab.registry.registry.list_boundaries")
+    def test_registry_delete_entry_not_found(self, mock_list, mock_delete):
+        """Should fail if entry not found."""
+        mock_list.return_value = []
+
+        result = runner.invoke(
+            app,
+            ["registry", "delete-entry", "2024", "hud_exchange"],
+        )
+
+        assert result.exit_code == 1
+        assert "No entry found" in result.output
+
+    @patch("coclab.source_registry.delete_by_local_path")
+    @patch("coclab.registry.registry.delete_vintage")
+    @patch("coclab.registry.registry.list_boundaries")
+    def test_registry_delete_entry_success(self, mock_list, mock_delete, mock_delete_src):
+        """Should delete entry when found and confirmed."""
+        from unittest.mock import MagicMock
+
+        entry = MagicMock()
+        entry.boundary_vintage = "2024"
+        entry.source = "hud_exchange"
+        entry.feature_count = 400
+        entry.path = Path("data/curated/coc_boundaries/coc_boundaries__2024.parquet")
+        mock_list.return_value = [entry]
+        mock_delete.return_value = True
+        mock_delete_src.return_value = 1
+
+        result = runner.invoke(
+            app,
+            ["registry", "delete-entry", "2024", "hud_exchange", "--yes"],
+        )
+
+        assert result.exit_code == 0
+        assert "Deleted registry entry" in result.output
+        mock_delete.assert_called_once_with("2024", "hud_exchange")
+
+
+class TestRegistryDeleteEntryDeprecated:
+    """Tests for the deprecated 'delete-boundaries' command."""
+
+    @patch("coclab.registry.registry.delete_vintage")
+    @patch("coclab.registry.registry.list_boundaries")
+    def test_delete_boundaries_shows_deprecation_warning(self, mock_list, mock_delete):
+        """Should show deprecation warning."""
+        mock_list.return_value = []
+
+        result = runner.invoke(
+            app,
+            ["delete-boundaries", "2024", "hud_exchange"],
+        )
+
+        assert "deprecated" in result.output.lower()
+        assert "registry delete-entry" in result.output
+
+
+class TestRegistryRebuild:
+    """Tests for the 'registry rebuild' command."""
+
+    def test_registry_rebuild_no_registry(self, tmp_path):
+        """Should handle missing registry file."""
+        result = runner.invoke(
+            app,
+            ["registry", "rebuild", "--registry", str(tmp_path / "nonexistent.parquet")],
+        )
+
+        assert "Registry not found" in result.output
+
+    @patch("coclab.cli.registry_rebuild._load_registry")
+    def test_registry_rebuild_empty_registry(self, mock_load, tmp_path):
+        """Should handle empty registry."""
+        import pandas as pd
+
+        registry_path = tmp_path / "source_registry.parquet"
+        registry_path.touch()
+        mock_load.return_value = pd.DataFrame()
+
+        result = runner.invoke(
+            app,
+            ["registry", "rebuild", "--registry", str(registry_path)],
+        )
+
+        assert "empty" in result.output.lower()
+
+
+class TestRegistryRebuildDeprecated:
+    """Tests for the deprecated 'registry-rebuild' command."""
+
+    def test_registry_rebuild_shows_deprecation_warning(self, tmp_path):
+        """Should show deprecation warning."""
+        result = runner.invoke(
+            app,
+            ["registry-rebuild", "--registry", str(tmp_path / "nonexistent.parquet")],
+        )
+
+        assert "deprecated" in result.output.lower()
+        assert "registry rebuild" in result.output

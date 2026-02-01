@@ -12,6 +12,7 @@ flowchart LR
     coclab --> diagnostics
     coclab --> build
     coclab --> show
+    coclab --> registry
     ingest --> boundaries
     ingest --> census
     ingest --> nhgis
@@ -20,10 +21,10 @@ flowchart LR
     ingest --> acs-population
     ingest --> tract-relationship
     ingest --> zori
-    coclab --> delete-boundaries
     coclab --> rollup-acs-population
     coclab --> verify-acs-population
-    coclab --> registry-rebuild
+    registry --> registry-delete-entry[delete-entry]
+    registry --> registry-rebuild[rebuild]
 
     boundaries --> |"--source hud_exchange"| HUD_EX[Download annual vintage]
     boundaries --> |"--source hud_opendata"| HUD_OD[Fetch current snapshot]
@@ -55,7 +56,7 @@ flowchart LR
     show --> show-measures[measures]
     show --> show-sources[sources]
     validate-boundaries --> BOUNDCHK[Validate boundary registry health]
-    delete-boundaries --> BOUNDDEL[Remove boundary registry entry]
+    registry-delete-entry --> BOUNDDEL[Remove boundary registry entry]
     show-map --> MAP[Render interactive map]
     build-xwalks --> XWALK[Create tract/county crosswalks]
     build-measures --> MEAS[Aggregate demographic measures from ACS]
@@ -96,6 +97,9 @@ Legacy build/aggregate/export commands remain as deprecated passthroughs for bac
 
 **Show grouping:** The canonical form is `coclab show <subcommand>` (e.g., `coclab show map`).
 Legacy commands (`show`, `show-measures`, `compare-vintages`, `source-status`) remain as deprecated passthroughs for backward compatibility.
+
+**Registry grouping:** The canonical form is `coclab registry <subcommand>` (e.g., `coclab registry rebuild`).
+Legacy commands (`delete-boundaries`, `registry-rebuild`) remain as deprecated passthroughs for backward compatibility.
 
 ## `coclab build measures`
 
@@ -273,15 +277,15 @@ coclab validate boundaries
 
 Returns a health report. Exits with code `1` if problems are detected.
 
-## `coclab delete-boundaries`
+## `coclab registry delete-entry`
 
 Remove a boundary vintage entry from the registry (does not delete the data file).
 
 ```bash
-coclab delete-boundaries 2024 hud_exchange
+coclab registry delete-entry 2024 hud_exchange
 
 # Skip confirmation
-coclab delete-boundaries 2024 hud_exchange --yes
+coclab registry delete-entry 2024 hud_exchange --yes
 ```
 
 | Option | Description | Default |
@@ -289,6 +293,24 @@ coclab delete-boundaries 2024 hud_exchange --yes
 | `vintage` | Boundary vintage year | Required |
 | `source` | Source name (`hud_exchange`, `hud_opendata`) | Required |
 | `--yes`, `-y` | Skip confirmation | False |
+
+## `coclab registry rebuild`
+
+Rebuild the source registry by checking local files for missing entries or hash
+mismatches. This is useful if files were moved or updated outside the normal
+ingest commands.
+
+```bash
+coclab registry rebuild
+
+# Preview changes without writing
+coclab registry rebuild --dry-run
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--dry-run`, `-n` | Preview changes without modifying registry | False |
+| `--registry`, `-r` | Path to source registry file | `data/curated/source_registry.parquet` |
 
 ## `coclab build xwalks`
 
@@ -901,24 +923,6 @@ coclab list xwalks --type tract
 |--------|-------------|---------|
 | `--type`, `-t` | `tract`, `county`, or `all` | `all` |
 | `--dir`, `-d` | Directory to scan | `data/curated/xwalks` |
-
-## `coclab registry-rebuild`
-
-Rebuild the source registry by checking local files for missing entries or hash
-mismatches. This is useful if files were moved or updated outside the normal
-ingest commands.
-
-```bash
-coclab registry-rebuild
-
-# Preview changes without writing
-coclab registry-rebuild --dry-run
-```
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--dry-run`, `-n` | Preview changes without modifying registry | False |
-| `--registry`, `-r` | Path to source registry file | `data/curated/source_registry.parquet` |
 
 ## `coclab rollup-acs-population`
 

@@ -71,9 +71,9 @@ def registry_rebuild(
 
     Examples:
 
-        coclab registry-rebuild
+        coclab registry rebuild
 
-        coclab registry-rebuild --dry-run
+        coclab registry rebuild --dry-run
     """
     if not registry_path.exists():
         typer.echo(f"Registry not found at {registry_path}")

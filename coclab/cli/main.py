@@ -108,6 +108,11 @@ show_app = typer.Typer(
     help="Display and visualize data",
     no_args_is_help=True,
 )
+registry_app = typer.Typer(
+    name="registry",
+    help="Manage boundary and source registries",
+    no_args_is_help=True,
+)
 
 
 @app.callback()
@@ -607,9 +612,9 @@ def delete_boundaries(
 
     Examples:
 
-        coclab delete-boundaries 2024 hud_exchange
+        coclab registry delete-entry 2024 hud_exchange
 
-        coclab delete-boundaries 2024 hud_exchange --yes
+        coclab registry delete-entry 2024 hud_exchange --yes
     """
     from coclab.registry.registry import delete_vintage, list_boundaries
     from coclab.source_registry import delete_by_local_path
@@ -640,6 +645,62 @@ def delete_boundaries(
     else:
         typer.echo("Failed to delete entry", err=True)
         raise typer.Exit(1)
+
+
+@wraps(delete_boundaries)
+def delete_boundaries_deprecated(
+    vintage: Annotated[
+        str,
+        typer.Argument(help="Boundary vintage year to delete (e.g., '2024')"),
+    ],
+    source: Annotated[
+        str,
+        typer.Argument(help="Data source (e.g., 'hud_exchange', 'hud_opendata')"),
+    ],
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            "-y",
+            help="Skip confirmation prompt",
+        ),
+    ] = False,
+) -> None:
+    """Deprecated: use `coclab registry delete-entry`."""
+    typer.echo(
+        "Warning: 'coclab delete-boundaries' is deprecated; "
+        "use 'coclab registry delete-entry' instead.",
+        err=True,
+    )
+    delete_boundaries(vintage, source, yes)
+
+
+@wraps(registry_rebuild)
+def registry_rebuild_deprecated(
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            "-n",
+            help="Preview changes without modifying the registry.",
+        ),
+    ] = False,
+    registry_path: Annotated[
+        Path,
+        typer.Option(
+            "--registry",
+            "-r",
+            help="Path to source registry file.",
+        ),
+    ] = Path("data/curated/source_registry.parquet"),
+) -> None:
+    """Deprecated: use `coclab registry rebuild`."""
+    typer.echo(
+        "Warning: 'coclab registry-rebuild' is deprecated; "
+        "use 'coclab registry rebuild' instead.",
+        err=True,
+    )
+    registry_rebuild(dry_run, registry_path)
 
 
 def list_boundaries_cmd() -> None:
@@ -1791,7 +1852,7 @@ app.command("check-boundaries", hidden=True)(check_boundaries_deprecated)
 app.command("compare-vintages", hidden=True)(compare_vintages_deprecated)
 app.command("crosscheck-pit-vintages", hidden=True)(crosscheck_pit_vintages)
 app.command("crosscheck-population", hidden=True)(crosscheck_population)
-app.command("delete-boundaries")(delete_boundaries)
+app.command("delete-boundaries", hidden=True)(delete_boundaries_deprecated)
 app.command("diagnostics-panel", hidden=True)(diagnostics_panel_deprecated)
 app.command("diagnostics-xwalk", hidden=True)(diagnostics_xwalk_deprecated)
 app.command("diagnostics-zori", hidden=True)(diagnostics_zori_deprecated)
@@ -1802,6 +1863,7 @@ app.add_typer(validate_app, name="validate")
 app.add_typer(diagnostics_app, name="diagnostics")
 app.add_typer(build_app, name="build")
 app.add_typer(show_app, name="show")
+app.add_typer(registry_app, name="registry")
 app.command("ingest-acs-population", hidden=True)(ingest_acs_population_deprecated)
 app.command("ingest-boundaries", hidden=True)(ingest_boundaries_deprecated)
 app.command("ingest-census", hidden=True)(ingest_census_deprecated)
@@ -1814,7 +1876,7 @@ app.command("list-boundaries", hidden=True)(list_boundaries_deprecated)
 app.command("list-census", hidden=True)(list_census_deprecated)
 app.command("list-measures", hidden=True)(list_measures_deprecated)
 app.command("list-xwalks", hidden=True)(list_xwalks_deprecated)
-app.command("registry-rebuild")(registry_rebuild)
+app.command("registry-rebuild", hidden=True)(registry_rebuild_deprecated)
 app.command("show", hidden=True)(show_deprecated)
 app.command("show-measures", hidden=True)(show_measures_deprecated)
 app.command("source-status", hidden=True)(source_status_deprecated)
@@ -1849,6 +1911,8 @@ show_app.command("vintage-diffs")(compare_vintages)
 show_app.command("map")(show)
 show_app.command("measures")(show_measures)
 show_app.command("sources")(source_status)
+registry_app.command("delete-entry")(delete_boundaries)
+registry_app.command("rebuild")(registry_rebuild)
 
 
 if __name__ == "__main__":
