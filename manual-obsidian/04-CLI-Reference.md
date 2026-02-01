@@ -21,8 +21,6 @@ flowchart LR
     ingest --> acs-population
     ingest --> tract-relationship
     ingest --> zori
-    coclab --> rollup-acs-population
-    coclab --> verify-acs-population
     registry --> registry-delete-entry[delete-entry]
     registry --> registry-rebuild[rebuild]
 
@@ -40,7 +38,6 @@ flowchart LR
     list --> list-xwalks[xwalks]
     list-boundaries --> LIST[List boundary vintages]
     validate --> validate-boundaries
-    validate --> validate-acs-population
     validate --> validate-pit-vintages
     validate --> validate-population
     diagnostics --> diagnostics-panel
@@ -61,11 +58,8 @@ flowchart LR
     build-xwalks --> XWALK[Create tract/county crosswalks]
     build-measures --> MEAS[Aggregate demographic measures from ACS]
     build-panel --> PANEL[Assemble CoC × year panels]
-    rollup-acs-population --> ROLLUP[Aggregate tract pop to CoC]
-    validate-acs-population --> XCHECK[Validate rollup vs measures]
     validate-pit-vintages --> PITXCHECK[Validate PIT across vintages]
     validate-population --> POPCHECK[Validate CoC pop vs national]
-    verify-acs-population --> VERIFY[Full pipeline: ingest→rollup→validate]
     build-zori --> ZORI_AGG[Aggregate ZORI to CoC level]
     diagnostics-panel --> PDIAG[Panel quality & sensitivity]
     diagnostics-xwalk --> DIAG[Crosswalk quality checks]
@@ -361,37 +355,6 @@ coclab show vintage-diffs -v1 2024 -v2 2025 -o diff_report.csv
 **Output:**
 - Summary counts of added, removed, changed, unchanged CoCs
 - Lists of affected CoC IDs by category
-
-## `coclab validate acs-population`
-
-Validate population rollup against existing CoC measures (`total_population` from `coc_measures`).
-
-```bash
-# Basic validation
-coclab validate acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting area
-
-# With custom thresholds
-coclab validate acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting area \
-    --warn-pct 0.02 --error-pct 0.10 --min-coverage 0.90
-```
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--boundary`, `-b` | CoC boundary vintage | Required |
-| `--acs`, `-a` | ACS 5-year vintage | Required |
-| `--tracts`, `-t` | Census tract vintage year | Required |
-| `--weighting`, `-w` | `area` or `population_mass` | `area` |
-| `--warn-pct` | Warning threshold for percent delta | 0.01 (1%) |
-| `--error-pct` | Error threshold for percent delta | 0.05 (5%) |
-| `--min-coverage` | Minimum coverage ratio | 0.95 |
-
-**Exit Codes:**
-- `0` - No errors (warnings allowed)
-- `2` - Errors found (threshold exceeded)
-
-**Output:**
-- Console report with top 25 worst deltas
-- `data/curated/acs/acs_population_crosscheck__{boundary}__{acs}__{tracts}__{weighting}.parquet`
 
 ## `coclab validate population`
 
@@ -924,33 +887,6 @@ coclab list xwalks --type tract
 | `--type`, `-t` | `tract`, `county`, or `all` | `all` |
 | `--dir`, `-d` | Directory to scan | `data/curated/xwalks` |
 
-## `coclab rollup-acs-population`
-
-Build CoC population rollup by aggregating tract population to CoC using existing crosswalks.
-
-```bash
-# Build rollup with area weighting
-coclab rollup-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting area
-
-# Use population_mass weighting
-coclab rollup-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting population_mass
-
-# Force rebuild even if cached
-coclab rollup-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting area --force
-```
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--boundary`, `-b` | CoC boundary vintage | Required |
-| `--acs`, `-a` | ACS 5-year vintage | Required |
-| `--tracts`, `-t` | Census tract vintage year | Required |
-| `--weighting`, `-w` | `area` or `population_mass` | `area` |
-| `--force` | Rebuild even if cached file exists | False |
-
-**Output:**
-- `data/curated/acs/coc_population_rollup__{boundary}__{acs}__{tracts}__{weighting}.parquet`
-- Contains: coc_id, boundary_vintage, acs_vintage, tract_vintage, weighting_method, coc_population, coverage_ratio, max_tract_contribution, tract_count
-
 ## `coclab show map`
 
 Render an interactive map for a specific CoC boundary.
@@ -1027,34 +963,6 @@ coclab show sources --type zori
 **Change Detection:**
 
 When `--check-changes` is used, the command identifies sources where the upstream data has changed between ingestions (different SHA-256 hashes). This helps detect silent updates to external data sources.
-
-## `coclab verify-acs-population`
-
-One-shot command that runs: ingest → rollup → validate.
-
-```bash
-# Full verification pipeline
-coclab verify-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting area
-
-# With custom thresholds and force rebuild
-coclab verify-acs-population --boundary 2025 --acs 2019-2023 --tracts 2023 --weighting area \
-    --force --warn-pct 0.02 --error-pct 0.10 --min-coverage 0.90
-```
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--boundary`, `-b` | CoC boundary vintage | Required |
-| `--acs`, `-a` | ACS 5-year vintage | Required |
-| `--tracts`, `-t` | Census tract vintage year | Required |
-| `--weighting`, `-w` | `area` or `population_mass` | `area` |
-| `--force` | Force re-ingest and rebuild all artifacts | False |
-| `--warn-pct` | Warning threshold for percent delta | 0.01 (1%) |
-| `--error-pct` | Error threshold for percent delta | 0.05 (5%) |
-| `--min-coverage` | Minimum coverage ratio | 0.95 |
-
-**Exit Codes:**
-- `0` - No errors (warnings allowed)
-- `2` - Errors found (threshold exceeded)
 
 ---
 
