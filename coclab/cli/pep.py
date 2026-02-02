@@ -72,6 +72,20 @@ def ingest_pep(
             help="When combining series, use postcensal values for 2020.",
         ),
     ] = False,
+    start: Annotated[
+        int | None,
+        typer.Option(
+            "--start",
+            help="First year to include (YYYY). Defaults to earliest in data.",
+        ),
+    ] = None,
+    end: Annotated[
+        int | None,
+        typer.Option(
+            "--end",
+            help="Last year to include (YYYY). Defaults to latest in data.",
+        ),
+    ] = None,
 ) -> None:
     """Download and normalize PEP county population estimates from Census Bureau.
 
@@ -97,6 +111,8 @@ def ingest_pep(
         coclab ingest pep --series postcensal --vintage 2024
 
         coclab ingest pep --series intercensal-2010-2020
+
+        coclab ingest pep --series postcensal --vintage 2024 --start 2015 --end 2020
     """
     from coclab.pep.ingest import (
         ALL_SERIES,
@@ -104,9 +120,15 @@ def ingest_pep(
         AUTO_SERIES,
         POSTCENSAL_SERIES,
         PEP_URLS,
+        _intercensal_available,
         get_output_path,
         ingest_pep_county,
     )
+    from coclab.provenance import read_provenance
+
+    if start is not None and end is not None and start > end:
+        typer.echo("Error: --start must be <= --end.", err=True)
+        raise typer.Exit(2)
 
     if series not in {AUTO_SERIES, POSTCENSAL_SERIES, INTERCENSAL_SERIES, ALL_SERIES}:
         typer.echo(
@@ -141,17 +163,29 @@ def ingest_pep(
             "Warning: --prefer-postcensal-2020 is only used when --series all or auto.",
             err=True,
         )
+    if series in {AUTO_SERIES, ALL_SERIES} and not _intercensal_available():
+        typer.echo(
+            "Note: Intercensal PEP estimates are not available; using postcensal data.",
+            err=False,
+        )
 
     if series == ALL_SERIES:
-        output_path = get_output_path("combined", output_dir)
+        output_path = get_output_path("combined", output_dir, start_year=start, end_year=end)
     elif series == POSTCENSAL_SERIES:
-        output_path = get_output_path(parsed_vintage, output_dir)
+        output_path = get_output_path(
+            parsed_vintage, output_dir, start_year=start, end_year=end
+        )
     elif series == AUTO_SERIES:
-        combined_path = get_output_path("combined", output_dir)
-        postcensal_path = get_output_path(parsed_vintage, output_dir)
-        output_path = combined_path if combined_path.exists() else postcensal_path
+        output_path = get_output_path(
+            "combined" if _intercensal_available() else parsed_vintage,
+            output_dir,
+            start_year=start,
+            end_year=end,
+        )
     else:
-        output_path = output_dir / "pep_county__intercensal_2010_2020.parquet"
+        output_path = get_output_path(
+            INTERCENSAL_SERIES, output_dir, start_year=start, end_year=end
+        )
 
     # Check for existing output
     if output_path.exists() and not force:
@@ -173,6 +207,8 @@ def ingest_pep(
             output_dir=output_dir,
             raw_dir=raw_dir,
             prefer_postcensal_2020=prefer_postcensal_2020,
+            start_year=start,
+            end_year=end,
         )
 
         # Report results
@@ -181,10 +217,35 @@ def ingest_pep(
         county_count = df["county_fips"].nunique()
         year_range = f"{df['year'].min()}-{df['year'].max()}"
 
+        provenance = read_provenance(result_path)
+        series_note = None
+        if provenance and provenance.extra:
+            series_note = provenance.extra.get("series")
+            series_used = provenance.extra.get("series_used")
+            if series_note == "postcensal" and provenance.extra.get("vintage") is not None:
+                series_note = f"postcensal (vintage {provenance.extra['vintage']})"
+            if series_note == "intercensal_2010_2020":
+                series_note = "intercensal 2010-2020"
+            if series_used:
+                intercensal_range = series_used.get("intercensal")
+                postcensal_vintage = series_used.get("postcensal_vintage")
+                prefer_2020 = series_used.get("prefer_postcensal_2020")
+                parts = []
+                if intercensal_range:
+                    parts.append(f"intercensal {intercensal_range[0]}-{intercensal_range[1]}")
+                if postcensal_vintage:
+                    parts.append(f"postcensal vintage {postcensal_vintage}")
+                if prefer_2020 is not None:
+                    parts.append(f"prefer_postcensal_2020={prefer_2020}")
+                if parts:
+                    series_note = "combined (" + ", ".join(parts) + ")"
+
         typer.echo(f"Successfully ingested PEP data to: {result_path}")
         typer.echo(f"  Counties: {county_count}")
         typer.echo(f"  Years: {year_range}")
         typer.echo(f"  Records: {len(df):,}")
+        if series_note:
+            typer.echo(f"  Series used: {series_note}")
 
     except httpx.HTTPStatusError as e:
         typer.echo(f"Error: Download failed: {e}", err=True)

@@ -390,9 +390,31 @@ def parse_pep_county(raw_path: Path, vintage: int) -> pd.DataFrame:
     return long_df
 
 
+def _format_year_range_suffix(start_year: int | None, end_year: int | None) -> str:
+    if start_year is None and end_year is None:
+        return ""
+    start_label = str(start_year) if start_year is not None else "min"
+    end_label = str(end_year) if end_year is not None else "max"
+    return f"__y{start_label}-{end_label}"
+
+
+def _filter_year_range(
+    df: pd.DataFrame,
+    start_year: int | None,
+    end_year: int | None,
+) -> pd.DataFrame:
+    if start_year is not None:
+        df = df[df["year"] >= start_year]
+    if end_year is not None:
+        df = df[df["year"] <= end_year]
+    return df
+
+
 def get_output_path(
     vintage: int | str,
     output_dir: Path | str | None = None,
+    start_year: int | None = None,
+    end_year: int | None = None,
 ) -> Path:
     """Get canonical output path for normalized PEP data.
 
@@ -406,18 +428,20 @@ def get_output_path(
     Returns
     -------
     Path
-        Output path like 'data/curated/pep/pep_county__v2024.parquet'.
+        Output path like 'data/curated/pep/pep_county__v2024.parquet',
+        optionally suffixed with a year filter like '__y2015-2020'.
     """
     if output_dir is None:
         output_dir = DEFAULT_OUTPUT_DIR
     else:
         output_dir = Path(output_dir)
 
+    suffix = _format_year_range_suffix(start_year, end_year)
     if vintage == "combined":
-        return output_dir / "pep_county__combined.parquet"
+        return output_dir / f"pep_county__combined{suffix}.parquet"
     if vintage == INTERCENSAL_SERIES:
-        return output_dir / "pep_county__intercensal_2010_2020.parquet"
-    return output_dir / f"pep_county__v{vintage}.parquet"
+        return output_dir / f"pep_county__intercensal_2010_2020{suffix}.parquet"
+    return output_dir / f"pep_county__v{vintage}{suffix}.parquet"
 
 
 def ingest_pep_county(
@@ -428,6 +452,8 @@ def ingest_pep_county(
     output_dir: Path | str | None = None,
     raw_dir: Path | str | None = None,
     prefer_postcensal_2020: bool = False,
+    start_year: int | None = None,
+    end_year: int | None = None,
 ) -> Path:
     """Download and normalize PEP county population estimates.
 
@@ -448,6 +474,10 @@ def ingest_pep_county(
         Directory for raw downloads. Defaults to 'data/raw/pep'.
     prefer_postcensal_2020 : bool
         When combining intercensal + postcensal, use postcensal for 2020.
+    start_year : int, optional
+        First year to include (inclusive). Defaults to earliest in data.
+    end_year : int, optional
+        Last year to include (inclusive). Defaults to latest in data.
 
     Returns
     -------
@@ -468,6 +498,9 @@ def ingest_pep_county(
             f"{INTERCENSAL_SERIES}, {ALL_SERIES}."
         )
 
+    if start_year is not None and end_year is not None and start_year > end_year:
+        raise ValueError("start_year must be <= end_year.")
+
     if series == INTERCENSAL_SERIES:
         if not _intercensal_available():
             available = _format_postcensal_ranges()
@@ -478,7 +511,12 @@ def ingest_pep_county(
         intercensal_url = _intercensal_url()
         if intercensal_url is None:
             raise ValueError("Intercensal PEP URL is not configured.")
-        output_path = get_output_path(INTERCENSAL_SERIES, output_dir)
+        output_path = get_output_path(
+            INTERCENSAL_SERIES,
+            output_dir,
+            start_year=start_year,
+            end_year=end_year,
+        )
 
         if output_path.exists() and not force:
             logger.info(f"Using cached file: {output_path}")
@@ -486,6 +524,9 @@ def ingest_pep_county(
 
         raw_path, sha256 = download_pep_intercensal(intercensal_url, raw_dir, force)
         df = parse_pep_county(raw_path, vintage=INTERCENSAL_YEAR_RANGE[1])
+        df = _filter_year_range(df, start_year, end_year)
+        if df.empty:
+            raise ValueError("No PEP data found for requested year range.")
 
         ingested_at = datetime.now(UTC)
         df["vintage"] = INTERCENSAL_YEAR_RANGE[1]
@@ -526,6 +567,10 @@ def ingest_pep_county(
                 "row_count": len(df),
                 "county_count": df["county_fips"].nunique(),
                 "year_range": [int(df["year"].min()), int(df["year"].max())],
+                "year_filter": {
+                    "start_year": start_year,
+                    "end_year": end_year,
+                },
                 "reference_date_convention": "july_1",
                 "population_universe": "resident_population",
             },
@@ -545,6 +590,8 @@ def ingest_pep_county(
             output_dir=output_dir,
             raw_dir=raw_dir,
             prefer_postcensal_2020=prefer_postcensal_2020,
+            start_year=start_year,
+            end_year=end_year,
         )
 
     if series in {ALL_SERIES, AUTO_SERIES} and not _intercensal_available():
@@ -559,7 +606,12 @@ def ingest_pep_county(
             vintage = max(PEP_URLS.keys())
         _validate_postcensal_vintage(vintage)
 
-    output_path = get_output_path(vintage, output_dir)
+    output_path = get_output_path(
+        vintage,
+        output_dir,
+        start_year=start_year,
+        end_year=end_year,
+    )
 
     # Check cache
     if output_path.exists() and not force:
@@ -575,6 +627,9 @@ def ingest_pep_county(
 
     # Parse
     df = parse_pep_county(raw_path, vintage)
+    df = _filter_year_range(df, start_year, end_year)
+    if df.empty:
+        raise ValueError("No PEP data found for requested year range.")
 
     county_count = df["county_fips"].nunique()
     year_range = f"{df['year'].min()}-{df['year'].max()}"
@@ -633,6 +688,10 @@ def ingest_pep_county(
             "row_count": len(df),
             "county_count": df["county_fips"].nunique(),
             "year_range": [int(df["year"].min()), int(df["year"].max())],
+            "year_filter": {
+                "start_year": start_year,
+                "end_year": end_year,
+            },
             "reference_date_convention": "july_1",
             "population_universe": "resident_population",
         },
@@ -667,9 +726,16 @@ def _ingest_combined(
     output_dir: Path | str | None = None,
     raw_dir: Path | str | None = None,
     prefer_postcensal_2020: bool = False,
+    start_year: int | None = None,
+    end_year: int | None = None,
 ) -> Path:
     """Ingest intercensal + postcensal and create a combined file."""
-    output_path = get_output_path("combined", output_dir)
+    output_path = get_output_path(
+        "combined",
+        output_dir,
+        start_year=start_year,
+        end_year=end_year,
+    )
 
     # Check cache
     if output_path.exists() and not force:
@@ -702,6 +768,9 @@ def _ingest_combined(
     df = _combine_intercensal_postcensal(
         df_intercensal, df_postcensal, prefer_postcensal_2020
     )
+    df = _filter_year_range(df, start_year, end_year)
+    if df.empty:
+        raise ValueError("No PEP data found for requested year range.")
 
     # Build provenance
     ingested_at = datetime.now(UTC)
@@ -717,6 +786,10 @@ def _ingest_combined(
                 "intercensal": INTERCENSAL_YEAR_RANGE,
                 "postcensal_vintage": vintage,
                 "prefer_postcensal_2020": prefer_postcensal_2020,
+            },
+            "year_filter": {
+                "start_year": start_year,
+                "end_year": end_year,
             },
             "intercensal_source": intercensal_provenance.to_dict(),
             "postcensal_source": postcensal_provenance.to_dict(),

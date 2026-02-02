@@ -173,6 +173,11 @@ class TestGetOutputPath:
         path = get_output_path("combined", output_dir=tmp_path)
         assert path == tmp_path / "pep_county__combined.parquet"
 
+    def test_year_filtered_path(self, tmp_path):
+        """Test output path when year filters are provided."""
+        path = get_output_path(2024, output_dir=tmp_path, start_year=2015, end_year=2020)
+        assert path == tmp_path / "pep_county__v2024__y2015-2020.parquet"
+
 
 class TestPepUrls:
     """Tests for PEP URL configuration."""
