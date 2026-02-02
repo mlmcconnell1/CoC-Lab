@@ -2,7 +2,7 @@
 
 Provides Typer commands for:
 - ingest pep: Download and normalize PEP county population data
-- build pep-coc: Aggregate PEP from county to CoC geography
+- build pep: Aggregate PEP from county to CoC geography
 
 These commands implement the PEP ingest spec (see background/coclab_pep_county_spec.md).
 """
@@ -260,7 +260,7 @@ def ingest_pep(
         raise typer.Exit(1) from e
 
 
-def build_pep_coc(
+def build_pep(
     boundary: Annotated[
         str,
         typer.Option(
@@ -354,11 +354,11 @@ def build_pep_coc(
 
     Examples:
 
-        coclab build pep-coc --boundary 2024 --counties 2024
+        coclab build pep --boundary 2024 --counties 2024
 
-        coclab build pep-coc --boundary 2024 --counties 2024 --weighting equal
+        coclab build pep --boundary 2024 --counties 2024 --weighting equal
 
-        coclab build pep-coc --boundary 2024 --counties 2024 --start-year 2015 --end-year 2024
+        coclab build pep --boundary 2024 --counties 2024 --start-year 2015 --end-year 2024
     """
     from coclab.pep.aggregate import aggregate_pep_to_coc, get_output_path
 

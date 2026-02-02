@@ -24,7 +24,7 @@ Ingest should default to the best-available series (postcensal for now) and trac
 
 ### 1.3 Success Criteria
 - `coclab ingest pep` produces normalized Parquet under `data/curated/pep/`
-- `coclab build pep-coc` aggregates to CoC level with coverage diagnostics
+- `coclab build pep` aggregates to CoC level with coverage diagnostics
 - Coverage spans 2010 through latest available vintage year
 - Provenance includes source URLs, file hashes, and attribution
 
@@ -150,11 +150,11 @@ coclab ingest pep --series all --vintage 2024  # Both series
 - `2`: Validation/parse error
 - `3`: Download error
 
-### 4.2 `coclab build pep-coc`
+### 4.2 `coclab build pep`
 **Purpose:** Aggregate county PEP estimates to CoC geography.
 
 ```bash
-coclab build pep-coc --boundary 2025 --counties 2023 --weighting area_share
+coclab build pep --boundary 2025 --counties 2023 --weighting area_share
 ```
 
 **Options:**
@@ -220,7 +220,7 @@ The year 2020 appears in both intercensal and postcensal series:
 
 ### Agent A: CLI + Orchestration
 **Deliverables:**
-- Typer commands: `ingest pep`, `build pep-coc`
+- Typer commands: `ingest pep`, `build pep`
 - CLI wiring in `coclab/cli/`
 - Standard console output and exit codes
 
@@ -292,7 +292,7 @@ data/
 
 ### 8.2 Integration Tests
 - `coclab ingest pep --series intercensal-2010-2020 --force` with fixture
-- `coclab build pep-coc --boundary 2025 --counties 2023`
+- `coclab build pep --boundary 2025 --counties 2023`
 - Assert output files exist and have expected columns
 
 ### 8.3 Data Validation
@@ -384,7 +384,7 @@ coclab ingest pep --series intercensal-2010-2020
 coclab ingest pep --series postcensal --vintage 2024
 
 # 3) Aggregate to CoC
-coclab build pep-coc --boundary 2025 --counties 2023 --weighting area_share
+coclab build pep --boundary 2025 --counties 2023 --weighting area_share
 
 # 4) Verify output
 coclab show pep --detail

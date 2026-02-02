@@ -21,6 +21,7 @@ flowchart LR
     ingest --> acs-population
     ingest --> tract-relationship
     ingest --> zori
+    ingest --> pep
     registry --> registry-delete-entry[delete-entry]
     registry --> registry-rebuild[rebuild]
 
@@ -48,6 +49,7 @@ flowchart LR
     build --> build-panel[panel]
     build --> build-xwalks[xwalks]
     build --> build-export[export]
+    build --> build-pep[pep]
     show --> show-vintage-diffs[vintage-diffs]
     show --> show-map[map]
     show --> show-measures[measures]
@@ -532,6 +534,55 @@ coclab diagnostics zori --coc-zori coc_zori.parquet --coverage-threshold 0.85
 - Per-CoC diagnostic flags (low coverage, high dominance)
 - Optional CSV/parquet export
 
+## `coclab build pep`
+
+Aggregate PEP (Population Estimates Program) county population estimates to CoC geography. Uses CoC-county crosswalks to weight and aggregate county-level annual population estimates.
+
+```bash
+# Basic aggregation
+coclab build pep --boundary 2024 --counties 2024
+
+# With equal weighting (instead of area-weighted)
+coclab build pep --boundary 2024 --counties 2024 --weighting equal
+
+# Specify year range
+coclab build pep --boundary 2024 --counties 2024 --start-year 2015 --end-year 2024
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--boundary`, `-b` | CoC boundary vintage year | Required |
+| `--counties`, `-c` | TIGER county vintage year for crosswalk | Required |
+| `--weighting`, `-w` | Weighting method: `area_share` or `equal` | `area_share` |
+| `--pep-path` | Explicit path to PEP county parquet | Auto-detected |
+| `--xwalk-path` | Explicit crosswalk path | Auto-detected |
+| `--start-year` | First year to include | Earliest in data |
+| `--end-year` | Last year to include | Latest in data |
+| `--min-coverage` | Minimum coverage ratio for valid CoC-year | `0.95` |
+| `--output-dir`, `-o` | Output directory for CoC-level data | `data/curated/pep` |
+| `--force`, `-f` | Recompute even if output exists | `False` |
+
+**Prerequisites:**
+```bash
+coclab ingest census --year 2024 --type counties
+coclab build xwalks --boundary 2024 --counties 2024
+coclab ingest pep --series auto
+```
+
+**Output:**
+- `data/curated/pep/coc_pep__B{boundary}xC{counties}__w{weighting}.parquet`
+
+**Columns:**
+| Column | Description |
+|--------|-------------|
+| `coc_id` | CoC identifier |
+| `year` | Estimate year |
+| `population` | Aggregated population |
+| `coverage_ratio` | Share of CoC weight covered by counties with data |
+| `county_count` | Number of contributing counties |
+| `boundary_vintage` | CoC boundary vintage used |
+| `weighting_method` | Weighting method used |
+
 ## `coclab build export`
 
 Export an analysis-ready bundle with MANIFEST.json for downstream analysis repositories.
@@ -805,6 +856,54 @@ coclab ingest zori --geography county --start 2020-01-01 --end 2024-12-31
 
 **Output:**
 - `data/curated/zori/zori__{geography}.parquet`
+
+## `coclab ingest pep`
+
+Download and normalize PEP (Population Estimates Program) county population estimates from the Census Bureau.
+
+```bash
+# Auto-detect best available series
+coclab ingest pep --series auto
+
+# Specific postcensal vintage
+coclab ingest pep --series postcensal --vintage 2024
+
+# Intercensal 2010-2020 estimates (when available)
+coclab ingest pep --series intercensal-2010-2020
+
+# Both series combined
+coclab ingest pep --series all --vintage 2024
+
+# Filter to specific years
+coclab ingest pep --series postcensal --vintage 2024 --start 2015 --end 2020
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--series`, `-s` | Series to ingest: `auto`, `postcensal`, `intercensal-2010-2020`, or `all` | `auto` |
+| `--vintage`, `-v` | Postcensal vintage year (required for postcensal or all) | Latest |
+| `--url` | Override download URL (single vintage only) | Auto-detected |
+| `--force`, `-f` | Re-download and reprocess even if cached | `False` |
+| `--output-dir`, `-o` | Output directory for curated parquet | `data/curated/pep` |
+| `--raw-dir` | Directory for raw downloads | `data/raw/pep` |
+| `--prefer-postcensal-2020` | When combining series, use postcensal values for 2020 | `False` |
+| `--start` | First year to include (YYYY) | Earliest in data |
+| `--end` | Last year to include (YYYY) | Latest in data |
+
+**Series Options:**
+- `auto`: Best available (intercensal if available, else postcensal)
+- `postcensal`: Current estimates (use `--vintage` for specific release)
+- `intercensal-2010-2020`: Bridged intercensal series (not yet available)
+- `all`: Combine intercensal + postcensal (falls back to postcensal if unavailable)
+
+**Exit Codes:**
+- `0` - Success
+- `2` - Validation/parse error
+- `3` - Download error
+
+**Output:**
+- `data/curated/pep/pep_county__v{vintage}.parquet` (postcensal)
+- `data/curated/pep/pep_county__combined.parquet` (all series)
 
 ## `coclab list boundaries`
 

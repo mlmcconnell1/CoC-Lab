@@ -31,7 +31,7 @@ from coclab.cli.list_xwalks import list_xwalks
 from coclab.cli.panel_diagnostics import panel_diagnostics
 from coclab.cli.registry_rebuild import registry_rebuild
 from coclab.cli.show_measures import show_measures
-from coclab.cli.pep import build_pep_coc, ingest_pep
+from coclab.cli.pep import build_pep, ingest_pep
 from coclab.cli.zori import (
     DEFAULT_OUTPUT_DIR,
     DEFAULT_RAW_DIR,
@@ -1909,7 +1909,7 @@ build_app.command("zori")(aggregate_zori)
 build_app.command("panel")(build_panel_cmd)
 build_app.command("xwalks")(build_xwalks)
 build_app.command("export")(export_bundle)
-build_app.command("pep-coc")(build_pep_coc)
+build_app.command("pep")(build_pep)
 show_app.command("vintage-diffs")(compare_vintages)
 show_app.command("map")(show)
 show_app.command("measures")(show_measures)
