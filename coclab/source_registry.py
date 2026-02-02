@@ -64,6 +64,7 @@ SourceType = Literal[
     "nhgis_tract",  # NHGIS tract geometries
     "acs_tract",  # ACS tract-level data
     "acs_county",  # ACS county-level data
+    "pep_county",  # Census PEP county population estimates
     "pit",  # HUD PIT counts
     "other",  # Other external sources
 ]
