@@ -76,6 +76,41 @@ erDiagram
 | `intersection_area` | float | Overlap area in square meters |
 | `tract_area` | float | Total tract area in square meters |
 
+## County Crosswalk Schema
+
+Crosswalks linking CoC boundaries to county geographies:
+
+```mermaid
+erDiagram
+    COC_COUNTY_CROSSWALK {
+        string coc_id PK "CoC identifier"
+        string boundary_vintage PK "CoC boundary version"
+        string county_fips PK "5-char county FIPS"
+        float area_share "Fraction of county area in CoC"
+        float intersection_area "Area of overlap in sq meters"
+        float county_area "Total county area in sq meters"
+        float coc_area "Total CoC area in sq meters"
+    }
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `coc_id` | string | CoC identifier (e.g., `CO-500`) |
+| `boundary_vintage` | string | CoC boundary version |
+| `county_fips` | string | 5-character county FIPS code |
+| `area_share` | float | `intersection_area / county_area` (for county→CoC aggregation) |
+| `intersection_area` | float | Overlap area in square meters (ESRI:102003) |
+| `county_area` | float | Total county area in square meters |
+| `coc_area` | float | Total CoC area in square meters |
+
+**Deriving Alternative Shares:**
+
+- **County share (default):** `area_share = intersection_area / county_area`
+  Used for aggregating county-level data to CoC level (e.g., PEP population, ZORI rents).
+
+- **CoC share:** `coc_share = intersection_area / coc_area`
+  Can be derived for disaggregating CoC-level data to counties.
+
 ## CoC Measures Schema
 
 Aggregated demographic measures at CoC level:

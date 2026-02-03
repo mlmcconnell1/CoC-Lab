@@ -35,7 +35,10 @@ def build_coc_county_crosswalk(
         - coc_id
         - boundary_vintage
         - county_fips
-        - area_share
+        - area_share (intersection_area / county_area, for county→CoC aggregation)
+        - intersection_area (square meters in ESRI:102003)
+        - county_area (square meters in ESRI:102003)
+        - coc_area (square meters in ESRI:102003)
     """
     # Ensure required columns exist
     if "coc_id" not in coc_gdf.columns:
@@ -47,13 +50,17 @@ def build_coc_county_crosswalk(
     coc_proj = coc_gdf.to_crs(ALBERS_EQUAL_AREA_CRS)
     county_proj = county_gdf.to_crs(ALBERS_EQUAL_AREA_CRS)
 
+    # Calculate CoC areas before overlay
+    coc_proj = coc_proj.copy()
+    coc_proj["coc_area"] = coc_proj.geometry.area
+
     # Calculate county areas before overlay
     county_proj = county_proj.copy()
     county_proj["county_area"] = county_proj.geometry.area
 
     # Compute intersection with gpd.overlay()
     intersections = gpd.overlay(
-        coc_proj[["coc_id", "geometry"]],
+        coc_proj[["coc_id", "coc_area", "geometry"]],
         county_proj[["GEOID", "county_area", "geometry"]],
         how="intersection",
         keep_geom_type=False,
@@ -62,16 +69,19 @@ def build_coc_county_crosswalk(
     # Calculate intersection areas
     intersections["intersection_area"] = intersections.geometry.area
 
-    # Calculate area share (intersection / county)
+    # Calculate area share (intersection / county) for county→CoC aggregation
     intersections["area_share"] = intersections["intersection_area"] / intersections["county_area"]
 
-    # Build crosswalk DataFrame
+    # Build crosswalk DataFrame with all area columns
     crosswalk = pd.DataFrame(
         {
             "coc_id": intersections["coc_id"],
             "boundary_vintage": boundary_vintage,
             "county_fips": intersections["GEOID"],
             "area_share": intersections["area_share"],
+            "intersection_area": intersections["intersection_area"],
+            "county_area": intersections["county_area"],
+            "coc_area": intersections["coc_area"],
         }
     )
 
