@@ -325,7 +325,7 @@ Filenames use temporal shorthand notation (see [[07-Temporal-Terminology]]).
 
 | File | Path Pattern | Description |
 |------|--------------|-------------|
-| Boundary data | `data/curated/boundaries/boundaries__B{vintage}.parquet` | GeoParquet with boundaries |
+| Boundary data | `data/curated/coc_boundaries/coc__B{vintage}.parquet` | GeoParquet with boundaries |
 | Registry | `data/curated/boundary_registry.parquet` | Vintage tracking |
 | Maps | `data/curated/maps/{coc_id}__B{vintage}.html` | Generated HTML maps |
 | Raw downloads | `data/raw/hud_exchange/{vintage}/` | Original source files |

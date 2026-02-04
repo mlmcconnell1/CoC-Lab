@@ -111,7 +111,7 @@ The shorthand maps directly to filenames (use `x` instead of `×` for ASCII comp
 
 | Shorthand | Filename |
 |-----------|----------|
-| B2025 | `boundaries__B2025.parquet` |
+| B2025 | `coc__B2025.parquet` |
 | A2022@B2025×T2023 | `measures__A2022@B2025xT2023.parquet` |
 | P2024 | `pit__P2024.parquet` |
 

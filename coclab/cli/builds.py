@@ -37,21 +37,44 @@ def create_build(
             help="Root directory for named builds.",
         ),
     ] = DEFAULT_BUILDS_DIR,
+    data_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--data-dir",
+            help="Root data directory for resolving base assets (default: data/).",
+        ),
+    ] = None,
 ) -> None:
-    """Create a named build directory scaffold."""
+    """Create a named build directory scaffold with pinned base assets."""
     try:
         parsed_years = parse_year_spec(years)
     except ValueError as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=2) from exc
 
-    build_dir = ensure_build_dir(name, builds_dir=builds_dir)
+    try:
+        build_dir, base_assets = ensure_build_dir(
+            name,
+            builds_dir=builds_dir,
+            years=parsed_years,
+            data_dir=data_dir,
+        )
+    except FileNotFoundError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        typer.echo(
+            "Ensure boundary files are ingested for all requested years.",
+            err=True,
+        )
+        raise typer.Exit(code=1) from exc
+
     typer.echo(f"Created build: {name}")
     typer.echo(f"  Years: {parsed_years}")
     typer.echo(f"  Path: {build_dir}")
-    typer.echo(f"  Curated: {build_dir / 'data' / 'curated'}")
-    typer.echo(f"  Raw: {build_dir / 'data' / 'raw'}")
-    typer.echo(f"  Base: {build_dir / 'base'}")
+    typer.echo(f"  Base assets pinned: {len(base_assets)}")
+    for asset in base_assets:
+        typer.echo(
+            f"    - coc_boundary/{asset['year']}: {asset['sha256'][:12]}..."
+        )
     typer.echo(f"  Manifest: {build_dir / 'manifest.json'}")
 
 

@@ -288,6 +288,10 @@ def county_weights_filename(acs_vintage: str, weighting: str) -> str:
 def boundary_path(boundary_vintage: str, base_dir: Path | str | None = None) -> Path:
     """Get canonical path for curated boundary file.
 
+    .. deprecated::
+        Use :func:`coc_base_path` instead. This function uses the legacy
+        ``boundaries__B`` naming convention.
+
     Args:
         boundary_vintage: Boundary vintage year
         base_dir: Base data directory (defaults to "data")
@@ -300,6 +304,23 @@ def boundary_path(boundary_vintage: str, base_dir: Path | str | None = None) -> 
     else:
         base_dir = Path(base_dir)
     return base_dir / "curated" / "coc_boundaries" / boundary_filename(boundary_vintage)
+
+
+def coc_base_path(boundary_vintage: str, base_dir: Path | str | None = None) -> Path:
+    """Get canonical path for curated CoC boundary file using preferred naming.
+
+    Args:
+        boundary_vintage: Boundary vintage year (e.g., "2025")
+        base_dir: Base data directory (defaults to "data")
+
+    Returns:
+        Path like data/curated/coc_boundaries/coc__B2025.parquet
+    """
+    if base_dir is None:
+        base_dir = Path("data")
+    else:
+        base_dir = Path(base_dir)
+    return base_dir / "curated" / "coc_boundaries" / coc_base_filename(boundary_vintage)
 
 
 def tract_path(tract_vintage: str | int, base_dir: Path | str | None = None) -> Path:

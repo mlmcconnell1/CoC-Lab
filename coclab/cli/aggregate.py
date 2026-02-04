@@ -1,17 +1,24 @@
 """CLI command group for aggregating datasets to CoC level.
 
-Provides stub commands for acs, zori, pep, and pit dataset aggregation.
-Each command validates inputs (build existence, alignment mode) and prints
-what it would do, but does not run actual aggregation logic yet.
+Provides commands for acs, zori, pep, and pit dataset aggregation.
+Each command validates inputs, resolves build-scoped parameters, and
+delegates to the corresponding pipeline module.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
 
-from coclab.builds import require_build_dir, resolve_build_dir
+from coclab.builds import (
+    build_curated_dir,
+    get_build_years,
+    record_aggregate_run,
+    require_build_dir,
+    resolve_build_dir,
+)
 from coclab.year_spec import parse_year_spec
 
 aggregate_app = typer.Typer(
@@ -35,13 +42,14 @@ ZORI_ALIGN_MODES = ("monthly_native", "pit_january", "calendar_year_average")
 # ---------------------------------------------------------------------------
 
 
-def _validate_build(build: str) -> None:
+def _validate_build(build: str) -> Path:
     """Validate that the named build directory exists.
 
+    Returns the build directory path.
     Raises ``typer.Exit(2)`` with a helpful message when the build is missing.
     """
     try:
-        require_build_dir(build)
+        return require_build_dir(build)
     except FileNotFoundError:
         build_path = resolve_build_dir(build)
         typer.echo(f"Error: Build '{build}' not found at {build_path}", err=True)
@@ -60,37 +68,20 @@ def _validate_align(align: str, valid_modes: tuple[str, ...], dataset: str) -> N
         raise typer.Exit(2)
 
 
-def _validate_years(years: str | None) -> list[int] | None:
-    """Parse ``--years`` if provided, returning ``None`` when omitted."""
-    if years is None:
-        return None
-    try:
-        return parse_year_spec(years)
-    except ValueError as exc:
-        typer.echo(f"Error: {exc}", err=True)
-        raise typer.Exit(2) from exc
-
-
-def _print_stub(
-    dataset: str,
-    build: str,
-    align: str,
-    years: list[int] | None,
-    extras: dict[str, object] | None = None,
-) -> None:
-    """Print what the command would do and exit with a not-yet-implemented message."""
-    typer.echo(
-        f"Would aggregate {dataset} for build '{build}' with alignment '{align}'"
-    )
+def _resolve_years(years: str | None, build_dir: Path) -> list[int]:
+    """Parse ``--years`` if provided, otherwise use build years from manifest."""
     if years is not None:
-        typer.echo(f"  Years: {years}")
-    else:
-        typer.echo("  Years: (build default)")
-    if extras:
-        for key, value in extras.items():
-            typer.echo(f"  {key}: {value}")
-    typer.echo("Not yet implemented.", err=True)
-    raise typer.Exit(1)
+        try:
+            return parse_year_spec(years)
+        except ValueError as exc:
+            typer.echo(f"Error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+
+    build_years = get_build_years(build_dir)
+    if not build_years:
+        typer.echo("Error: Build manifest has no years defined.", err=True)
+        raise typer.Exit(2)
+    return build_years
 
 
 # ---------------------------------------------------------------------------
@@ -132,11 +123,34 @@ def aggregate_pep(
             help="Number of lag years (required when --align=lagged).",
         ),
     ] = None,
+    counties: Annotated[
+        str | None,
+        typer.Option(
+            "--counties",
+            "-c",
+            help="TIGER county vintage year for crosswalk (e.g., '2024').",
+        ),
+    ] = None,
+    weighting: Annotated[
+        str,
+        typer.Option(
+            "--weighting",
+            "-w",
+            help="Weighting method: 'area_share' (default) or 'equal'.",
+        ),
+    ] = "area_share",
+    min_coverage: Annotated[
+        float,
+        typer.Option(
+            "--min-coverage",
+            help="Minimum coverage ratio for valid CoC-year (default 0.95).",
+        ),
+    ] = 0.95,
 ) -> None:
     """Aggregate PEP population estimates to CoC level."""
-    _validate_build(build)
+    build_dir = _validate_build(build)
     _validate_align(align, PEP_ALIGN_MODES, "pep")
-    parsed_years = _validate_years(years)
+    parsed_years = _resolve_years(years, build_dir)
 
     if align == "lagged" and lag_years is None:
         typer.echo(
@@ -145,11 +159,102 @@ def aggregate_pep(
         )
         raise typer.Exit(2)
 
-    extras: dict[str, object] = {}
-    if lag_years is not None:
-        extras["lag-years"] = lag_years
+    # Determine boundary vintage from manifest (use first base asset year
+    # as default; all share the same geographic vintage in typical builds)
+    from coclab.builds import read_build_manifest
 
-    _print_stub("pep", build, align, parsed_years, extras=extras or None)
+    manifest = read_build_manifest(build_dir)
+    base_assets = manifest.get("base_assets", [])
+    if not base_assets:
+        typer.echo("Error: Build has no pinned base assets.", err=True)
+        raise typer.Exit(2)
+
+    # Use the latest boundary year as the canonical boundary vintage
+    boundary_years = sorted(a["year"] for a in base_assets if a["asset_type"] == "coc_boundary")
+    boundary_vintage = str(boundary_years[-1]) if boundary_years else None
+    if boundary_vintage is None:
+        typer.echo("Error: No coc_boundary base assets found in manifest.", err=True)
+        raise typer.Exit(2)
+
+    if counties is None:
+        counties = boundary_vintage
+
+    curated_dir = build_curated_dir(build_dir)
+    output_dir = curated_dir / "pep"
+
+    # Determine year range from parsed years
+    start_year = min(parsed_years)
+    end_year = max(parsed_years)
+
+    # Apply alignment adjustments
+    if align == "to_pit_year":
+        # PIT counts in January of year N reflect population of year N-1
+        start_year -= 1
+        end_year -= 1
+    elif align == "lagged" and lag_years is not None:
+        start_year -= lag_years
+        end_year -= lag_years
+
+    typer.echo(f"Aggregating PEP to CoC (build '{build}', align '{align}')...")
+    typer.echo(f"  Boundary: {boundary_vintage}, Counties: {counties}")
+    typer.echo(f"  Years: {start_year}-{end_year}")
+
+    from coclab.pep.aggregate import aggregate_pep_to_coc
+
+    align_params: dict | None = {"lag_years": lag_years} if lag_years else None
+
+    try:
+        result_path = aggregate_pep_to_coc(
+            boundary_vintage=boundary_vintage,
+            county_vintage=counties,
+            weighting=weighting,
+            start_year=start_year,
+            end_year=end_year,
+            min_coverage=min_coverage,
+            output_dir=output_dir,
+            force=True,
+        )
+
+        import pandas as pd
+
+        df = pd.read_parquet(result_path)
+        coc_count = df["coc_id"].nunique()
+        year_range = f"{df['year'].min()}-{df['year'].max()}"
+        materialized = sorted(df["year"].unique().tolist())
+        typer.echo(f"Wrote PEP aggregate: {result_path}")
+        typer.echo(f"  CoCs: {coc_count}, Years: {year_range}")
+
+        if result_path.is_relative_to(build_dir):
+            rel = result_path.relative_to(build_dir).as_posix()
+        else:
+            rel = str(result_path)
+        record_aggregate_run(
+            build_dir,
+            dataset="pep",
+            alignment=align,
+            years_requested=parsed_years,
+            years_materialized=materialized,
+            alignment_params=align_params,
+            outputs=[rel],
+        )
+
+    except FileNotFoundError as exc:
+        record_aggregate_run(
+            build_dir, dataset="pep", alignment=align,
+            years_requested=parsed_years, status="failed",
+            error=str(exc), alignment_params=align_params,
+        )
+        typer.echo(f"Error: {exc}", err=True)
+        typer.echo("Ensure PEP data and crosswalks are available.", err=True)
+        raise typer.Exit(1) from exc
+    except Exception as exc:
+        record_aggregate_run(
+            build_dir, dataset="pep", alignment=align,
+            years_requested=parsed_years, status="failed", error=str(exc),
+            alignment_params=align_params,
+        )
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -185,11 +290,73 @@ def aggregate_pit(
         ),
     ] = None,
 ) -> None:
-    """Aggregate PIT counts to CoC level."""
-    _validate_build(build)
+    """Aggregate PIT counts to CoC level.
+
+    PIT data already contains coc_id, so this command filters and
+    aligns PIT count data to the build's year scope.
+    """
+    build_dir = _validate_build(build)
     _validate_align(align, PIT_ALIGN_MODES, "pit")
-    parsed_years = _validate_years(years)
-    _print_stub("pit", build, align, parsed_years)
+    parsed_years = _resolve_years(years, build_dir)
+
+    curated_dir = build_curated_dir(build_dir)
+    output_dir = curated_dir / "pit"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    typer.echo(f"Aggregating PIT to CoC (build '{build}', align '{align}')...")
+    typer.echo(f"  Years: {parsed_years}")
+
+    import pandas as pd
+
+    from coclab.naming import pit_path
+
+    collected: list[pd.DataFrame] = []
+    missing: list[int] = []
+
+    for year in parsed_years:
+        src = pit_path(year)
+        if not Path(src).exists():
+            missing.append(year)
+            continue
+        df = pd.read_parquet(src)
+        if align == "to_calendar_year":
+            # PIT January count maps to the same calendar year
+            df = df.copy()
+            if "calendar_year" not in df.columns:
+                df["calendar_year"] = year
+        collected.append(df)
+
+    if missing:
+        typer.echo(
+            f"Warning: PIT data missing for years: {missing}",
+            err=True,
+        )
+
+    if not collected:
+        typer.echo("Error: No PIT data found for any requested year.", err=True)
+        raise typer.Exit(1)
+
+    result = pd.concat(collected, ignore_index=True)
+    output_path = output_dir / f"pit__P{parsed_years[0]}-{parsed_years[-1]}.parquet"
+    result.to_parquet(output_path, index=False)
+
+    materialized = [y for y in parsed_years if y not in missing]
+    coc_count = result["coc_id"].nunique() if "coc_id" in result.columns else "n/a"
+    typer.echo(f"Wrote PIT aggregate: {output_path}")
+    typer.echo(f"  CoCs: {coc_count}, Records: {len(result):,}")
+
+    if output_path.is_relative_to(build_dir):
+        rel = output_path.relative_to(build_dir).as_posix()
+    else:
+        rel = str(output_path)
+    record_aggregate_run(
+        build_dir,
+        dataset="pit",
+        alignment=align,
+        years_requested=parsed_years,
+        years_materialized=materialized,
+        outputs=[rel],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -228,20 +395,140 @@ def aggregate_acs(
         str | None,
         typer.Option(
             "--acs-vintage",
-            help="ACS 5-year estimate vintage (e.g. '2019-2023').",
+            help="ACS 5-year estimate vintage (e.g. '2019-2023'). Required for as_reported.",
+        ),
+    ] = None,
+    weighting: Annotated[
+        str,
+        typer.Option(
+            "--weighting",
+            "-w",
+            help="Weighting method: 'area' (default) or 'population'.",
+        ),
+    ] = "area",
+    tracts: Annotated[
+        int | None,
+        typer.Option(
+            "--tracts",
+            "-t",
+            help="Census tract vintage for crosswalk. Defaults to ACS end year.",
         ),
     ] = None,
 ) -> None:
     """Aggregate ACS estimates to CoC level."""
-    _validate_build(build)
+    build_dir = _validate_build(build)
     _validate_align(align, ACS_ALIGN_MODES, "acs")
-    parsed_years = _validate_years(years)
+    parsed_years = _resolve_years(years, build_dir)
 
-    extras: dict[str, object] = {}
-    if acs_vintage is not None:
-        extras["acs-vintage"] = acs_vintage
+    if align == "as_reported" and acs_vintage is None:
+        typer.echo(
+            "Error: --acs-vintage is required when --align=as_reported.",
+            err=True,
+        )
+        raise typer.Exit(2)
 
-    _print_stub("acs", build, align, parsed_years, extras=extras or None)
+    if weighting not in ("area", "population"):
+        typer.echo(
+            f"Error: Invalid weighting '{weighting}'. Use 'area' or 'population'.",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    from coclab.builds import read_build_manifest
+
+    manifest = read_build_manifest(build_dir)
+    base_assets = manifest.get("base_assets", [])
+    boundary_years = sorted(a["year"] for a in base_assets if a["asset_type"] == "coc_boundary")
+    if not boundary_years:
+        typer.echo("Error: No coc_boundary base assets found in manifest.", err=True)
+        raise typer.Exit(2)
+
+    # Use the latest boundary vintage as the canonical one
+    boundary_vintage = str(boundary_years[-1])
+
+    curated_dir = build_curated_dir(build_dir)
+    output_dir = curated_dir / "measures"
+
+    # Determine ACS vintage based on alignment mode
+    if align == "as_reported":
+        vintages_to_run = [acs_vintage]
+    elif align == "vintage_end_year":
+        # ACS end year = build year, so ACS 2019-2023 maps to year 2023
+        vintages_to_run = [f"{y - 4}-{y}" for y in parsed_years]
+    elif align == "window_center_year":
+        # ACS center year = build year, so year 2021 → ACS 2019-2023
+        vintages_to_run = [f"{y - 2}-{y + 2}" for y in parsed_years]
+
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    unique_vintages: list[str] = []
+    for v in vintages_to_run:
+        if v not in seen:
+            seen.add(v)
+            unique_vintages.append(v)
+
+    typer.echo(f"Aggregating ACS to CoC (build '{build}', align '{align}')...")
+    typer.echo(f"  Boundary: {boundary_vintage}")
+    typer.echo(f"  ACS vintages: {unique_vintages}")
+
+    from coclab.measures.acs import build_coc_measures
+    from coclab.naming import tract_xwalk_filename
+
+    for vintage in unique_vintages:
+        # Resolve tract vintage from ACS end year
+        if "-" in vintage:
+            acs_end_year = int(vintage.split("-")[1])
+        else:
+            acs_end_year = int(vintage)
+        tract_vintage = tracts if tracts is not None else acs_end_year
+
+        # Find crosswalk
+        xwalk_dir = curated_dir / "xwalks"
+        xwalk_path = xwalk_dir / tract_xwalk_filename(boundary_vintage, tract_vintage)
+        # Fall back to global xwalks
+        if not xwalk_path.exists():
+            xwalk_path = Path("data/curated/xwalks") / tract_xwalk_filename(
+                boundary_vintage, tract_vintage
+            )
+
+        if not xwalk_path.exists():
+            typer.echo(
+                f"Error: Crosswalk not found: {xwalk_path}",
+                err=True,
+            )
+            typer.echo(
+                f"Run: coclab build xwalks --boundary {boundary_vintage} "
+                f"--tracts {tract_vintage}",
+                err=True,
+            )
+            raise typer.Exit(1)
+
+        typer.echo(f"  Running ACS {vintage} (tracts {tract_vintage})...")
+        try:
+            build_coc_measures(
+                boundary_vintage=boundary_vintage,
+                acs_vintage=vintage,
+                crosswalk_path=xwalk_path,
+                weighting=weighting,
+                output_dir=output_dir,
+                show_progress=True,
+            )
+        except Exception as exc:
+            record_aggregate_run(
+                build_dir, dataset="acs", alignment=align,
+                years_requested=parsed_years, status="failed", error=str(exc),
+            )
+            typer.echo(f"Error aggregating ACS {vintage}: {exc}", err=True)
+            raise typer.Exit(1) from exc
+
+    record_aggregate_run(
+        build_dir,
+        dataset="acs",
+        alignment=align,
+        years_requested=parsed_years,
+        years_materialized=parsed_years,
+    )
+    typer.echo(f"ACS aggregation complete. Output in: {output_dir}")
 
 
 # ---------------------------------------------------------------------------
@@ -276,9 +563,110 @@ def aggregate_zori(
             help="Year spec override (e.g. '2018-2024'). Defaults to build years.",
         ),
     ] = None,
+    counties: Annotated[
+        str | None,
+        typer.Option(
+            "--counties",
+            "-c",
+            help="TIGER county vintage year for crosswalk (e.g., '2023').",
+        ),
+    ] = None,
+    acs_vintage: Annotated[
+        str | None,
+        typer.Option(
+            "--acs-vintage",
+            help="ACS 5-year vintage for weights (e.g. '2019-2023').",
+        ),
+    ] = None,
+    weighting: Annotated[
+        str,
+        typer.Option(
+            "--weighting",
+            "-w",
+            help="Weighting: renter_households (default), housing_units, population, equal.",
+        ),
+    ] = "renter_households",
 ) -> None:
     """Aggregate ZORI rent indices to CoC level."""
-    _validate_build(build)
+    build_dir = _validate_build(build)
     _validate_align(align, ZORI_ALIGN_MODES, "zori")
-    parsed_years = _validate_years(years)
-    _print_stub("zori", build, align, parsed_years)
+    parsed_years = _resolve_years(years, build_dir)
+
+    from coclab.builds import read_build_manifest
+
+    manifest = read_build_manifest(build_dir)
+    base_assets = manifest.get("base_assets", [])
+    boundary_years = sorted(a["year"] for a in base_assets if a["asset_type"] == "coc_boundary")
+    if not boundary_years:
+        typer.echo("Error: No coc_boundary base assets found in manifest.", err=True)
+        raise typer.Exit(2)
+
+    boundary_vintage = str(boundary_years[-1])
+
+    if counties is None:
+        counties = boundary_vintage
+    if acs_vintage is None:
+        # Default: ACS ending at the boundary vintage year
+        bv = int(boundary_vintage)
+        acs_vintage = f"{bv - 4}-{bv}"
+
+    # Map alignment mode to pipeline parameters
+    to_yearly = align != "monthly_native"
+    yearly_method_map = {
+        "pit_january": "pit_january",
+        "calendar_year_average": "calendar_mean",
+    }
+    yearly_method = yearly_method_map.get(align, "pit_january")
+
+    curated_dir = build_curated_dir(build_dir)
+    output_dir = curated_dir / "zori"
+
+    typer.echo(f"Aggregating ZORI to CoC (build '{build}', align '{align}')...")
+    typer.echo(f"  Boundary: {boundary_vintage}, Counties: {counties}")
+    typer.echo(f"  ACS vintage: {acs_vintage}, Weighting: {weighting}")
+    if to_yearly:
+        typer.echo(f"  Yearly collapse: {yearly_method}")
+
+    from coclab.rents.aggregate import aggregate_zori_to_coc
+
+    try:
+        result_path = aggregate_zori_to_coc(
+            boundary=boundary_vintage,
+            counties=counties,
+            acs_vintage=acs_vintage,
+            weighting=weighting,
+            output_dir=output_dir,
+            to_yearly=to_yearly,
+            yearly_method=yearly_method,
+            force=True,
+        )
+        typer.echo(f"Wrote ZORI aggregate: {result_path}")
+
+        if result_path.is_relative_to(build_dir):
+            rel = result_path.relative_to(build_dir).as_posix()
+        else:
+            rel = str(result_path)
+        record_aggregate_run(
+            build_dir,
+            dataset="zori",
+            alignment=align,
+            years_requested=parsed_years,
+            years_materialized=parsed_years,
+            outputs=[rel],
+        )
+
+    except FileNotFoundError as exc:
+        record_aggregate_run(
+            build_dir, dataset="zori", alignment=align,
+            years_requested=parsed_years, status="failed", error=str(exc),
+        )
+        typer.echo(f"Error: {exc}", err=True)
+        typer.echo("Ensure ZORI data, crosswalks, and ACS weights are available.", err=True)
+        raise typer.Exit(1) from exc
+    except Exception as exc:
+        record_aggregate_run(
+            build_dir, dataset="zori", alignment=align,
+            years_requested=parsed_years, status="failed", error=str(exc),
+        )
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from exc

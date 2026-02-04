@@ -46,7 +46,7 @@ sequenceDiagram
     CLI->>Visualizer: render_coc_map("CO-500")
     Visualizer->>Registry: latest_vintage()
     Registry-->>Visualizer: "2025"
-    Visualizer->>Storage: Read boundaries__B2025.parquet
+    Visualizer->>Storage: Read coc__B2025.parquet
     Storage-->>Visualizer: GeoDataFrame
     Visualizer->>Visualizer: Filter by coc_id
     Visualizer->>Visualizer: Create Folium map
@@ -90,7 +90,7 @@ sequenceDiagram
     Census->>Storage: Download TIGER shapefiles
     Census->>Storage: Save tracts__T2023.parquet
     Census-->>CLI: Tract GeoDataFrame
-    CLI->>Storage: Load boundaries__B2025.parquet
+    CLI->>Storage: Load coc__B2025.parquet
     CLI->>XwalkBuilder: build_coc_tract_crosswalk(...)
     XwalkBuilder->>XwalkBuilder: Reproject to ESRI:102003 (Albers)
     XwalkBuilder->>XwalkBuilder: Compute overlay intersections
@@ -239,7 +239,7 @@ coclab build export \
 
 | Phase | Output Location |
 |-------|-----------------|
-| 1a. Boundaries | `data/curated/boundaries/boundaries__B{year}.parquet` |
+| 1a. Boundaries | `data/curated/coc_boundaries/coc__B{year}.parquet` |
 | 1b. Census | `data/curated/census/tracts__T2023.parquet`, `counties__C2023.parquet` |
 | 1c. PIT | `data/curated/pit/pit_vintage__2024.parquet` |
 | 1d. ZORI | `data/curated/zori/zori__county.parquet` |

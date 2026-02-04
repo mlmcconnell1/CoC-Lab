@@ -19,8 +19,9 @@ PATTERNS = {
         "data/curated/xwalks/xwalk__B*xC*.parquet",
         "data/curated/xwalks/coc_county_xwalk__*.parquet",
     ],
-    # Boundaries: new boundaries__B*.parquet, legacy coc_boundaries__*.parquet
+    # Boundaries: preferred coc__B*, legacy boundaries__B*, oldest coc_boundaries__*
     "boundaries": [
+        "data/curated/coc_boundaries/coc__B*.parquet",
         "data/curated/coc_boundaries/boundaries__B*.parquet",
         "data/curated/coc_boundaries/coc_boundaries__*.parquet",
     ],

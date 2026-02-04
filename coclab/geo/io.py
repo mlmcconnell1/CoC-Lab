@@ -63,16 +63,18 @@ def write_geoparquet(
 def curated_boundary_path(boundary_vintage: str, base_dir: Path | str | None = None) -> Path:
     """Get the canonical path for a curated boundary file.
 
+    Uses the preferred ``coc__BYYYY`` naming convention.
+
     Args:
         boundary_vintage: Version identifier (e.g., "2025", "HUDOpenData_2025-08-19")
         base_dir: Base data directory (defaults to "data")
 
     Returns:
-        Path like data/curated/coc_boundaries/boundaries__B2025.parquet
+        Path like data/curated/coc_boundaries/coc__B2025.parquet
     """
-    from coclab.naming import boundary_path
+    from coclab.naming import coc_base_path
 
-    return boundary_path(boundary_vintage, base_dir)
+    return coc_base_path(boundary_vintage, base_dir)
 
 
 def resolve_curated_boundary_path(
