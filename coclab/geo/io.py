@@ -75,6 +75,38 @@ def curated_boundary_path(boundary_vintage: str, base_dir: Path | str | None = N
     return boundary_path(boundary_vintage, base_dir)
 
 
+def resolve_curated_boundary_path(
+    boundary_vintage: str, base_dir: Path | str | None = None
+) -> Path:
+    """Resolve an existing curated boundary file across supported naming schemes.
+
+    Preference order:
+    1. coc__B{vintage}.parquet
+    2. boundaries__B{vintage}.parquet
+    3. coc_boundaries__{vintage}.parquet (legacy)
+    """
+    from coclab.naming import boundary_filename, coc_base_filename
+
+    if base_dir is None:
+        base_dir = Path("data")
+    else:
+        base_dir = Path(base_dir)
+
+    boundaries_dir = base_dir / "curated" / "coc_boundaries"
+    candidates = [
+        boundaries_dir / coc_base_filename(boundary_vintage),
+        boundaries_dir / boundary_filename(boundary_vintage),
+        boundaries_dir / f"coc_boundaries__{boundary_vintage}.parquet",
+    ]
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    tried = ", ".join(str(path) for path in candidates)
+    raise FileNotFoundError(f"Boundary file not found for vintage '{boundary_vintage}'. Tried: {tried}")
+
+
 def registry_path(base_dir: Path | str | None = None) -> Path:
     """Get the path to the boundary registry file.
 

@@ -19,6 +19,7 @@ from coclab.geo.io import (
     curated_boundary_path,
     read_geoparquet,
     registry_path,
+    resolve_curated_boundary_path,
     write_geoparquet,
 )
 from coclab.geo.normalize import (
@@ -316,3 +317,36 @@ class TestPathHelpers:
         """registry_path should respect custom base_dir."""
         path = registry_path(base_dir="/custom/data")
         assert path == Path("/custom/data/curated/boundary_registry.parquet")
+
+    def test_resolve_curated_boundary_path_prefers_coc_base(self, tmp_path):
+        """Resolver should prefer coc__B* when multiple names exist."""
+        boundaries_dir = tmp_path / "data" / "curated" / "coc_boundaries"
+        boundaries_dir.mkdir(parents=True)
+        coc_path = boundaries_dir / "coc__B2025.parquet"
+        alt_path = boundaries_dir / "boundaries__B2025.parquet"
+        coc_path.touch()
+        alt_path.touch()
+
+        resolved = resolve_curated_boundary_path("2025", base_dir=tmp_path / "data")
+        assert resolved == coc_path
+
+    def test_resolve_curated_boundary_path_fallbacks(self, tmp_path):
+        """Resolver should fall back from boundaries__B* to coc_boundaries__*."""
+        boundaries_dir = tmp_path / "data" / "curated" / "coc_boundaries"
+        boundaries_dir.mkdir(parents=True)
+
+        boundaries_path = boundaries_dir / "boundaries__B2024.parquet"
+        boundaries_path.touch()
+        resolved = resolve_curated_boundary_path("2024", base_dir=tmp_path / "data")
+        assert resolved == boundaries_path
+
+        boundaries_path.unlink()
+        legacy_path = boundaries_dir / "coc_boundaries__2024.parquet"
+        legacy_path.touch()
+        resolved = resolve_curated_boundary_path("2024", base_dir=tmp_path / "data")
+        assert resolved == legacy_path
+
+    def test_resolve_curated_boundary_path_missing_raises(self, tmp_path):
+        """Resolver should raise with all tried paths when no file exists."""
+        with pytest.raises(FileNotFoundError, match="Boundary file not found"):
+            resolve_curated_boundary_path("1999", base_dir=tmp_path / "data")

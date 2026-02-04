@@ -149,6 +149,18 @@ class TestRenderCocMap:
         with pytest.raises(FileNotFoundError):
             render_coc_map("CO-500", vintage="1999")
 
+    def test_render_supports_coc_base_filename(self, sample_boundaries, temp_data_dir):
+        """Render should resolve new coc__B* boundary filename."""
+        legacy_path = sample_boundaries["parquet_path"]
+        gdf = sample_boundaries["gdf"]
+
+        coc_path = temp_data_dir / "data" / "curated" / "coc_boundaries" / "coc__B2025.parquet"
+        gdf.to_parquet(coc_path)
+        legacy_path.unlink()
+
+        out_path = render_coc_map("CO-500", vintage="2025")
+        assert out_path.exists()
+
     def test_render_no_vintages_raises(self, temp_data_dir):
         """Test that missing vintages raises ValueError."""
         with pytest.raises(ValueError, match="No boundary vintages available"):

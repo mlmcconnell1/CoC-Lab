@@ -37,6 +37,18 @@ def boundary_filename(boundary_vintage: str) -> str:
     return f"boundaries__B{boundary_vintage}.parquet"
 
 
+def coc_base_filename(boundary_vintage: str) -> str:
+    """Generate filename for CoC base boundary data.
+
+    Args:
+        boundary_vintage: Boundary vintage year (e.g., "2025")
+
+    Returns:
+        Filename like 'coc__B2025.parquet'
+    """
+    return f"coc__B{boundary_vintage}.parquet"
+
+
 def tract_filename(tract_vintage: str | int) -> str:
     """Generate filename for census tract geometry.
 

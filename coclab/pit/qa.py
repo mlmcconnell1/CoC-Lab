@@ -321,11 +321,11 @@ def check_missing_cocs(
     else:
         # Try to load from curated path
         try:
-            from coclab.geo.io import curated_boundary_path, read_geoparquet
+            from coclab.geo.io import read_geoparquet, resolve_curated_boundary_path
 
             if data_dir is None:
                 data_dir = Path("data")
-            boundary_path = curated_boundary_path(boundary_vintage, base_dir=data_dir)
+            boundary_path = resolve_curated_boundary_path(boundary_vintage, base_dir=data_dir)
             gdf = read_geoparquet(boundary_path)
             boundary_cocs = set(gdf["coc_id"].unique())
         except FileNotFoundError:
