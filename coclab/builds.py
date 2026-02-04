@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 DEFAULT_BUILDS_DIR = Path("builds")
@@ -23,9 +24,23 @@ def build_raw_dir(build_dir: Path) -> Path:
     return build_dir / "data" / "raw"
 
 
+def build_base_dir(build_dir: Path) -> Path:
+    """Return the base directory for a build."""
+    return build_dir / "base"
+
+
 def build_hub_dir(build_dir: Path) -> Path:
-    """Return the hub directory for a build."""
-    return build_dir / "hub"
+    """Return the base directory for a build.
+
+    .. deprecated::
+        Use :func:`build_base_dir` instead.
+    """
+    return build_base_dir(build_dir)
+
+
+def build_manifest_path(build_dir: Path) -> Path:
+    """Return the manifest.json path for a build."""
+    return build_dir / "manifest.json"
 
 
 def ensure_build_dir(name: str, builds_dir: Path | None = None) -> Path:
@@ -33,11 +48,15 @@ def ensure_build_dir(name: str, builds_dir: Path | None = None) -> Path:
     build_dir = resolve_build_dir(name, builds_dir=builds_dir)
     curated_dir = build_curated_dir(build_dir)
     raw_dir = build_raw_dir(build_dir)
-    hub_dir = build_hub_dir(build_dir)
+    base_dir = build_base_dir(build_dir)
 
     curated_dir.mkdir(parents=True, exist_ok=True)
     raw_dir.mkdir(parents=True, exist_ok=True)
-    hub_dir.mkdir(parents=True, exist_ok=True)
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest = build_manifest_path(build_dir)
+    if not manifest.exists():
+        manifest.write_text(json.dumps({"schema_version": 1}, indent=2) + "\n")
 
     return build_dir
 

@@ -11,14 +11,17 @@ runner = CliRunner()
 
 def test_build_create_and_list():
     with runner.isolated_filesystem():
-        result = runner.invoke(app, ["build", "create", "--name", "demo"])
+        result = runner.invoke(
+            app, ["build", "create", "--name", "demo", "--years", "2018-2024"],
+        )
         assert result.exit_code == 0
         assert "Created build: demo" in result.output
 
         build_root = Path("builds") / "demo"
         assert (build_root / "data" / "curated").exists()
         assert (build_root / "data" / "raw").exists()
-        assert (build_root / "hub").exists()
+        assert (build_root / "base").exists()
+        assert (build_root / "manifest.json").exists()
 
         list_result = runner.invoke(app, ["build", "list"])
         assert list_result.exit_code == 0

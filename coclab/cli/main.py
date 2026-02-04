@@ -11,6 +11,7 @@ from typing import Annotated
 
 import typer
 
+from coclab.cli.aggregate import aggregate_app
 from coclab.cli.build_measures import build_measures
 from coclab.cli.build_panel import DEFAULT_ZORI_MIN_COVERAGE, build_panel_cmd
 from coclab.cli.build_xwalks import build_xwalks
@@ -30,9 +31,9 @@ from coclab.cli.list_census import list_census
 from coclab.cli.list_measures import list_measures
 from coclab.cli.list_xwalks import list_xwalks
 from coclab.cli.panel_diagnostics import panel_diagnostics
+from coclab.cli.pep import build_pep, ingest_pep
 from coclab.cli.registry_rebuild import registry_rebuild
 from coclab.cli.show_measures import show_measures
-from coclab.cli.pep import build_pep, ingest_pep
 from coclab.cli.zori import (
     DEFAULT_OUTPUT_DIR,
     DEFAULT_RAW_DIR,
@@ -75,11 +76,6 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
-ingest_app = typer.Typer(
-    name="ingest",
-    help="Ingest raw and curated datasets",
-    no_args_is_help=True,
-)
 ingest_app = typer.Typer(
     name="ingest",
     help="Ingest raw and curated datasets",
@@ -1864,6 +1860,7 @@ app.add_typer(list_app, name="list")
 app.add_typer(validate_app, name="validate")
 app.add_typer(diagnostics_app, name="diagnostics")
 app.add_typer(build_app, name="build")
+app.add_typer(aggregate_app, name="aggregate")
 app.add_typer(show_app, name="show")
 app.add_typer(registry_app, name="registry")
 app.command("ingest-acs-population", hidden=True)(ingest_acs_population_deprecated)

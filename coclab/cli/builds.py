@@ -8,6 +8,7 @@ from typing import Annotated
 import typer
 
 from coclab.builds import DEFAULT_BUILDS_DIR, ensure_build_dir, list_builds
+from coclab.year_spec import parse_year_spec
 
 
 def create_build(
@@ -19,6 +20,16 @@ def create_build(
             help="Name of the build directory to create.",
         ),
     ],
+    years: Annotated[
+        str,
+        typer.Option(
+            "--years",
+            help=(
+                "Year spec: range (2018-2024), list (2018,2019,2020), "
+                "or mixed (2018-2020,2022)."
+            ),
+        ),
+    ],
     builds_dir: Annotated[
         Path,
         typer.Option(
@@ -28,12 +39,20 @@ def create_build(
     ] = DEFAULT_BUILDS_DIR,
 ) -> None:
     """Create a named build directory scaffold."""
+    try:
+        parsed_years = parse_year_spec(years)
+    except ValueError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
     build_dir = ensure_build_dir(name, builds_dir=builds_dir)
     typer.echo(f"Created build: {name}")
+    typer.echo(f"  Years: {parsed_years}")
     typer.echo(f"  Path: {build_dir}")
     typer.echo(f"  Curated: {build_dir / 'data' / 'curated'}")
     typer.echo(f"  Raw: {build_dir / 'data' / 'raw'}")
-    typer.echo(f"  Hub: {build_dir / 'hub'}")
+    typer.echo(f"  Base: {build_dir / 'base'}")
+    typer.echo(f"  Manifest: {build_dir / 'manifest.json'}")
 
 
 def list_builds_cmd(
