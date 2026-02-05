@@ -506,6 +506,9 @@ def aggregate_acs(
     from coclab.measures.acs import build_coc_measures
     from coclab.naming import tract_xwalk_filename
 
+    def decennial_floor(year: int) -> int:
+        return year - (year % 10)
+
     for vintage in unique_vintages:
         # Resolve tract vintage from ACS end year
         if "-" in vintage:
@@ -528,9 +531,19 @@ def aggregate_acs(
                 f"Error: Crosswalk not found: {xwalk_path}",
                 err=True,
             )
+            suggested_tract = None
+            if tract_vintage % 10 != 0:
+                suggested = decennial_floor(tract_vintage)
+                suggested_tract = suggested
+                typer.echo(
+                    "The requested census tract year wasn't found and isn't on a decennial. "
+                    f"Did you mean to request {suggested}?",
+                    err=True,
+                )
+            hint_tract = suggested_tract if suggested_tract is not None else tract_vintage
             typer.echo(
                 f"Run: coclab build xwalks --boundary {boundary_vintage} "
-                f"--tracts {tract_vintage}",
+                f"--tracts {hint_tract}",
                 err=True,
             )
             raise typer.Exit(1)
