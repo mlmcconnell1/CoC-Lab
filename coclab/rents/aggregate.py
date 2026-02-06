@@ -785,15 +785,25 @@ def aggregate_zori_to_coc(
         f"acs={acs_vintage}, weighting={weighting}"
     )
 
-    # Load input data
-    zori_df = load_zori(geography, zori_path, output_dir)
+    # Resolve actual ZORI path with fallback to global curated directory
+    if zori_path is not None:
+        zori_source_path = Path(zori_path)
+    else:
+        zori_source_path = get_zori_output_path(geography, output_dir)
+        if not zori_source_path.exists() and output_dir is not None:
+            global_path = get_zori_output_path(geography, DEFAULT_OUTPUT_DIR)
+            if global_path.exists():
+                logger.info(f"ZORI not found at {zori_source_path}, using global {global_path}")
+                zori_source_path = global_path
+
+    # Load input data using resolved path
+    zori_df = load_zori(geography, zori_path=zori_source_path)
     xwalk_df = load_crosswalk(boundary, counties, xwalk_path, xwalk_dir)
     weights_df = load_weights(acs_vintage, weighting, weights_dir)
 
     zori_df, weights_df = _align_ct_geographies(zori_df, xwalk_df, weights_df, counties)
 
     # Get provenance from source files for lineage tracking
-    zori_source_path = Path(zori_path) if zori_path else get_zori_output_path(geography, output_dir)
     zori_provenance = read_provenance(zori_source_path)
 
     # Perform aggregation
