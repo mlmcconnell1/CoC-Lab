@@ -314,7 +314,7 @@ class TestBuildMeasuresCommand:
         mock_latest.return_value = "2025"
         xwalk_dir = tmp_path / "xwalks"
         xwalk_dir.mkdir(parents=True, exist_ok=True)
-        xwalk_path = xwalk_dir / "coc_tract_xwalk__2025__2023.parquet"
+        xwalk_path = xwalk_dir / "coc_tract_xwalk__2025__2020.parquet"
         xwalk_path.touch()
 
         mock_build.return_value = pd.DataFrame({"coc_id": ["CO-500"], "total_population": [1000]})

@@ -226,7 +226,7 @@ def test_aggregate_acs_missing_crosswalk_suggests_decennial():
         result = runner.invoke(app, ["aggregate", "acs", "--build", "demo"])
         assert result.exit_code == 1
         assert "Crosswalk not found" in result.output
-        assert "Did you mean to request 2010?" in result.output
+        assert "Did you mean to request" not in result.output
         assert "Run: coclab build xwalks --boundary 2015 --tracts 2010" in result.output
 
 
