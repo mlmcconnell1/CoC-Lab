@@ -188,6 +188,35 @@ class TestLoadAcsMeasures:
         )
         assert result["coc_id"].dtype == object
 
+    def test_load_weighting_mismatch_raises(self, tmp_path):
+        """Test that weighting mismatch error lists available weightings."""
+        measures_dir = tmp_path / "measures"
+        measures_dir.mkdir()
+
+        df = pd.DataFrame(
+            {
+                "coc_id": ["CO-500"],
+                "total_population": [500000],
+                "adult_population": [400000],
+                "population_below_poverty": [50000],
+                "median_household_income": [65000],
+                "median_gross_rent": [1200],
+                "coverage_ratio": [0.95],
+                "weighting_method": ["area"],
+            }
+        )
+        df.to_parquet(
+            measures_dir / "coc_measures__2024__2023.parquet", index=False
+        )
+
+        with pytest.raises(ValueError, match="available weightings.*area"):
+            _load_acs_measures(
+                boundary_vintage="2024",
+                acs_vintage="2023",
+                weighting="population",
+                measures_dir=measures_dir,
+            )
+
     def test_load_measures_with_tract_suffix(self, tmp_path):
         """Test that measures files with tract suffix are discovered.
 
@@ -347,10 +376,10 @@ class TestBuildPanel:
             )
             df_pit.to_parquet(pit_dir / f"pit_counts__{year}.parquet", index=False)
 
-        # Create ACS measures for 2022 and 2023 vintages
+        # Create ACS measures for 2022 and 2023 vintages (both weightings)
         for acs_year in [2022, 2023]:
             boundary_year = acs_year + 1  # boundary vintage = acs + 1 per default policy
-            df_acs = pd.DataFrame(
+            df_pop = pd.DataFrame(
                 {
                     "coc_id": ["CO-500", "CA-600"],
                     "total_population": [500000, 10000000],
@@ -362,6 +391,9 @@ class TestBuildPanel:
                     "weighting_method": ["population", "population"],
                 }
             )
+            df_area = df_pop.copy()
+            df_area["weighting_method"] = "area"
+            df_acs = pd.concat([df_pop, df_area], ignore_index=True)
             df_acs.to_parquet(
                 measures_dir / f"coc_measures__{boundary_year}__{acs_year}.parquet",
                 index=False,
@@ -516,6 +548,38 @@ class TestBuildPanel:
 
         assert len(result) == 0
         assert set(result.columns) == set(PANEL_COLUMNS)
+
+    def test_build_all_null_acs_raises(self, tmp_path):
+        """Test that panel with all-null ACS columns raises ValueError.
+
+        When PIT data exists but no ACS measures are found for any year,
+        the panel would have entirely null ACS columns. This should fail
+        fast rather than silently producing an unusable panel.
+        """
+        pit_dir = tmp_path / "pit"
+        pit_dir.mkdir()
+        measures_dir = tmp_path / "measures"
+        measures_dir.mkdir()
+
+        # Create PIT data but no measures files
+        df_pit = pd.DataFrame(
+            {
+                "coc_id": ["CO-500", "CA-600"],
+                "pit_total": [1200, 45000],
+                "pit_sheltered": [800, 30000],
+                "pit_unsheltered": [400, 15000],
+                "pit_year": [2024, 2024],
+            }
+        )
+        df_pit.to_parquet(pit_dir / "pit_counts__2024.parquet", index=False)
+
+        with pytest.raises(ValueError, match="All ACS-derived columns are null"):
+            build_panel(
+                2024,
+                2024,
+                pit_dir=pit_dir,
+                measures_dir=measures_dir,
+            )
 
 
 class TestSavePanel:

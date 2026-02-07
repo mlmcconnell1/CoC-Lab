@@ -174,8 +174,8 @@ def full_test_setup(tmp_path, sample_cocs, sample_acs_measures):
         df.to_parquet(pit_dir / f"pit_counts__{year}.parquet", index=False)
 
     # Create ACS measures for each boundary/acs vintage combination
-    for acs_year in [2021, 2022, 2023]:
-        boundary_year = acs_year + 1
+    # Include (2024,2022) for custom policy test (2-year lag: year 2024 → acs 2022)
+    for boundary_year, acs_year in [(2022, 2021), (2023, 2022), (2024, 2022), (2024, 2023)]:
         df = pd.DataFrame(
             {
                 "coc_id": sample_cocs,

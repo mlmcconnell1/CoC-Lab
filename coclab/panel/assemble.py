@@ -429,21 +429,13 @@ def _load_acs_measures(
     if "weighting_method" in df.columns:
         df_weighted = df[df["weighting_method"] == weighting].copy()
         if df_weighted.empty:
-            logger.warning(
-                f"ACS measures file has no rows for weighting={weighting}; "
-                "returning empty dataset to avoid mixing weightings"
+            available = sorted(df["weighting_method"].unique())
+            raise ValueError(
+                f"ACS measures file {measures_path.name} has no rows for "
+                f"weighting={weighting}; available weightings: {available}. "
+                f"Re-run 'coclab build measures' with --weighting {weighting}, "
+                f"or use --weighting {available[0]} for this panel."
             )
-            return pd.DataFrame(
-                columns=[
-                    "coc_id",
-                    "total_population",
-                    "adult_population",
-                    "population_below_poverty",
-                    "median_household_income",
-                    "median_gross_rent",
-                    "coverage_ratio",
-                ]
-            ), None
         df = df_weighted
 
     # Select relevant columns
@@ -849,6 +841,24 @@ def build_panel(
 
     # Combine all years
     panel_df = pd.concat(year_dfs, ignore_index=True)
+
+    # Fail fast if every ACS column is null (panel is unusable for analysis)
+    acs_cols = [
+        "total_population",
+        "adult_population",
+        "population_below_poverty",
+        "median_household_income",
+        "median_gross_rent",
+        "coverage_ratio",
+    ]
+    present = [c for c in acs_cols if c in panel_df.columns]
+    if present and len(panel_df) > 0 and panel_df[present].isna().all().all():
+        raise ValueError(
+            f"All ACS-derived columns are null for every row in the panel "
+            f"({start_year}-{end_year}, weighting={policy.weighting_method}). "
+            f"No usable ACS measures were found. Check that measures have been "
+            f"built for the required vintage range with the requested weighting."
+        )
 
     # Sort by CoC and year for boundary change detection
     panel_df = panel_df.sort_values(["coc_id", "year"]).reset_index(drop=True)
