@@ -229,7 +229,7 @@ class TestFetchCountyAcsTotals:
             status_code=404,
         )
 
-        df, sha256, file_size = fetch_county_acs_totals("2019-2023", "renter_households")
+        df, sha256, file_size, _ = fetch_county_acs_totals("2019-2023", "renter_households")
 
         # Check required columns exist
         required_cols = [
@@ -268,7 +268,7 @@ class TestFetchCountyAcsTotals:
             status_code=404,
         )
 
-        df, _, _ = fetch_county_acs_totals("2019-2023", "housing_units")
+        df, _, _, _ = fetch_county_acs_totals("2019-2023", "housing_units")
 
         assert df.iloc[0]["weighting_method"] == "housing_units"
         assert "B25001" in df.iloc[0]["source_ref"]
@@ -290,7 +290,7 @@ class TestFetchCountyAcsTotals:
             status_code=404,
         )
 
-        df, _, _ = fetch_county_acs_totals("2019-2023", "population")
+        df, _, _, _ = fetch_county_acs_totals("2019-2023", "population")
 
         assert df.iloc[0]["weighting_method"] == "population"
         assert "B01003" in df.iloc[0]["source_ref"]
@@ -319,7 +319,7 @@ class TestFetchCountyAcsTotals:
             status_code=404,
         )
 
-        df, _, _ = fetch_county_acs_totals("2019-2023", "renter_households")
+        df, _, _, _ = fetch_county_acs_totals("2019-2023", "renter_households")
 
         # All non-NA values should be >= 0
         valid_weights = df["weight_value"].dropna()
@@ -339,7 +339,7 @@ class TestFetchCountyAcsTotals:
             status_code=404,
         )
 
-        df, _, _ = fetch_county_acs_totals("2019-2023", "renter_households")
+        df, _, _, _ = fetch_county_acs_totals("2019-2023", "renter_households")
 
         assert len(df) > 0
 
@@ -547,7 +547,7 @@ class TestSchemaValidation:
             status_code=404,
         )
 
-        df, _, _ = fetch_county_acs_totals("2019-2023", "renter_households")
+        df, _, _, _ = fetch_county_acs_totals("2019-2023", "renter_households")
 
         # All county FIPS should be exactly 5 characters
         assert all(len(fips) == 5 for fips in df["county_fips"])
@@ -566,7 +566,7 @@ class TestSchemaValidation:
             status_code=404,
         )
 
-        df, _, _ = fetch_county_acs_totals("2019-2023", "renter_households")
+        df, _, _, _ = fetch_county_acs_totals("2019-2023", "renter_households")
 
         assert all(df["data_source"] == "acs_5yr")
 
@@ -584,7 +584,7 @@ class TestSchemaValidation:
             status_code=404,
         )
 
-        df, _, _ = fetch_county_acs_totals("2019-2023", "renter_households")
+        df, _, _, _ = fetch_county_acs_totals("2019-2023", "renter_households")
 
         # Check that timestamp is timezone-aware
         ts = df.iloc[0]["ingested_at"]

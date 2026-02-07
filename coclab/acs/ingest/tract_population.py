@@ -26,7 +26,6 @@ Output Schema
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import re
 from datetime import UTC, datetime
@@ -37,6 +36,7 @@ import pandas as pd
 
 from coclab import naming
 from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
+from coclab.raw_snapshot import write_api_snapshot
 from coclab.source_registry import check_source_changed, register_source
 from coclab.sources import CENSUS_API_ACS5
 
@@ -250,8 +250,11 @@ def fetch_state_tract_population(year: int, state_fips: str) -> tuple[pd.DataFra
 def fetch_tract_population(
     acs_vintage: str,
     tract_vintage: str,
-) -> tuple[pd.DataFrame, str, int]:
+    raw_root: Path | None = None,
+) -> tuple[pd.DataFrame, str, int, Path | None]:
     """Fetch tract-level population data for all US states and territories.
+
+    Raw API responses are persisted under ``data/raw/acs_tract/<snapshot_id>/``.
 
     Parameters
     ----------
@@ -259,11 +262,13 @@ def fetch_tract_population(
         ACS vintage string like "2019-2023" representing the 5-year estimate period.
     tract_vintage : str
         Census tract geography vintage (e.g., "2023").
+    raw_root : Path, optional
+        Override the default raw data root (for testing).
 
     Returns
     -------
-    tuple[pd.DataFrame, str, int]
-        Tuple of (DataFrame, SHA-256 hash, total content size).
+    tuple[pd.DataFrame, str, int, Path | None]
+        Tuple of (DataFrame, SHA-256 hash, content size, raw snapshot dir).
         DataFrame with columns:
         - tract_geoid (str): 11-character Census tract GEOID
         - acs_vintage (str): ACS vintage string
@@ -302,10 +307,26 @@ def fetch_tract_population(
     if not dfs:
         raise ValueError("No tract population data could be fetched from any state")
 
-    # Compute SHA-256 hash of all raw content combined
-    combined_content = b"".join(all_raw_content)
-    content_sha256 = hashlib.sha256(combined_content).hexdigest()
-    content_size = len(combined_content)
+    # Persist raw API snapshot
+    source_url = CENSUS_API.format(year=year)
+    snapshot_id = f"A{year}_B01003"
+    snap_dir, content_sha256, content_size = write_api_snapshot(
+        all_raw_content,
+        "acs_tract",
+        snapshot_id=snapshot_id,
+        request_metadata={
+            "url": source_url,
+            "params": {
+                "get": "NAME,B01003_001E,B01003_001M",
+                "for": "tract:*",
+                "in": "state:{fips}",
+            },
+            "table": "B01003",
+            "acs_vintage": acs_vintage,
+        },
+        record_count=sum(len(df) for df in dfs),
+        raw_root=raw_root,
+    )
 
     # Combine all states
     result = pd.concat(dfs, ignore_index=True)
@@ -340,7 +361,7 @@ def fetch_tract_population(
     result = result[col_order]
 
     logger.info(f"Fetched population data for {len(result)} tracts")
-    return result, content_sha256, content_size
+    return result, content_sha256, content_size, snap_dir
 
 
 def get_output_path(
@@ -378,8 +399,11 @@ def ingest_tract_population(
     tract_vintage: str,
     force: bool = False,
     output_dir: Path | str | None = None,
+    raw_root: Path | None = None,
 ) -> Path:
     """Fetch and cache tract population data.
+
+    Raw API responses are persisted under ``data/raw/acs_tract/``.
 
     Parameters
     ----------
@@ -391,6 +415,8 @@ def ingest_tract_population(
         If True, re-fetch even if cached file exists. Default is False.
     output_dir : Path or str, optional
         Output directory. Defaults to 'data/curated/acs'.
+    raw_root : Path, optional
+        Override the default raw data root (for testing).
 
     Returns
     -------
@@ -409,8 +435,10 @@ def ingest_tract_population(
         logger.info(f"Using cached file: {output_path}")
         return output_path
 
-    # Fetch data
-    df, content_sha256, content_size = fetch_tract_population(acs_vintage, tract_vintage)
+    # Fetch data (now also persists raw snapshot)
+    df, content_sha256, content_size, snap_dir = fetch_tract_population(
+        acs_vintage, tract_vintage, raw_root=raw_root,
+    )
 
     # Build source URL for registry
     year = parse_acs_vintage(acs_vintage)
@@ -452,19 +480,20 @@ def ingest_tract_population(
     write_parquet_with_provenance(df, output_path, provenance)
     logger.info(f"Wrote tract population data to {output_path}")
 
-    # Register this download in source registry
+    # Register this download in source registry (local_path → raw snapshot)
     register_source(
         source_type="acs_tract",
         source_url=source_url,
         source_name=f"ACS Tract Population {acs_vintage}",
         raw_sha256=content_sha256,
         file_size=content_size,
-        local_path=str(output_path),
+        local_path=str(snap_dir) if snap_dir else "",
         metadata={
             "acs_vintage": acs_vintage,
             "tract_vintage": tract_vintage,
             "table": "B01003",
             "row_count": len(df),
+            "curated_path": str(output_path),
         },
     )
 

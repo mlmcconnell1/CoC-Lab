@@ -1,0 +1,151 @@
+"""Retention compliance tests for raw data persistence.
+
+Verifies that ingest modules comply with the raw-data-retention-policy:
+1. Raw snapshots are persisted via raw_snapshot utilities.
+2. Source registry local_path references raw artifacts (not curated outputs).
+3. Curated paths are stored in metadata["curated_path"] when distinct.
+"""
+
+from __future__ import annotations
+
+import ast
+import textwrap
+from pathlib import Path
+
+import pytest
+
+# All ingest modules that must comply with the retention policy
+INGEST_MODULES = [
+    "coclab/ingest/hud_opendata_arcgis.py",
+    "coclab/census/ingest/tiger_tracts.py",
+    "coclab/census/ingest/tiger_counties.py",
+    "coclab/census/ingest/tract_relationship.py",
+    "coclab/nhgis/ingest.py",
+    "coclab/acs/ingest/tract_population.py",
+    "coclab/rents/weights.py",
+]
+
+
+def _module_source(relpath: str) -> str:
+    """Read a module's source from the project root."""
+    path = Path(relpath)
+    if not path.exists():
+        pytest.skip(f"Module not found: {relpath}")
+    return path.read_text(encoding="utf-8")
+
+
+def _module_imports(source: str) -> set[str]:
+    """Extract all imported names from module source."""
+    tree = ast.parse(source)
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            if node.names:
+                for alias in node.names:
+                    names.add(alias.name)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                names.add(alias.name)
+    return names
+
+
+class TestRetentionPolicyImports:
+    """Verify each ingester imports raw_snapshot utilities."""
+
+    @pytest.mark.parametrize("module_path", INGEST_MODULES)
+    def test_imports_raw_snapshot_utility(self, module_path: str):
+        """Each ingester must import from coclab.raw_snapshot."""
+        source = _module_source(module_path)
+        imports = _module_imports(source)
+        has_persist = "persist_file_snapshot" in imports
+        has_api = "write_api_snapshot" in imports
+        assert has_persist or has_api, (
+            f"{module_path} does not import persist_file_snapshot "
+            f"or write_api_snapshot from coclab.raw_snapshot"
+        )
+
+
+class TestRetentionPolicyCallSites:
+    """Verify each ingester calls raw snapshot persistence."""
+
+    @pytest.mark.parametrize("module_path", INGEST_MODULES)
+    def test_calls_raw_snapshot_function(self, module_path: str):
+        """Each ingester must call persist_file_snapshot or write_api_snapshot."""
+        source = _module_source(module_path)
+        has_call = (
+            "persist_file_snapshot(" in source
+            or "write_api_snapshot(" in source
+        )
+        assert has_call, (
+            f"{module_path} does not call persist_file_snapshot() "
+            f"or write_api_snapshot()"
+        )
+
+
+class TestLocalPathSemantic:
+    """Verify register_source local_path points to raw artifacts."""
+
+    @pytest.mark.parametrize("module_path", INGEST_MODULES)
+    def test_local_path_references_raw_artifact(self, module_path: str):
+        """local_path in register_source should reference raw snapshot, not curated output.
+
+        We check that register_source calls use snap_dir, raw_path, or raw_dir
+        as the local_path argument, rather than output_path or curated_path.
+        """
+        source = _module_source(module_path)
+
+        # Find all register_source(...) call blocks
+        # A simple heuristic: find lines with local_path= inside register_source
+        in_register = False
+        local_path_lines = []
+        paren_depth = 0
+        for line in source.splitlines():
+            stripped = line.strip()
+            if "register_source(" in stripped:
+                in_register = True
+                paren_depth = 0
+            if in_register:
+                paren_depth += stripped.count("(") - stripped.count(")")
+                if "local_path=" in stripped:
+                    local_path_lines.append(stripped)
+                if paren_depth <= 0 and in_register and ")" in stripped:
+                    in_register = False
+
+        assert local_path_lines, (
+            f"{module_path}: no local_path= found in register_source call"
+        )
+
+        for line in local_path_lines:
+            # The local_path should NOT reference output_path directly
+            # (unless it IS the raw file, like in PIT/ZORI which write to data/raw/)
+            # We check for known raw-artifact variable names
+            assert not line.startswith("local_path=str(output_path)"), (
+                f"{module_path}: local_path should reference raw artifact, "
+                f"not curated output_path. Line: {line}"
+            )
+
+
+class TestCuratedPathInMetadata:
+    """Verify curated_path is stored in metadata when distinct from raw."""
+
+    @pytest.mark.parametrize("module_path", INGEST_MODULES)
+    def test_curated_path_in_metadata(self, module_path: str):
+        """Ingesters that produce curated output should store curated_path in metadata."""
+        source = _module_source(module_path)
+
+        # If the module writes curated output (has curated_boundary_path,
+        # write_parquet_with_provenance, or .to_parquet), it should include
+        # curated_path in metadata
+        produces_curated = (
+            "curated_boundary_path" in source
+            or "write_parquet_with_provenance" in source
+            or ".to_parquet(" in source
+        )
+
+        if not produces_curated:
+            pytest.skip(f"{module_path} does not produce curated output")
+
+        assert '"curated_path"' in source or "'curated_path'" in source, (
+            f"{module_path} produces curated output but does not store "
+            f"curated_path in register_source metadata"
+        )

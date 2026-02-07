@@ -10,7 +10,6 @@ Documentation:
     https://www2.census.gov/geo/pdfs/maps-data/data/rel2020/tract/explanation_tab20_tract20_tract10.pdf
 """
 
-import hashlib
 import io
 import logging
 from datetime import UTC, datetime
@@ -21,6 +20,7 @@ import pandas as pd
 
 from coclab.naming import tract_relationship_filename
 from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
+from coclab.raw_snapshot import persist_file_snapshot
 from coclab.source_registry import check_source_changed, register_source
 from coclab.sources import CENSUS_TRACT_RELATIONSHIP_URL
 
@@ -58,11 +58,11 @@ RELATIONSHIP_URL = CENSUS_TRACT_RELATIONSHIP_URL
 OUTPUT_DIR = Path("data/curated/census")
 
 
-def download_tract_relationship() -> tuple[pd.DataFrame, str, int]:
+def download_tract_relationship() -> tuple[pd.DataFrame, str, int, Path]:
     """Download and parse the Census tract relationship file.
 
     Returns:
-        Tuple of (DataFrame, sha256_hash, content_size) where DataFrame has:
+        Tuple of (DataFrame, sha256_hash, content_size, raw_path) where DataFrame has:
         - tract_geoid_2010: 11-char GEOID
         - tract_geoid_2020: 11-char GEOID
         - area_2010_to_2020_weight: AREALAND_PART / AREALAND_TRACT_10
@@ -79,9 +79,11 @@ def download_tract_relationship() -> tuple[pd.DataFrame, str, int]:
         response.raise_for_status()
         raw_content = response.content
 
-    # Compute SHA-256 hash
-    content_sha256 = hashlib.sha256(raw_content).hexdigest()
-    content_size = len(raw_content)
+    # Persist raw snapshot and compute hash
+    filename = RELATIONSHIP_URL.rsplit("/", 1)[-1]
+    raw_path, content_sha256, content_size = persist_file_snapshot(
+        raw_content, "census", filename, subdirs=("tract_relationship",)
+    )
 
     # Parse pipe-delimited file
     # The file has a header row with column names
@@ -130,7 +132,7 @@ def download_tract_relationship() -> tuple[pd.DataFrame, str, int]:
     # Sort for consistent output
     result = result.sort_values(["tract_geoid_2010", "tract_geoid_2020"]).reset_index(drop=True)
 
-    return result, content_sha256, content_size
+    return result, content_sha256, content_size, raw_path
 
 
 def save_tract_relationship(df: pd.DataFrame) -> Path:
@@ -177,7 +179,7 @@ def ingest_tract_relationship(force: bool = False) -> Path:
         return output_path
 
     # Download and parse
-    df, content_sha256, content_size = download_tract_relationship()
+    df, content_sha256, content_size, raw_path = download_tract_relationship()
 
     # Save to parquet
     output_path = save_tract_relationship(df)
@@ -206,11 +208,12 @@ def ingest_tract_relationship(force: bool = False) -> Path:
         source_name="Census Tract Relationship File 2010-2020",
         raw_sha256=content_sha256,
         file_size=content_size,
-        local_path=str(output_path),
+        local_path=str(raw_path),
         metadata={
             "from_vintage": "2010",
             "to_vintage": "2020",
             "row_count": len(df),
+            "curated_path": str(output_path),
         },
     )
 

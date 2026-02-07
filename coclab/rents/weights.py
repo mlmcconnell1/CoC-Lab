@@ -38,7 +38,6 @@ totals.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import re
 from datetime import UTC, datetime
@@ -49,6 +48,7 @@ import httpx
 import pandas as pd
 
 from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
+from coclab.raw_snapshot import write_api_snapshot
 from coclab.source_registry import check_source_changed, register_source
 
 logger = logging.getLogger(__name__)
@@ -277,8 +277,11 @@ def fetch_state_county_acs(
 def fetch_county_acs_totals(
     acs_vintage: str,
     method: WeightingMethod,
-) -> tuple[pd.DataFrame, str, int]:
+    raw_root: Path | None = None,
+) -> tuple[pd.DataFrame, str, int, Path | None]:
     """Fetch county-level ACS totals for all US states and territories.
+
+    Raw API responses are persisted under ``data/raw/acs_county/<snapshot_id>/``.
 
     Parameters
     ----------
@@ -286,12 +289,14 @@ def fetch_county_acs_totals(
         ACS vintage string like "2019-2023" representing the 5-year estimate period.
     method : {"renter_households", "housing_units", "population"}
         Weighting method determining which ACS variable to fetch.
+    raw_root : Path, optional
+        Override the default raw data root (for testing).
 
     Returns
     -------
-    tuple[pd.DataFrame, str, int]
-        Tuple of (DataFrame with county weights, SHA-256 hash of combined raw content,
-        total content size in bytes).
+    tuple[pd.DataFrame, str, int, Path | None]
+        Tuple of (DataFrame with county weights, SHA-256 hash, content size,
+        raw snapshot dir).
 
         DataFrame columns:
         - county_fips (str): 5-character county FIPS code
@@ -340,10 +345,24 @@ def fetch_county_acs_totals(
     if not dfs:
         raise ValueError("No county ACS data could be fetched from any state")
 
-    # Compute SHA-256 hash of all raw content combined
-    combined_content = b"".join(all_raw_content)
-    content_sha256 = hashlib.sha256(combined_content).hexdigest()
-    content_size = len(combined_content)
+    # Persist raw API snapshot
+    source_url = CENSUS_API.format(year=year)
+    snapshot_id = f"A{year}_{var_info['table']}__{method}"
+    snap_dir, content_sha256, content_size = write_api_snapshot(
+        all_raw_content,
+        "acs_county",
+        snapshot_id=snapshot_id,
+        request_metadata={
+            "url": source_url,
+            "params": {"get": f"NAME,{variable}", "for": "county:*", "in": "state:{fips}"},
+            "table": var_info["table"],
+            "variable": variable,
+            "acs_vintage": acs_vintage,
+            "method": method,
+        },
+        record_count=sum(len(df) for df in dfs),
+        raw_root=raw_root,
+    )
 
     # Combine all states
     result = pd.concat(dfs, ignore_index=True)
@@ -381,7 +400,7 @@ def fetch_county_acs_totals(
     result = result[col_order]
 
     logger.info(f"Fetched {method} data for {len(result)} counties")
-    return result, content_sha256, content_size
+    return result, content_sha256, content_size, snap_dir
 
 
 def get_county_weights_path(
@@ -498,8 +517,8 @@ def build_county_weights(
         logger.info(f"Using cached file: {output_path}")
         return pd.read_parquet(output_path)
 
-    # Fetch data (now returns sha256 and content size)
-    df, content_sha256, content_size = fetch_county_acs_totals(acs_vintage, method)
+    # Fetch data (now also persists raw snapshot)
+    df, content_sha256, content_size, snap_dir = fetch_county_acs_totals(acs_vintage, method)
 
     # Build source URL for registry
     year = parse_acs_vintage(acs_vintage)
@@ -523,14 +542,14 @@ def build_county_weights(
     elif details.get("is_new"):
         logger.info(f"First time tracking ACS county {method} source in registry")
 
-    # Register this download in the source registry
+    # Register this download in the source registry (local_path → raw snapshot)
     register_source(
         source_type="acs_county",
         source_url=source_url,
         source_name=f"ACS 5-Year County {method.replace('_', ' ').title()} ({acs_vintage})",
         raw_sha256=content_sha256,
         file_size=content_size,
-        local_path=str(output_path),
+        local_path=str(snap_dir) if snap_dir else "",
         metadata={
             "acs_vintage": acs_vintage,
             "weighting_method": method,
@@ -538,6 +557,7 @@ def build_county_weights(
             "variable": var_info["variable"],
             "api_year": year,
             "county_count": len(df),
+            "curated_path": str(output_path),
         },
     )
 

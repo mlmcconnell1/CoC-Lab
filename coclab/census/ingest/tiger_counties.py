@@ -1,6 +1,5 @@
 """TIGER/Line county geometry ingestion."""
 
-import hashlib
 import logging
 import tempfile
 import zipfile
@@ -10,6 +9,7 @@ from pathlib import Path
 import geopandas as gpd
 import httpx
 
+from coclab.raw_snapshot import persist_file_snapshot
 from coclab.source_registry import check_source_changed, register_source
 from coclab.sources import CENSUS_TIGER_BASE
 
@@ -19,14 +19,20 @@ TIGER_BASE = CENSUS_TIGER_BASE
 OUTPUT_DIR = Path("data/curated/census")
 
 
-def download_tiger_counties(year: int = 2023) -> tuple[gpd.GeoDataFrame, str, int]:
+def download_tiger_counties(
+    year: int = 2023,
+    raw_root: Path | None = None,
+) -> tuple[gpd.GeoDataFrame, str, int, Path]:
     """Download all US counties for a given year.
+
+    Raw ZIP is persisted under ``data/raw/census/<year>/counties/``.
 
     Args:
         year: TIGER vintage year (default 2023)
+        raw_root: Override the default raw data root (for testing)
 
     Returns:
-        Tuple of (GeoDataFrame, SHA-256 hash, file size):
+        Tuple of (GeoDataFrame, SHA-256 hash, file size, raw_path):
         GeoDataFrame with standardized schema:
         - geo_vintage: str (e.g. "2023")
         - geoid: str (county FIPS code)
@@ -37,12 +43,14 @@ def download_tiger_counties(year: int = 2023) -> tuple[gpd.GeoDataFrame, str, in
     # 2010 has a different URL structure: extra /2010/ subdirectory and county10 suffix
     if year == 2010:
         url = f"{TIGER_BASE.format(year=year, layer='COUNTY')}2010/tl_2010_us_county10.zip"
+        zip_name = "tl_2010_us_county10.zip"
     else:
         url = f"{TIGER_BASE.format(year=year, layer='COUNTY')}tl_{year}_us_county.zip"
+        zip_name = f"tl_{year}_us_county.zip"
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmppath = Path(tmpdir)
-        zip_path = tmppath / f"tl_{year}_us_county.zip"
+        zip_path = tmppath / zip_name
 
         # Download the zip file
         with httpx.Client(timeout=300.0) as client:
@@ -51,9 +59,14 @@ def download_tiger_counties(year: int = 2023) -> tuple[gpd.GeoDataFrame, str, in
             raw_content = response.content
             zip_path.write_bytes(raw_content)
 
-        # Compute SHA-256 hash of raw zip file
-        content_sha256 = hashlib.sha256(raw_content).hexdigest()
-        content_size = len(raw_content)
+        # Persist raw ZIP to data/raw/census/<year>/counties/
+        raw_path, content_sha256, content_size = persist_file_snapshot(
+            raw_content,
+            "census",
+            zip_name,
+            subdirs=(str(year), "counties"),
+            raw_root=raw_root,
+        )
 
         # Check for upstream changes
         changed, details = check_source_changed(
@@ -103,7 +116,7 @@ def download_tiger_counties(year: int = 2023) -> tuple[gpd.GeoDataFrame, str, in
         crs="EPSG:4326",
     )
 
-    return result, content_sha256, content_size
+    return result, content_sha256, content_size, raw_path
 
 
 def save_counties(gdf: gpd.GeoDataFrame, year: int = 2023) -> Path:
@@ -124,20 +137,22 @@ def save_counties(gdf: gpd.GeoDataFrame, year: int = 2023) -> Path:
     return output_path
 
 
-def ingest_tiger_counties(year: int = 2023) -> Path:
+def ingest_tiger_counties(year: int = 2023, raw_root: Path | None = None) -> Path:
     """Download and save TIGER counties in one step.
+
+    Raw ZIP is persisted under ``data/raw/census/<year>/counties/``.
 
     Args:
         year: TIGER vintage year (default 2023)
+        raw_root: Override the default raw data root (for testing)
 
     Returns:
         Path to saved parquet file
     """
-    gdf, content_sha256, content_size = download_tiger_counties(year)
+    gdf, content_sha256, content_size, raw_path = download_tiger_counties(year, raw_root=raw_root)
     output_path = save_counties(gdf, year)
 
-    # Register this download in source registry
-    # 2010 has a different URL structure
+    # Register this download in source registry (local_path → raw snapshot)
     if year == 2010:
         url = f"{TIGER_BASE.format(year=year, layer='COUNTY')}2010/tl_2010_us_county10.zip"
     else:
@@ -148,10 +163,11 @@ def ingest_tiger_counties(year: int = 2023) -> Path:
         source_name=f"TIGER/Line Counties {year}",
         raw_sha256=content_sha256,
         file_size=content_size,
-        local_path=str(output_path),
+        local_path=str(raw_path),
         metadata={
             "year": year,
             "county_count": len(gdf),
+            "curated_path": str(output_path),
         },
     )
 

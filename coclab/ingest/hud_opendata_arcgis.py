@@ -6,7 +6,6 @@ normalizes them to the canonical schema, and writes to GeoParquet.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 from datetime import UTC, datetime
@@ -19,6 +18,7 @@ from shapely.geometry import shape
 
 from coclab.geo import normalize_boundaries, validate_boundaries
 from coclab.geo.io import curated_boundary_path, write_geoparquet
+from coclab.raw_snapshot import write_api_snapshot
 from coclab.source_registry import check_source_changed, register_source
 from coclab.sources import HUD_ARCGIS_COC_FEATURE_SERVICE, HUD_ARCGIS_COC_SOURCE_REF
 
@@ -167,17 +167,20 @@ def ingest_hud_opendata(
     *,
     base_dir: Path | str | None = None,
     http_client: httpx.Client | None = None,
+    raw_root: Path | None = None,
 ) -> Path:
     """Ingest CoC boundaries from HUD Open Data ArcGIS feature service.
 
     Fetches all CoC Grantee Area boundaries, normalizes them to the
     canonical schema, validates the data, and writes to GeoParquet.
+    Raw API responses are persisted under ``data/raw/hud_opendata/``.
 
     Args:
         snapshot_tag: Snapshot identifier. Use "latest" to generate a
             date-based vintage like "HUDOpenData_2025-01-04".
         base_dir: Base data directory (defaults to "data")
         http_client: Optional HTTP client for testing/injection
+        raw_root: Override the default raw data root (for testing)
 
     Returns:
         Path to the written GeoParquet file
@@ -208,9 +211,26 @@ def ingest_hud_opendata(
     if not features:
         raise ValueError("No features returned from HUD Open Data API")
 
-    # Compute SHA-256 hash of raw content for source registry
-    content_sha256 = hashlib.sha256(raw_content).hexdigest()
-    content_size = len(raw_content)
+    # Persist raw API snapshot under data/raw/hud_opendata/<date>/
+    snapshot_id = ingested_at.strftime("%Y-%m-%d")
+    raw_pages = [raw_content] if raw_content else []
+    snap_dir, content_sha256, content_size = write_api_snapshot(
+        raw_pages,
+        "hud_opendata",
+        snapshot_id=snapshot_id,
+        request_metadata={
+            "url": FEATURE_SERVICE_URL,
+            "params": {
+                "where": "1=1",
+                "outFields": "COCNUM,COCNAME,STUSAB,STATE_NAME",
+                "outSR": "4326",
+                "f": "geojson",
+            },
+            "page_size": PAGE_SIZE,
+        },
+        record_count=len(features),
+        raw_root=raw_root,
+    )
 
     # Check for upstream changes
     changed, details = check_source_changed(
@@ -248,18 +268,19 @@ def ingest_hud_opendata(
     output_path = curated_boundary_path(boundary_vintage, base_dir=base_dir)
     write_geoparquet(gdf, output_path)
 
-    # Register this download in source registry
+    # Register this download in source registry (local_path → raw snapshot)
     register_source(
         source_type="boundary",
         source_url=FEATURE_SERVICE_URL,
         source_name=f"HUD OpenData CoC Boundaries {boundary_vintage}",
         raw_sha256=content_sha256,
         file_size=content_size,
-        local_path=str(output_path),
+        local_path=str(snap_dir),
         metadata={
             "boundary_vintage": boundary_vintage,
             "feature_count": len(features),
             "source": "hud_opendata",
+            "curated_path": str(output_path),
         },
     )
 

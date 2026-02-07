@@ -78,16 +78,25 @@ REGISTRY_COLUMNS = [
     "source_url",  # URL or identifier of the source
     "source_name",  # Human-readable name (e.g., "ZORI County Monthly")
     "raw_sha256",  # SHA-256 hash of raw downloaded content
-    "file_size",  # Size in bytes
-    "local_path",  # Path to local raw file
+    "file_size",  # Size in bytes of the raw artifact
+    "local_path",  # Path to retained raw artifact (file or directory)
     "ingested_at",  # UTC timestamp of ingestion
     "metadata",  # JSON string with additional metadata
 ]
+# Semantic note: ``local_path`` always points to the **retained raw
+# artifact** (a file under ``data/raw/`` or a snapshot directory).  If a
+# curated output lives at a different location, store its path in
+# ``metadata["curated_path"]``.
 
 
 @dataclass
 class SourceRegistryEntry:
-    """A single entry in the source data registry."""
+    """A single entry in the source data registry.
+
+    ``local_path`` references the retained raw artifact (ZIP, CSV, or
+    API snapshot directory under ``data/raw/``).  The curated output
+    path, when different, is stored in ``metadata["curated_path"]``.
+    """
 
     source_type: str
     source_url: str
@@ -186,7 +195,9 @@ def register_source(
     file_size : int, optional
         Size of the downloaded file in bytes.
     local_path : str or Path, optional
-        Path to the local raw file.
+        Path to the retained raw artifact (file or snapshot directory
+        under ``data/raw/``).  Store the curated output path in
+        ``metadata["curated_path"]`` when it differs.
     metadata : dict, optional
         Additional metadata to store.
     registry_path : Path, optional

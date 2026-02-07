@@ -12,6 +12,7 @@ import geopandas as gpd
 import httpx
 import pandas as pd
 
+from coclab.raw_snapshot import persist_file_snapshot
 from coclab.source_registry import check_source_changed, register_source
 from coclab.sources import CENSUS_TIGER_BASE
 
@@ -123,17 +124,20 @@ def _download_state_tracts(
 def download_tiger_tracts(
     year: int = 2023,
     show_progress: bool = False,
-) -> tuple[gpd.GeoDataFrame, str, int]:
+    raw_root: Path | None = None,
+) -> tuple[gpd.GeoDataFrame, str, int, list[Path]]:
     """Download all US census tracts for a given year.
 
     Downloads per-state tract files and combines them into a single GeoDataFrame.
+    Raw ZIP files are persisted under ``data/raw/census/<year>/tracts/``.
 
     Args:
         year: TIGER vintage year (default 2023)
         show_progress: If True, display a progress bar
+        raw_root: Override the default raw data root (for testing)
 
     Returns:
-        Tuple of (GeoDataFrame, combined_sha256, total_size) where:
+        Tuple of (GeoDataFrame, combined_sha256, total_size, raw_paths) where:
         - GeoDataFrame with standardized schema:
           - geo_vintage: str (e.g. "2023")
           - geoid: str (tract FIPS code)
@@ -142,10 +146,12 @@ def download_tiger_tracts(
           - ingested_at: datetime
         - combined_sha256: SHA-256 hash of all downloaded content
         - total_size: Total size in bytes of all downloaded files
+        - raw_paths: List of persisted raw ZIP file paths
     """
     gdfs = []
     all_content = []  # Collect all raw content for combined hash
     total_size = 0
+    raw_paths: list[Path] = []
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmppath = Path(tmpdir)
@@ -168,11 +174,21 @@ def download_tiger_tracts(
                         all_content.append(raw_content)
                         total_size += len(raw_content)
 
+                        # Persist raw ZIP to data/raw/census/<year>/tracts/
+                        zip_name = f"tl_{year}_{state_fips}_tract.zip"
+                        raw_path, _, _ = persist_file_snapshot(
+                            raw_content,
+                            "census",
+                            zip_name,
+                            subdirs=(str(year), "tracts"),
+                            raw_root=raw_root,
+                        )
+                        raw_paths.append(raw_path)
+
     if not gdfs:
         raise ValueError(f"No tract data found for year {year}")
 
     # Compute combined SHA-256 hash of all downloaded content
-    # Hash the concatenation of all individual file hashes (sorted by state FIPS)
     hasher = hashlib.sha256()
     for content in all_content:
         hasher.update(content)
@@ -199,7 +215,7 @@ def download_tiger_tracts(
         crs="EPSG:4326",
     )
 
-    return result, combined_sha256, total_size
+    return result, combined_sha256, total_size, raw_paths
 
 
 def nullcontext(value):
@@ -233,12 +249,19 @@ def save_tracts(gdf: gpd.GeoDataFrame, year: int = 2023) -> Path:
     return output_path
 
 
-def ingest_tiger_tracts(year: int = 2023, show_progress: bool = False) -> Path:
+def ingest_tiger_tracts(
+    year: int = 2023,
+    show_progress: bool = False,
+    raw_root: Path | None = None,
+) -> Path:
     """Download and save TIGER tracts in one step.
+
+    Raw ZIP files are persisted under ``data/raw/census/<year>/tracts/``.
 
     Args:
         year: TIGER vintage year (default 2023)
         show_progress: If True, display a progress bar
+        raw_root: Override the default raw data root (for testing)
 
     Returns:
         Path to saved parquet file
@@ -246,7 +269,9 @@ def ingest_tiger_tracts(year: int = 2023, show_progress: bool = False) -> Path:
     # Build source URL (base URL for this year's tract data)
     source_url = TIGER_BASE.format(year=year, layer="TRACT")
 
-    gdf, combined_sha256, total_size = download_tiger_tracts(year, show_progress=show_progress)
+    gdf, combined_sha256, total_size, raw_paths = download_tiger_tracts(
+        year, show_progress=show_progress, raw_root=raw_root,
+    )
     output_path = save_tracts(gdf, year)
 
     # Check for upstream changes
@@ -266,6 +291,9 @@ def ingest_tiger_tracts(year: int = 2023, show_progress: bool = False) -> Path:
     elif details.get("is_new"):
         logger.info(f"First time tracking TIGER tracts {year} source in registry")
 
+    # local_path → raw snapshot directory
+    raw_dir = str(raw_paths[0].parent) if raw_paths else ""
+
     # Register this download in source registry
     register_source(
         source_type="census_tract",
@@ -273,13 +301,14 @@ def ingest_tiger_tracts(year: int = 2023, show_progress: bool = False) -> Path:
         source_name=f"TIGER/Line Census Tracts {year}",
         raw_sha256=combined_sha256,
         file_size=total_size,
-        local_path=str(output_path),
+        local_path=raw_dir,
         metadata={
             "year": year,
             "vintage": str(year),
             "data_source": "US Census Bureau",
             "tract_count": len(gdf),
             "states_downloaded": len(STATE_FIPS_CODES),
+            "curated_path": str(output_path),
         },
     )
 

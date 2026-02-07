@@ -6,7 +6,6 @@ national files (avoiding the county-by-county download required for 2010 TIGER).
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import tempfile
 import time
@@ -17,6 +16,7 @@ from typing import TYPE_CHECKING
 
 import geopandas as gpd
 
+from coclab.raw_snapshot import persist_file_snapshot
 from coclab.source_registry import register_source
 
 if TYPE_CHECKING:
@@ -196,7 +196,10 @@ def _download_and_extract(
         nested_extract_dir = nested_zip.parent / nested_zip.stem
         nested_extract_dir.mkdir(exist_ok=True)
         with zipfile.ZipFile(nested_zip, "r") as nzf:
-            logger.info(f"Extracting nested zip {nested_zip.name} with {len(nzf.namelist())} entries")
+            logger.info(
+                f"Extracting nested zip {nested_zip.name} "
+                f"with {len(nzf.namelist())} entries"
+            )
             nzf.extractall(nested_extract_dir)
 
     # Find the shapefile - NHGIS nests files in subdirectories
@@ -359,9 +362,14 @@ def ingest_nhgis_tracts(
         # Normalize to standard schema
         gdf = _normalize_to_schema(gdf, year)
 
-    # Compute hash of downloaded content
-    content_sha256 = hashlib.sha256(raw_content).hexdigest()
-    content_size = len(raw_content)
+    # Persist raw ZIP under data/raw/nhgis/<year>/tracts/
+    shapefile_name = _get_shapefile_name(year)
+    raw_path, content_sha256, content_size = persist_file_snapshot(
+        raw_content,
+        "nhgis",
+        f"{shapefile_name}.zip",
+        subdirs=(str(year), "tracts"),
+    )
 
     # Save to output
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -373,8 +381,7 @@ def ingest_nhgis_tracts(
     if progress_callback:
         progress_callback(f"Saved {len(gdf)} tracts to {output_path}")
 
-    # Register in source registry
-    shapefile_name = _get_shapefile_name(year)
+    # Register in source registry (local_path → raw snapshot)
     source_url = f"nhgis://shapefiles/{shapefile_name}"
 
     register_source(
@@ -383,12 +390,13 @@ def ingest_nhgis_tracts(
         source_name=f"NHGIS Census Tracts {year}",
         raw_sha256=content_sha256,
         file_size=content_size,
-        local_path=str(output_path),
+        local_path=str(raw_path),
         metadata={
             "year": year,
             "shapefile": shapefile_name,
             "tract_count": len(gdf),
             "source": "nhgis",
+            "curated_path": str(output_path),
         },
     )
 
@@ -540,9 +548,14 @@ def ingest_nhgis_counties(
         # Normalize to standard schema
         gdf = _normalize_county_to_schema(gdf, year)
 
-    # Compute hash of downloaded content
-    content_sha256 = hashlib.sha256(raw_content).hexdigest()
-    content_size = len(raw_content)
+    # Persist raw ZIP under data/raw/nhgis/<year>/counties/
+    shapefile_name = _get_shapefile_name(year, geo_type="counties")
+    raw_path, content_sha256, content_size = persist_file_snapshot(
+        raw_content,
+        "nhgis",
+        f"{shapefile_name}.zip",
+        subdirs=(str(year), "counties"),
+    )
 
     # Save to output
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -552,8 +565,7 @@ def ingest_nhgis_counties(
     if progress_callback:
         progress_callback(f"Saved {len(gdf)} counties to {output_path}")
 
-    # Register in source registry
-    shapefile_name = _get_shapefile_name(year, geo_type="counties")
+    # Register in source registry (local_path → raw snapshot)
     source_url = f"nhgis://shapefiles/{shapefile_name}"
 
     register_source(
@@ -562,12 +574,13 @@ def ingest_nhgis_counties(
         source_name=f"NHGIS Census Counties {year}",
         raw_sha256=content_sha256,
         file_size=content_size,
-        local_path=str(output_path),
+        local_path=str(raw_path),
         metadata={
             "year": year,
             "shapefile": shapefile_name,
             "county_count": len(gdf),
             "source": "nhgis",
+            "curated_path": str(output_path),
         },
     )
 

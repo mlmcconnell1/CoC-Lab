@@ -232,7 +232,7 @@ class TestFetchTractPopulation:
             status_code=404,
         )
 
-        df, _, _ = fetch_tract_population("2019-2023", "2023")
+        df, _, _, _ = fetch_tract_population("2019-2023", "2023")
 
         # Check required columns exist
         required_cols = [
@@ -282,7 +282,7 @@ class TestFetchTractPopulation:
             status_code=404,
         )
 
-        df, _, _ = fetch_tract_population("2019-2023", "2023")
+        df, _, _, _ = fetch_tract_population("2019-2023", "2023")
 
         # All non-NA values should be >= 0
         valid_pops = df["total_population"].dropna()
@@ -311,7 +311,7 @@ class TestFetchTractPopulation:
             status_code=404,
         )
 
-        df, _, _ = fetch_tract_population("2019-2023", "2023")
+        df, _, _, _ = fetch_tract_population("2019-2023", "2023")
 
         assert len(df) > 0
 
@@ -516,7 +516,7 @@ class TestSchemaValidation:
             status_code=404,
         )
 
-        df, _, _ = fetch_tract_population("2019-2023", "2023")
+        df, _, _, _ = fetch_tract_population("2019-2023", "2023")
 
         # All GEOIDs should be exactly 11 characters
         assert all(len(geoid) == 11 for geoid in df["tract_geoid"])
@@ -544,7 +544,7 @@ class TestSchemaValidation:
             status_code=404,
         )
 
-        df, _, _ = fetch_tract_population("2019-2023", "2023")
+        df, _, _, _ = fetch_tract_population("2019-2023", "2023")
 
         assert all(df["data_source"] == "acs_5yr")
 
@@ -571,7 +571,7 @@ class TestSchemaValidation:
             status_code=404,
         )
 
-        df, _, _ = fetch_tract_population("2019-2023", "2023")
+        df, _, _, _ = fetch_tract_population("2019-2023", "2023")
 
         # Check that timestamp is timezone-aware
         ts = df.iloc[0]["ingested_at"]

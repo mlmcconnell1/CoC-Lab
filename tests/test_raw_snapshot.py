@@ -1,0 +1,424 @@
+"""Tests for raw snapshot utilities.
+
+Covers:
+- persist_file_snapshot: file-based raw snapshot persistence
+- write_api_snapshot: API-based raw snapshot persistence (NDJSON + manifest)
+- hash_file: single-file SHA-256 hashing
+- hash_directory: deterministic directory hashing
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+
+import pytest
+
+from coclab.raw_snapshot import (
+    hash_directory,
+    hash_file,
+    persist_file_snapshot,
+    write_api_snapshot,
+)
+
+# ---------------------------------------------------------------------------
+# persist_file_snapshot
+# ---------------------------------------------------------------------------
+
+
+class TestPersistFileSnapshot:
+    """Tests for persist_file_snapshot function."""
+
+    def test_writes_file_to_correct_path(self, tmp_path: Path):
+        """File lands at <raw_root>/<source_type>/<filename>."""
+        content = b"hello raw data"
+        path, _, _ = persist_file_snapshot(
+            content, "census", "tract.zip", raw_root=tmp_path,
+        )
+
+        assert path == tmp_path / "census" / "tract.zip"
+        assert path.exists()
+        assert path.read_bytes() == content
+
+    def test_writes_file_with_subdirs(self, tmp_path: Path):
+        """File lands at <raw_root>/<source_type>/<subdirs...>/<filename>."""
+        content = b"zip bytes"
+        path, _, _ = persist_file_snapshot(
+            content,
+            "census",
+            "tl_2023_06_tract.zip",
+            subdirs=("2023", "tracts"),
+            raw_root=tmp_path,
+        )
+
+        assert path == tmp_path / "census" / "2023" / "tracts" / "tl_2023_06_tract.zip"
+        assert path.exists()
+        assert path.read_bytes() == content
+
+    def test_returns_correct_tuple(self, tmp_path: Path):
+        """Return value is (path, sha256, size)."""
+        content = b"deterministic content"
+        path, sha256_hex, size = persist_file_snapshot(
+            content, "hud", "data.csv", raw_root=tmp_path,
+        )
+
+        assert isinstance(path, Path)
+        assert isinstance(sha256_hex, str)
+        assert isinstance(size, int)
+
+    def test_sha256_matches_hashlib(self, tmp_path: Path):
+        """Returned SHA-256 matches hashlib.sha256(content).hexdigest()."""
+        content = b"verify this hash please"
+        _, sha256_hex, _ = persist_file_snapshot(
+            content, "census", "test.zip", raw_root=tmp_path,
+        )
+
+        expected = hashlib.sha256(content).hexdigest()
+        assert sha256_hex == expected
+
+    def test_size_matches_content_length(self, tmp_path: Path):
+        """Returned size matches len(content)."""
+        content = b"twelve bytes"
+        _, _, size = persist_file_snapshot(
+            content, "census", "test.zip", raw_root=tmp_path,
+        )
+
+        assert size == len(content)
+
+    def test_creates_parent_directories(self, tmp_path: Path):
+        """Parent directories are created even when deeply nested."""
+        nested_root = tmp_path / "deep" / "nested" / "raw"
+        content = b"nested"
+        path, _, _ = persist_file_snapshot(
+            content, "census", "f.zip", subdirs=("a", "b"), raw_root=nested_root,
+        )
+
+        assert path.exists()
+        assert path.parent == nested_root / "census" / "a" / "b"
+
+    def test_uses_default_raw_root_when_not_specified(self, tmp_path: Path, monkeypatch):
+        """When raw_root is None, uses the module-level RAW_DATA_ROOT."""
+        # Monkeypatch the module constant so it writes inside tmp_path
+        import coclab.raw_snapshot as mod
+
+        monkeypatch.setattr(mod, "RAW_DATA_ROOT", tmp_path / "data" / "raw")
+
+        content = b"default root"
+        path, _, _ = persist_file_snapshot(content, "src", "file.csv")
+
+        assert path == tmp_path / "data" / "raw" / "src" / "file.csv"
+        assert path.exists()
+
+    def test_empty_content(self, tmp_path: Path):
+        """Empty byte string is persisted correctly."""
+        content = b""
+        path, sha256_hex, size = persist_file_snapshot(
+            content, "census", "empty.zip", raw_root=tmp_path,
+        )
+
+        assert path.read_bytes() == b""
+        assert size == 0
+        assert sha256_hex == hashlib.sha256(b"").hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# write_api_snapshot
+# ---------------------------------------------------------------------------
+
+
+class TestWriteApiSnapshot:
+    """Tests for write_api_snapshot function."""
+
+    def _make_payload(self, obj: dict) -> bytes:
+        """Encode a dict as JSON bytes (simulating an HTTP response body)."""
+        return json.dumps(obj).encode("utf-8")
+
+    def test_creates_response_ndjson(self, tmp_path: Path):
+        """response.ndjson is created in the snapshot directory."""
+        payloads = [self._make_payload({"a": 1})]
+        snap_dir, _, _ = write_api_snapshot(
+            payloads, "hud_opendata", snapshot_id="2026-02-07", raw_root=tmp_path,
+        )
+
+        ndjson_path = snap_dir / "response.ndjson"
+        assert ndjson_path.exists()
+
+    def test_ndjson_deterministic_sorted_keys(self, tmp_path: Path):
+        """response.ndjson uses sorted keys for deterministic serialisation."""
+        payloads = [self._make_payload({"z": 1, "a": 2, "m": 3})]
+        snap_dir, _, _ = write_api_snapshot(
+            payloads, "hud_opendata", snapshot_id="snap1", raw_root=tmp_path,
+        )
+
+        ndjson_path = snap_dir / "response.ndjson"
+        line = ndjson_path.read_text(encoding="utf-8").strip()
+        parsed_keys = list(json.loads(line).keys())
+        assert parsed_keys == ["a", "m", "z"]
+
+    def test_creates_request_json_when_metadata_provided(self, tmp_path: Path):
+        """request.json is created when request_metadata is given."""
+        payloads = [self._make_payload({"data": 1})]
+        metadata = {"url": "https://example.com/api", "params": {"key": "val"}}
+
+        snap_dir, _, _ = write_api_snapshot(
+            payloads,
+            "hud_opendata",
+            snapshot_id="snap1",
+            request_metadata=metadata,
+            raw_root=tmp_path,
+        )
+
+        request_path = snap_dir / "request.json"
+        assert request_path.exists()
+
+        loaded = json.loads(request_path.read_text(encoding="utf-8"))
+        assert loaded["url"] == "https://example.com/api"
+        assert loaded["params"] == {"key": "val"}
+
+    def test_no_request_json_without_metadata(self, tmp_path: Path):
+        """request.json is NOT created when request_metadata is None."""
+        payloads = [self._make_payload({"data": 1})]
+        snap_dir, _, _ = write_api_snapshot(
+            payloads, "hud_opendata", snapshot_id="snap1", raw_root=tmp_path,
+        )
+
+        assert not (snap_dir / "request.json").exists()
+
+    def test_creates_manifest_json(self, tmp_path: Path):
+        """manifest.json is created with correct fields."""
+        payloads = [
+            self._make_payload({"row": 1}),
+            self._make_payload({"row": 2}),
+        ]
+        snap_dir, sha256_hex, ndjson_size = write_api_snapshot(
+            payloads,
+            "hud_opendata",
+            snapshot_id="snap1",
+            record_count=42,
+            raw_root=tmp_path,
+        )
+
+        manifest_path = snap_dir / "manifest.json"
+        assert manifest_path.exists()
+
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        assert manifest["snapshot_id"] == "snap1"
+        assert manifest["source_type"] == "hud_opendata"
+        assert manifest["page_count"] == 2
+        assert manifest["record_count"] == 42
+        assert manifest["ndjson_sha256"] == sha256_hex
+        assert manifest["ndjson_bytes"] == ndjson_size
+        assert "retrieved_at" in manifest
+
+    def test_sha256_computed_from_persisted_ndjson(self, tmp_path: Path):
+        """SHA-256 matches hash of the persisted response.ndjson bytes."""
+        payloads = [self._make_payload({"x": 1})]
+        snap_dir, sha256_hex, _ = write_api_snapshot(
+            payloads, "hud_opendata", snapshot_id="snap1", raw_root=tmp_path,
+        )
+
+        ndjson_content = (snap_dir / "response.ndjson").read_bytes()
+        expected = hashlib.sha256(ndjson_content).hexdigest()
+        assert sha256_hex == expected
+
+    def test_returns_correct_tuple(self, tmp_path: Path):
+        """Return value is (snap_dir, sha256, ndjson_size)."""
+        payloads = [self._make_payload({"v": 1})]
+        snap_dir, sha256_hex, ndjson_size = write_api_snapshot(
+            payloads, "hud_opendata", snapshot_id="snap1", raw_root=tmp_path,
+        )
+
+        assert isinstance(snap_dir, Path)
+        assert snap_dir == tmp_path / "hud_opendata" / "snap1"
+        assert isinstance(sha256_hex, str)
+        assert len(sha256_hex) == 64
+        assert isinstance(ndjson_size, int)
+        assert ndjson_size > 0
+
+    def test_custom_raw_root(self, tmp_path: Path):
+        """Snapshot is written under the custom raw_root."""
+        custom_root = tmp_path / "custom" / "raw"
+        payloads = [self._make_payload({"ok": True})]
+        snap_dir, _, _ = write_api_snapshot(
+            payloads, "src", snapshot_id="s1", raw_root=custom_root,
+        )
+
+        assert snap_dir == custom_root / "src" / "s1"
+        assert snap_dir.exists()
+
+    def test_empty_response_list(self, tmp_path: Path):
+        """Empty response list produces empty response.ndjson."""
+        snap_dir, sha256_hex, ndjson_size = write_api_snapshot(
+            [], "hud_opendata", snapshot_id="empty", raw_root=tmp_path,
+        )
+
+        ndjson_path = snap_dir / "response.ndjson"
+        assert ndjson_path.exists()
+        assert ndjson_path.read_bytes() == b""
+        assert ndjson_size == 0
+        assert sha256_hex == hashlib.sha256(b"").hexdigest()
+
+        manifest = json.loads((snap_dir / "manifest.json").read_text(encoding="utf-8"))
+        assert manifest["page_count"] == 0
+
+    def test_deterministic_same_input_same_hash(self, tmp_path: Path):
+        """Same input produces identical hash across two calls."""
+        payloads = [self._make_payload({"z": 3, "a": 1})]
+
+        _, hash1, size1 = write_api_snapshot(
+            payloads, "src", snapshot_id="run1", raw_root=tmp_path,
+        )
+        _, hash2, size2 = write_api_snapshot(
+            payloads, "src", snapshot_id="run2", raw_root=tmp_path,
+        )
+
+        assert hash1 == hash2
+        assert size1 == size2
+
+    def test_multiple_pages_produce_multiline_ndjson(self, tmp_path: Path):
+        """Multiple payloads produce one NDJSON line each."""
+        payloads = [
+            self._make_payload({"page": 1}),
+            self._make_payload({"page": 2}),
+            self._make_payload({"page": 3}),
+        ]
+        snap_dir, _, _ = write_api_snapshot(
+            payloads, "src", snapshot_id="multi", raw_root=tmp_path,
+        )
+
+        ndjson_text = (snap_dir / "response.ndjson").read_text(encoding="utf-8")
+        # Trailing newline means split produces an extra empty string
+        lines = [ln for ln in ndjson_text.split("\n") if ln]
+        assert len(lines) == 3
+
+    def test_record_count_none_in_manifest(self, tmp_path: Path):
+        """record_count=None is faithfully stored in manifest."""
+        payloads = [self._make_payload({"x": 1})]
+        snap_dir, _, _ = write_api_snapshot(
+            payloads, "src", snapshot_id="s1", raw_root=tmp_path,
+        )
+
+        manifest = json.loads((snap_dir / "manifest.json").read_text(encoding="utf-8"))
+        assert manifest["record_count"] is None
+
+
+# ---------------------------------------------------------------------------
+# hash_file
+# ---------------------------------------------------------------------------
+
+
+class TestHashFile:
+    """Tests for hash_file helper."""
+
+    def test_returns_correct_sha256_and_size(self, tmp_path: Path):
+        """SHA-256 and size match independently computed values."""
+        content = b"known content for hashing"
+        f = tmp_path / "file.bin"
+        f.write_bytes(content)
+
+        sha256_hex, size = hash_file(f)
+
+        assert sha256_hex == hashlib.sha256(content).hexdigest()
+        assert size == len(content)
+
+    def test_empty_file(self, tmp_path: Path):
+        """Empty file produces the empty-bytes SHA-256."""
+        f = tmp_path / "empty.bin"
+        f.write_bytes(b"")
+
+        sha256_hex, size = hash_file(f)
+
+        assert sha256_hex == hashlib.sha256(b"").hexdigest()
+        assert size == 0
+
+    def test_hash_is_lowercase_hex(self, tmp_path: Path):
+        """Returned hash is lowercase hexadecimal, 64 chars."""
+        f = tmp_path / "f.bin"
+        f.write_bytes(b"abc")
+
+        sha256_hex, _ = hash_file(f)
+
+        assert len(sha256_hex) == 64
+        assert sha256_hex == sha256_hex.lower()
+        assert all(c in "0123456789abcdef" for c in sha256_hex)
+
+    def test_raises_for_missing_file(self, tmp_path: Path):
+        """FileNotFoundError when file does not exist."""
+        with pytest.raises(FileNotFoundError):
+            hash_file(tmp_path / "nonexistent.bin")
+
+
+# ---------------------------------------------------------------------------
+# hash_directory
+# ---------------------------------------------------------------------------
+
+
+class TestHashDirectory:
+    """Tests for hash_directory helper."""
+
+    def test_hashes_files_in_sorted_order(self, tmp_path: Path):
+        """Combined hash equals hashing file contents in sorted name order."""
+        (tmp_path / "b.txt").write_bytes(b"beta")
+        (tmp_path / "a.txt").write_bytes(b"alpha")
+
+        combined_hex, total_size = hash_directory(tmp_path)
+
+        # Manually reproduce: sorted order is a.txt, b.txt
+        hasher = hashlib.sha256()
+        hasher.update(b"alpha")
+        hasher.update(b"beta")
+        expected = hasher.hexdigest()
+
+        assert combined_hex == expected
+        assert total_size == len(b"alpha") + len(b"beta")
+
+    def test_deterministic_across_calls(self, tmp_path: Path):
+        """Same directory contents produce same hash on repeated calls."""
+        (tmp_path / "x.txt").write_bytes(b"x-data")
+        (tmp_path / "y.txt").write_bytes(b"y-data")
+
+        hash1, size1 = hash_directory(tmp_path)
+        hash2, size2 = hash_directory(tmp_path)
+
+        assert hash1 == hash2
+        assert size1 == size2
+
+    def test_includes_files_in_subdirectories(self, tmp_path: Path):
+        """Files in subdirectories are included (rglob)."""
+        sub = tmp_path / "sub"
+        sub.mkdir()
+        (sub / "nested.txt").write_bytes(b"nested content")
+        (tmp_path / "top.txt").write_bytes(b"top content")
+
+        _, total_size = hash_directory(tmp_path)
+
+        assert total_size == len(b"nested content") + len(b"top content")
+
+    def test_empty_directory(self, tmp_path: Path):
+        """Empty directory produces the initial SHA-256 (no updates)."""
+        empty = tmp_path / "empty_dir"
+        empty.mkdir()
+
+        combined_hex, total_size = hash_directory(empty)
+
+        assert combined_hex == hashlib.sha256().hexdigest()
+        assert total_size == 0
+
+    def test_order_matters_for_hash(self, tmp_path: Path):
+        """Renaming files changes the hash because sort order changes."""
+        dir1 = tmp_path / "dir1"
+        dir1.mkdir()
+        (dir1 / "a.txt").write_bytes(b"first")
+        (dir1 / "b.txt").write_bytes(b"second")
+
+        dir2 = tmp_path / "dir2"
+        dir2.mkdir()
+        # Same content but swapped names
+        (dir2 / "a.txt").write_bytes(b"second")
+        (dir2 / "b.txt").write_bytes(b"first")
+
+        hash1, _ = hash_directory(dir1)
+        hash2, _ = hash_directory(dir2)
+
+        assert hash1 != hash2
