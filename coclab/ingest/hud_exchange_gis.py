@@ -569,7 +569,7 @@ def ingest_hud_exchange(
         source_url = ARCGIS_FEATURE_SERVICE_URL
 
         # Persist raw API snapshot per retention policy
-        snapshot_id = datetime.now(UTC).strftime("%Y-%m-%d")
+        snapshot_id = f"B{boundary_vintage}_{datetime.now(UTC).strftime('%Y-%m-%d')}"
         snap_dir, content_sha256, content_size = write_api_snapshot(
             raw_pages,
             "hud_exchange",
