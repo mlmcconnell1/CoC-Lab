@@ -139,3 +139,52 @@ def test_build_panel_with_missing_build_errors():
         assert result.exit_code == 2
         assert "Build 'missing' not found" in result.output
         assert "coclab build create" in result.output
+
+
+def test_build_catalog_and_resolve():
+    """build catalog should scan boundary files and write catalog JSON."""
+    with runner.isolated_filesystem():
+        _create_boundary_files(Path("."), [2020, 2021, 2022])
+
+        result = runner.invoke(app, ["build", "catalog"])
+        assert result.exit_code == 0, result.output
+        assert "Cataloged 3 base assets" in result.output
+
+        catalog_path = Path("data/registry/base_assets.json")
+        assert catalog_path.exists()
+
+        catalog = json.loads(catalog_path.read_text())
+        assert catalog["schema_version"] == 1
+        assert len(catalog["assets"]) == 3
+        years = sorted(a["year"] for a in catalog["assets"])
+        assert years == [2020, 2021, 2022]
+        for asset in catalog["assets"]:
+            assert len(asset["sha256"]) == 64
+
+        # build create should resolve from catalog
+        result = runner.invoke(
+            app,
+            [
+                "build", "create",
+                "--name", "demo",
+                "--years", "2020-2022",
+                "--data-dir", "data",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "Base assets pinned: 3" in result.output
+
+
+def test_build_catalog_empty():
+    """build catalog should handle missing boundary directory gracefully."""
+    with runner.isolated_filesystem():
+        result = runner.invoke(app, ["build", "catalog"])
+        assert result.exit_code == 0
+        assert "No boundary assets found" in result.output
+
+
+def test_build_catalog_help():
+    """build catalog help should show options."""
+    result = runner.invoke(app, ["build", "catalog", "--help"])
+    assert result.exit_code == 0
+    assert "catalog" in result.output.lower()

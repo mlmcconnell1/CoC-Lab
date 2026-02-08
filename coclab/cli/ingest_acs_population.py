@@ -50,11 +50,11 @@ def ingest_acs_population(
 
     Examples:
 
-        coclab ingest-acs-population --acs 2019-2023 --tracts 2023
+        coclab ingest acs --acs 2019-2023 --tracts 2023
 
-        coclab ingest-acs-population --acs 2015-2019 --tracts 2023
+        coclab ingest acs --acs 2015-2019 --tracts 2023
 
-        coclab ingest-acs-population --acs 2015-2019 --tracts 2023 --no-translate
+        coclab ingest acs --acs 2015-2019 --tracts 2023 --no-translate
     """
     import pandas as pd
 

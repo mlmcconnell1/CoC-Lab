@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 DEFAULT_BUILDS_DIR = Path("builds")
+DEFAULT_CATALOG_PATH = Path("data/registry/base_assets.json")
 
 
 def resolve_build_dir(name: str, builds_dir: Path | None = None) -> Path:
@@ -61,6 +62,92 @@ def _compute_sha256(path: Path) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Base asset catalog (optional)
+# ---------------------------------------------------------------------------
+
+
+def read_base_catalog(catalog_path: Path | None = None) -> dict:
+    """Read the global base asset catalog, returning an empty structure if absent.
+
+    The catalog at ``data/registry/base_assets.json`` is an optional inventory
+    of available base assets.  When present, :func:`_resolve_boundary_source`
+    consults it before falling back to filesystem discovery.
+    """
+    path = catalog_path or DEFAULT_CATALOG_PATH
+    if not path.exists():
+        return {"schema_version": 1, "assets": []}
+    return json.loads(path.read_text())
+
+
+def write_base_catalog(
+    assets: list[dict],
+    catalog_path: Path | None = None,
+) -> Path:
+    """Write (or overwrite) the global base asset catalog.
+
+    Args:
+        assets: List of asset dicts with keys
+            ``asset_type``, ``year``, ``path``, ``sha256``.
+        catalog_path: Override for the default catalog location.
+
+    Returns:
+        Path to the written catalog file.
+    """
+    path = catalog_path or DEFAULT_CATALOG_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    catalog = {"schema_version": 1, "assets": assets}
+    path.write_text(json.dumps(catalog, indent=2) + "\n")
+    return path
+
+
+def scan_boundary_assets(data_dir: Path | None = None) -> list[dict]:
+    """Scan curated boundary files and return catalog entries.
+
+    Discovers all ``coc__B*.parquet`` files under the curated boundary
+    directory and computes SHA-256 hashes for each.
+
+    Args:
+        data_dir: Root data directory (defaults to ``data/``).
+
+    Returns:
+        Sorted list of asset dicts.
+    """
+    base = Path(data_dir) if data_dir else Path("data")
+    boundary_dir = base / "curated" / "coc_boundaries"
+    if not boundary_dir.exists():
+        return []
+
+    assets: list[dict] = []
+    for p in sorted(boundary_dir.glob("coc__B*.parquet")):
+        # Extract year from filename like coc__B2024.parquet
+        stem = p.stem  # e.g. "coc__B2024"
+        year_str = stem.split("__B")[-1] if "__B" in stem else None
+        if year_str is None or not year_str.isdigit():
+            continue
+        assets.append({
+            "asset_type": "coc_boundary",
+            "year": int(year_str),
+            "path": p.as_posix(),
+            "sha256": _compute_sha256(p),
+        })
+    return assets
+
+
+def _catalog_lookup(year: int, catalog_path: Path | None = None) -> Path | None:
+    """Look up a boundary asset for *year* in the catalog.
+
+    Returns the path if found and the file exists, otherwise ``None``.
+    """
+    catalog = read_base_catalog(catalog_path)
+    for asset in catalog.get("assets", []):
+        if asset.get("asset_type") == "coc_boundary" and asset.get("year") == year:
+            p = Path(asset["path"])
+            if p.exists():
+                return p
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Base asset pinning
 # ---------------------------------------------------------------------------
 
@@ -68,12 +155,18 @@ def _compute_sha256(path: Path) -> str:
 def _resolve_boundary_source(year: int, data_dir: Path | None = None) -> Path:
     """Resolve a curated boundary file for *year*.
 
-    Uses the multi-scheme resolver so that ``coc__B``, ``boundaries__B``,
-    and legacy ``coc_boundaries__`` filenames are all accepted.
+    Checks the optional base asset catalog first, then falls back to the
+    multi-scheme filesystem resolver (``coc__B``, ``boundaries__B``,
+    legacy ``coc_boundaries__``).
 
     Raises:
         FileNotFoundError: if no boundary file is found for *year*.
     """
+    # Try catalog first (fast path)
+    catalog_hit = _catalog_lookup(year)
+    if catalog_hit is not None:
+        return catalog_hit
+
     from coclab.geo.io import resolve_curated_boundary_path
 
     return resolve_curated_boundary_path(str(year), base_dir=data_dir)

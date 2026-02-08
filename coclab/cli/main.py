@@ -14,7 +14,7 @@ import typer
 from coclab.cli.aggregate import aggregate_app
 from coclab.cli.build_panel import build_panel_cmd
 from coclab.cli.build_xwalks import build_xwalks
-from coclab.cli.builds import create_build, list_builds_cmd
+from coclab.cli.builds import catalog_cmd, create_build, list_builds_cmd
 from coclab.cli.compare_vintages import compare_vintages
 from coclab.cli.crosscheck_pit_vintages import crosscheck_pit_vintages, validate_pit_vintages
 from coclab.cli.crosscheck_population import crosscheck_population, validate_population
@@ -334,10 +334,10 @@ def ingest_acs_population_deprecated(
         ),
     ] = True,
 ) -> None:
-    """Deprecated: use `coclab ingest acs-population`."""
+    """Deprecated: use `coclab ingest acs`."""
     typer.echo(
         "Warning: 'coclab ingest-acs-population' is deprecated; "
-        "use 'coclab ingest acs-population' instead.",
+        "use 'coclab ingest acs' instead.",
         err=True,
     )
     ingest_acs_population(
@@ -1521,7 +1521,8 @@ app.command("validate-boundaries", hidden=True)(validate_boundaries_deprecated)
 app.command("validate-pit-vintages", hidden=True)(validate_pit_vintages_deprecated)
 app.command("validate-population", hidden=True)(validate_population_deprecated)
 
-ingest_app.command("acs-population")(ingest_acs_population)
+ingest_app.command("acs")(ingest_acs_population)
+ingest_app.command("acs-population", hidden=True)(ingest_acs_population)
 ingest_app.command("boundaries")(ingest_boundaries)
 ingest_app.command("census")(ingest_census)
 ingest_app.command("nhgis")(ingest_nhgis)
@@ -1543,6 +1544,7 @@ diagnostics_app.command("zori")(zori_diagnostics)
 build_app.command("panel")(build_panel_cmd)
 build_app.command("xwalks")(build_xwalks)
 build_app.command("export")(export_bundle)
+build_app.command("catalog")(catalog_cmd)
 build_app.command("create")(create_build)
 build_app.command("list")(list_builds_cmd)
 show_app.command("vintage-diffs")(compare_vintages)

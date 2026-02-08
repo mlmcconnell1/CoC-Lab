@@ -74,14 +74,21 @@ class TestIngestAcsPopulationCommand:
         mock_ingest.assert_called_once()
 
 
-class TestNestedIngestAcsPopulationCommand:
-    """Tests for ingest acs-population nested CLI command."""
+class TestNestedIngestAcsCommand:
+    """Tests for ingest acs nested CLI command."""
 
-    def test_ingest_acs_population_nested_help(self):
-        """Nested ingest acs-population help should show options."""
-        result = runner.invoke(app, ["ingest", "acs-population", "--help"])
+    def test_ingest_acs_help(self):
+        """Nested ingest acs help should show options."""
+        result = runner.invoke(app, ["ingest", "acs", "--help"])
 
         assert result.exit_code == 0
         assert "--acs" in result.output
         assert "--tracts" in result.output
         assert "--translate" in result.output
+
+    def test_ingest_acs_population_still_works(self):
+        """Deprecated 'ingest acs-population' should still resolve."""
+        result = runner.invoke(app, ["ingest", "acs-population", "--help"])
+
+        assert result.exit_code == 0
+        assert "--acs" in result.output

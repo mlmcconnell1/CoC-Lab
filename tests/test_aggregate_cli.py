@@ -18,7 +18,7 @@ runner = CliRunner()
 def test_aggregate_help_shows_subcommands():
     result = runner.invoke(app, ["aggregate", "--help"])
     assert result.exit_code == 0
-    for name in ("acs", "zori", "pep", "pit"):
+    for name in ("acs", "acs-population", "zori", "pep", "pit"):
         assert name in result.output
 
 
@@ -386,3 +386,46 @@ def test_aggregate_pit_vintage_partial_coverage(tmp_path):
     assert result.exit_code == 0
     assert "Using vintage P2021" in result.output
     assert "PIT data missing for years: [2025]" in result.output
+
+
+# ---------------------------------------------------------------------------
+# ACS-population aggregate (cache-only, no API)
+# ---------------------------------------------------------------------------
+
+
+def test_aggregate_acs_population_help_shows_in_aggregate():
+    result = runner.invoke(app, ["aggregate", "--help"])
+    assert result.exit_code == 0
+    assert "acs-population" in result.output
+
+
+def test_aggregate_acs_population_missing_build():
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            app, ["aggregate", "acs-population", "--build", "nonexistent"]
+        )
+        assert result.exit_code == 2
+        assert "Build 'nonexistent' not found" in result.output
+
+
+def test_aggregate_acs_population_invalid_align():
+    with runner.isolated_filesystem():
+        _create_build(years=[2020])
+        result = runner.invoke(
+            app,
+            ["aggregate", "acs-population", "--build", "demo", "--align", "bad_mode"],
+        )
+        assert result.exit_code == 2
+        assert "Invalid alignment mode 'bad_mode' for acs-population" in result.output
+
+
+def test_aggregate_acs_population_missing_cache():
+    """Should fail with actionable message when ACS cache is missing."""
+    with runner.isolated_filesystem():
+        _create_build(years=[2020])
+        result = runner.invoke(
+            app, ["aggregate", "acs-population", "--build", "demo"]
+        )
+        assert result.exit_code == 1
+        assert "Cached ACS tract population file not found" in result.output
+        assert "coclab ingest acs" in result.output

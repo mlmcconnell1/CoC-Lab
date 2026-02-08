@@ -97,3 +97,35 @@ def list_builds_cmd(
     typer.echo(f"Builds in {builds_dir}:")
     for build in builds:
         typer.echo(f"  - {build.name}")
+
+
+def catalog_cmd(
+    data_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--data-dir",
+            help="Root data directory to scan for boundary assets.",
+        ),
+    ] = None,
+) -> None:
+    """Sync the global base asset catalog from curated boundary files.
+
+    Scans ``data/curated/coc_boundaries/`` for boundary files and writes
+    an inventory to ``data/registry/base_assets.json``.  The catalog is
+    optional and speeds up ``build create`` by avoiding filesystem probing.
+
+    Examples:
+
+        coclab build catalog
+    """
+    from coclab.builds import scan_boundary_assets, write_base_catalog
+
+    assets = scan_boundary_assets(data_dir=data_dir)
+    if not assets:
+        typer.echo("No boundary assets found to catalog.")
+        return
+
+    catalog_path = write_base_catalog(assets)
+    typer.echo(f"Cataloged {len(assets)} base assets to: {catalog_path}")
+    for asset in assets:
+        typer.echo(f"  - B{asset['year']}: {asset['sha256'][:12]}...")
