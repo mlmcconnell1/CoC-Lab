@@ -310,3 +310,15 @@ class TestRecipeCLI:
             "--recipe", str(f),
         ])
         assert result.exit_code == 2
+
+    def test_dry_run_succeeds(self, tmp_path: Path):
+        import yaml
+
+        recipe_file = tmp_path / "recipe.yaml"
+        recipe_file.write_text(yaml.dump(_minimal_recipe()), encoding="utf-8")
+        result = runner.invoke(app, [
+            "build", "recipe",
+            "--recipe", str(recipe_file),
+            "--dry-run",
+        ])
+        assert "Loaded recipe: test-recipe" in result.output

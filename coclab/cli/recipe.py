@@ -25,6 +25,14 @@ def recipe_cmd(
             help="Path to a YAML recipe file.",
         ),
     ],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            "-n",
+            help="Validate only; do not execute the build.",
+        ),
+    ] = False,
 ) -> None:
     """Load, validate, and execute a build recipe.
 
@@ -35,6 +43,8 @@ def recipe_cmd(
     Examples:
 
         coclab build recipe --recipe my_build.yaml
+
+        coclab build recipe --recipe my_build.yaml --dry-run
     """
     # 1. Load and structurally validate the recipe
     try:
@@ -69,3 +79,8 @@ def recipe_cmd(
         typer.echo(f"Recipe validated with {len(warnings)} warning(s).")
     else:
         typer.echo("Recipe validated successfully.")
+
+    if dry_run:
+        return
+
+    # TODO: execute the build pipeline here
