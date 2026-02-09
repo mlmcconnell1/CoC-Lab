@@ -801,16 +801,16 @@ Aggregate PEP county estimates to CoC level for each boundary year in a named bu
 # Default July 1 alignment
 coclab aggregate pep --build demo
 
-# Align to PIT year with a lag
-coclab aggregate pep --build demo --align lagged --lag-years 1
+# Lag by 6 months (linear interpolation between current and previous year)
+coclab aggregate pep --build demo --align lagged --lag-months 6
 ```
 
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--build`, `-b` | Named build to aggregate against | Required |
-| `--align` | `as_of_july`, `to_calendar_year`, `to_pit_year`, `lagged` | `as_of_july` |
+| `--align` | `as_of_july`, `lagged` | `as_of_july` |
 | `--years` | Year spec override (e.g., `2018-2024`) | Build years |
-| `--lag-years` | Lag years (required for `lagged`) | None |
+| `--lag-months` | Lag months for `lagged` (0-12); 0=current year, 12=previous year, 1-11=linear interpolation | `0` |
 | `--weighting`, `-w` | `area_share` or `equal` | `area_share` |
 | `--min-coverage` | Minimum coverage ratio for valid CoC-year | `0.95` |
 

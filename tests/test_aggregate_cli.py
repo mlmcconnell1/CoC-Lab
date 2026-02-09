@@ -3,8 +3,10 @@
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
+from coclab.cli.aggregate import _build_lagged_pep_series
 from coclab.cli.main import app
 
 runner = CliRunner()
@@ -197,14 +199,97 @@ def test_aggregate_pep_with_invalid_years():
 # ---------------------------------------------------------------------------
 
 
-def test_aggregate_pep_lagged_requires_lag_years():
+def test_aggregate_pep_lagged_rejects_lag_months_out_of_range():
     with runner.isolated_filesystem():
         _create_build(years=[2020])
         result = runner.invoke(
-            app, ["aggregate", "pep", "--build", "demo", "--align", "lagged"]
+            app,
+            [
+                "aggregate",
+                "pep",
+                "--build",
+                "demo",
+                "--align",
+                "lagged",
+                "--lag-months",
+                "13",
+            ],
         )
         assert result.exit_code == 2
-        assert "--lag-years is required" in result.output
+        assert "--lag-months must be between 0 and 12" in result.output
+
+
+def test_aggregate_pep_rejects_lag_months_without_lagged_align():
+    with runner.isolated_filesystem():
+        _create_build(years=[2020])
+        result = runner.invoke(
+            app,
+            [
+                "aggregate",
+                "pep",
+                "--build",
+                "demo",
+                "--lag-months",
+                "1",
+            ],
+        )
+        assert result.exit_code == 2
+        assert "--lag-months is only valid when --align=lagged" in result.output
+
+
+def test_build_lagged_pep_series_zero_months_matches_current_year():
+    import pandas as pd
+
+    pep_df = pd.DataFrame({
+        "county_fips": ["01001", "01003", "01001", "01003"],
+        "year": [2019, 2019, 2020, 2020],
+        "population": [90000, 120000, 100000, 130000],
+    })
+
+    result = _build_lagged_pep_series(pep_df, target_year=2020, lag_months=0)
+    result = result.sort_values("county_fips").reset_index(drop=True)
+    assert list(result["population"]) == [100000, 130000]
+
+
+def test_build_lagged_pep_series_twelve_months_matches_previous_year():
+    import pandas as pd
+
+    pep_df = pd.DataFrame({
+        "county_fips": ["01001", "01003", "01001", "01003"],
+        "year": [2019, 2019, 2020, 2020],
+        "population": [90000, 120000, 100000, 130000],
+    })
+
+    result = _build_lagged_pep_series(pep_df, target_year=2020, lag_months=12)
+    result = result.sort_values("county_fips").reset_index(drop=True)
+    assert list(result["population"]) == [90000, 120000]
+
+
+def test_build_lagged_pep_series_interpolates_for_partial_month_lag():
+    import pandas as pd
+
+    pep_df = pd.DataFrame({
+        "county_fips": ["01001", "01003", "01001", "01003"],
+        "year": [2019, 2019, 2020, 2020],
+        "population": [90000, 120000, 100000, 130000],
+    })
+
+    result = _build_lagged_pep_series(pep_df, target_year=2020, lag_months=6)
+    result = result.sort_values("county_fips").reset_index(drop=True)
+    assert list(result["population"]) == [95000, 125000]
+
+
+def test_build_lagged_pep_series_rejects_invalid_lag_months():
+    import pandas as pd
+
+    pep_df = pd.DataFrame({
+        "county_fips": ["01001"],
+        "year": [2020],
+        "population": [100000],
+    })
+
+    with pytest.raises(ValueError, match="--lag-months must be between 0 and 12"):
+        _build_lagged_pep_series(pep_df, target_year=2020, lag_months=-1)
 
 
 def _create_fake_acs_cache(acs_vintage: str, tract_vintage: str | int) -> None:
@@ -409,4 +494,3 @@ def test_aggregate_pit_vintage_partial_coverage(tmp_path):
     assert result.exit_code == 0
     assert "Using vintage P2021" in result.output
     assert "PIT data missing for years: [2025]" in result.output
-

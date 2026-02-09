@@ -11,9 +11,11 @@ as the geographic reference.
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 from typing import Annotated
 
+import pandas as pd
 import typer
 
 from coclab.builds import (
@@ -35,7 +37,7 @@ aggregate_app = typer.Typer(
 # Valid alignment modes per dataset
 # ---------------------------------------------------------------------------
 
-PEP_ALIGN_MODES = ("as_of_july", "to_calendar_year", "to_pit_year", "lagged")
+PEP_ALIGN_MODES = ("as_of_july", "lagged")
 PIT_ALIGN_MODES = ("point_in_time_jan", "to_calendar_year")
 ACS_ALIGN_MODES = ("vintage_end_year", "window_center_year")
 ZORI_ALIGN_MODES = ("monthly_native", "pit_january", "calendar_year_average")
@@ -103,6 +105,58 @@ def _require_boundary_years(build_dir: Path) -> list[int]:
     return boundary_years
 
 
+def _build_lagged_pep_series(pep_df: pd.DataFrame, target_year: int, lag_months: int) -> pd.DataFrame:
+    """Build a one-year county PEP series with month-based lag interpolation."""
+    if lag_months < 0 or lag_months > 12:
+        raise ValueError("--lag-months must be between 0 and 12.")
+
+    current = (
+        pep_df.loc[pep_df["year"] == target_year, ["county_fips", "population"]]
+        .drop_duplicates(subset=["county_fips"])
+        .rename(columns={"population": "population_current"})
+    )
+    if current.empty:
+        raise FileNotFoundError(f"No PEP data found for year {target_year}.")
+
+    weight_prev = lag_months / 12.0
+    weight_current = 1.0 - weight_prev
+
+    if lag_months == 0:
+        out = current.rename(columns={"population_current": "population"})[
+            ["county_fips", "population"]
+        ].copy()
+        out["year"] = target_year
+        return out[["county_fips", "year", "population"]]
+
+    previous = (
+        pep_df.loc[pep_df["year"] == target_year - 1, ["county_fips", "population"]]
+        .drop_duplicates(subset=["county_fips"])
+        .rename(columns={"population": "population_previous"})
+    )
+    if previous.empty:
+        raise FileNotFoundError(
+            f"No PEP data found for year {target_year - 1} "
+            f"(required for --lag-months={lag_months})."
+        )
+
+    merged = current.merge(previous, on="county_fips", how="outer")
+    interpolated = (
+        weight_current * merged["population_current"].fillna(0.0)
+        + weight_prev * merged["population_previous"].fillna(0.0)
+    )
+
+    valid = pd.Series(True, index=merged.index)
+    if weight_current > 0:
+        valid &= merged["population_current"].notna()
+    if weight_prev > 0:
+        valid &= merged["population_previous"].notna()
+    merged["population"] = interpolated.where(valid)
+
+    out = merged[["county_fips", "population"]].copy()
+    out["year"] = target_year
+    return out[["county_fips", "year", "population"]]
+
+
 # ---------------------------------------------------------------------------
 # pep
 # ---------------------------------------------------------------------------
@@ -124,7 +178,7 @@ def aggregate_pep(
             "--align",
             help=(
                 "Temporal alignment mode. "
-                "One of: as_of_july, to_calendar_year, to_pit_year, lagged."
+                "One of: as_of_july, lagged."
             ),
         ),
     ] = "as_of_july",
@@ -135,13 +189,16 @@ def aggregate_pep(
             help="Year spec override (e.g. '2018-2024'). Defaults to build years.",
         ),
     ] = None,
-    lag_years: Annotated[
-        int | None,
+    lag_months: Annotated[
+        int,
         typer.Option(
-            "--lag-years",
-            help="Number of lag years (required when --align=lagged).",
+            "--lag-months",
+            help=(
+                "Lag in months for --align=lagged (0-12). "
+                "0 = current year, 12 = previous year."
+            ),
         ),
-    ] = None,
+    ] = 0,
     weighting: Annotated[
         str,
         typer.Option(
@@ -167,9 +224,15 @@ def aggregate_pep(
     _validate_align(align, PEP_ALIGN_MODES, "pep")
     parsed_years = _resolve_years(years, build_dir)
 
-    if align == "lagged" and lag_years is None:
+    if lag_months < 0 or lag_months > 12:
         typer.echo(
-            "Error: --lag-years is required when --align=lagged.",
+            "Error: --lag-months must be between 0 and 12.",
+            err=True,
+        )
+        raise typer.Exit(2)
+    if align != "lagged" and lag_months != 0:
+        typer.echo(
+            "Error: --lag-months is only valid when --align=lagged.",
             err=True,
         )
         raise typer.Exit(2)
@@ -181,30 +244,60 @@ def aggregate_pep(
 
     typer.echo(f"Aggregating PEP to CoC (build '{build}', align '{align}')...")
 
-    from coclab.pep.aggregate import aggregate_pep_to_coc
+    from coclab.pep.aggregate import aggregate_pep_to_coc, load_pep_county
 
-    align_params: dict | None = {"lag_years": lag_years} if lag_years else None
+    align_params: dict | None = {"lag_months": lag_months} if align == "lagged" else None
+    pep_source_df = pd.DataFrame()
+    if align == "lagged":
+        try:
+            pep_source_df = load_pep_county()
+        except FileNotFoundError as exc:
+            record_aggregate_run(
+                build_dir, dataset="pep", alignment=align,
+                years_requested=parsed_years, status="failed",
+                error=str(exc), alignment_params=align_params,
+            )
+            typer.echo(f"Error: {exc}", err=True)
+            typer.echo("Ensure PEP data and crosswalks are available.", err=True)
+            raise typer.Exit(1) from exc
     all_outputs: list[str] = []
     materialized: list[int] = []
 
     for build_year in parsed_years:
         boundary_vintage = str(build_year)
         county_vintage = str(build_year)
-
-        # Apply alignment adjustments to determine PEP data year
+        pep_path: Path | None = None
         pep_year = build_year
-        if align == "to_pit_year":
-            pep_year = build_year - 1
-        elif align == "lagged" and lag_years is not None:
-            pep_year = build_year - lag_years
-
-        typer.echo(f"  B{build_year}: PEP year {pep_year}, counties {county_vintage}")
 
         try:
+            if align == "lagged":
+                weight_prev = lag_months / 12.0
+                typer.echo(
+                    f"  B{build_year}: lag {lag_months} months "
+                    f"(w_current={1.0 - weight_prev:.3f}, w_previous={weight_prev:.3f}), "
+                    f"counties {county_vintage}"
+                )
+                if lag_months > 0:
+                    lagged_series = _build_lagged_pep_series(
+                        pep_df=pep_source_df,
+                        target_year=build_year,
+                        lag_months=lag_months,
+                    )
+                    with tempfile.NamedTemporaryFile(
+                        prefix=f"pep_lagged_{build_year}_",
+                        suffix=".parquet",
+                        delete=False,
+                    ) as tmp:
+                        pep_path = Path(tmp.name)
+                    lagged_series.to_parquet(pep_path, index=False)
+            else:
+                typer.echo(f"  B{build_year}: PEP year {pep_year}, counties {county_vintage}")
+
             result_path = aggregate_pep_to_coc(
                 boundary_vintage=boundary_vintage,
                 county_vintage=county_vintage,
                 weighting=weighting,
+                pep_path=pep_path,
                 start_year=pep_year,
                 end_year=pep_year,
                 min_coverage=min_coverage,
@@ -237,6 +330,9 @@ def aggregate_pep(
             )
             typer.echo(f"Error: {exc}", err=True)
             raise typer.Exit(1) from exc
+        finally:
+            if pep_path is not None and pep_path.exists():
+                pep_path.unlink()
 
     record_aggregate_run(
         build_dir,

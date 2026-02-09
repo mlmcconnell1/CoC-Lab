@@ -332,7 +332,7 @@ def record_aggregate_run(
         alignment: Alignment mode used.
         years_requested: Years the user requested.
         years_materialized: Years actually produced (defaults to requested).
-        alignment_params: Extra alignment parameters (e.g. lag_years).
+        alignment_params: Extra alignment parameters (e.g. lag_months).
         outputs: List of output file paths (relative to build dir).
         status: "success" or "failed".
         error: Error message if status is "failed".

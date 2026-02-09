@@ -261,11 +261,11 @@ class TestRecordAggregateRun:
             dataset="pep",
             alignment="lagged",
             years_requested=[2020],
-            alignment_params={"lag_years": 2},
+            alignment_params={"lag_months": 6},
         )
 
         assert entry["alignment"]["mode"] == "lagged"
-        assert entry["alignment"]["lag_years"] == 2
+        assert entry["alignment"]["lag_months"] == 6
 
     def test_years_materialized_defaults_to_requested(self, tmp_path):
         write_build_manifest(tmp_path, "test", [2020, 2021], [])

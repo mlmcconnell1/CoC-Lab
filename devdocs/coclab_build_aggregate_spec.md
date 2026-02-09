@@ -88,9 +88,7 @@ coclab aggregate pep --build <build> [--years ...] --align <mode>
 Alignment modes:
 
 - `as_of_july` (default)
-- `to_calendar_year`
-- `to_pit_year`
-- `lagged` (requires `--lag-years <n>`)
+- `lagged` (`--lag-months 0..12`)
 
 ## 3.2 `coclab aggregate pit`
 
@@ -220,7 +218,7 @@ Important:
 coclab build create --name b2026q1 --years 2018-2024
 
 coclab aggregate pit  --build b2026q1 --align point_in_time_jan
-coclab aggregate pep  --build b2026q1 --align to_pit_year
+coclab aggregate pep  --build b2026q1 --align lagged --lag-months 6
 coclab aggregate acs  --build b2026q1 --align vintage_end_year --acs-vintage 2019-2023
 coclab aggregate zori --build b2026q1 --align pit_january
 ```
