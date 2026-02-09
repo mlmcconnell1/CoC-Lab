@@ -353,13 +353,13 @@ def tract_path(tract_vintage: str | int, base_dir: Path | str | None = None) -> 
         base_dir: Base data directory (defaults to "data")
 
     Returns:
-        Path like data/curated/census/tracts__T2023.parquet
+        Path like data/curated/tiger/tracts__T2023.parquet
     """
     if base_dir is None:
         base_dir = Path("data")
     else:
         base_dir = Path(base_dir)
-    return base_dir / "curated" / "census" / tract_filename(tract_vintage)
+    return base_dir / "curated" / "tiger" / tract_filename(tract_vintage)
 
 
 def county_path(county_vintage: str | int, base_dir: Path | str | None = None) -> Path:
@@ -370,13 +370,13 @@ def county_path(county_vintage: str | int, base_dir: Path | str | None = None) -
         base_dir: Base data directory (defaults to "data")
 
     Returns:
-        Path like data/curated/census/counties__C2023.parquet
+        Path like data/curated/tiger/counties__C2023.parquet
     """
     if base_dir is None:
         base_dir = Path("data")
     else:
         base_dir = Path(base_dir)
-    return base_dir / "curated" / "census" / county_filename(county_vintage)
+    return base_dir / "curated" / "tiger" / county_filename(county_vintage)
 
 
 def pit_path(pit_year: str | int, base_dir: Path | str | None = None) -> Path:

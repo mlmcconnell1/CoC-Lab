@@ -55,7 +55,7 @@ class TractRelationshipNotFoundError(FileNotFoundError):
 RELATIONSHIP_URL = CENSUS_TRACT_RELATIONSHIP_URL
 
 # Output directory
-OUTPUT_DIR = Path("data/curated/census")
+OUTPUT_DIR = Path("data/curated/tiger")
 
 
 def download_tract_relationship() -> tuple[pd.DataFrame, str, int, Path]:
@@ -82,7 +82,7 @@ def download_tract_relationship() -> tuple[pd.DataFrame, str, int, Path]:
     # Persist raw snapshot and compute hash
     filename = RELATIONSHIP_URL.rsplit("/", 1)[-1]
     raw_path, content_sha256, content_size = persist_file_snapshot(
-        raw_content, "census", filename, subdirs=("tract_relationship",)
+        raw_content, "tiger", filename, subdirs=("tract_relationship",)
     )
 
     # Parse pipe-delimited file

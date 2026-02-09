@@ -843,8 +843,8 @@ coclab ingest nhgis --year 2010 --force
 5. Saves as GeoParquet and registers in source registry
 
 **Output:**
-- `data/curated/census/tracts__T{year}.parquet`
-- `data/curated/census/counties__C{year}.parquet`
+- `data/curated/tiger/tracts__T{year}.parquet`
+- `data/curated/tiger/counties__C{year}.parquet`
 - Same schema as TIGER geometries: `geo_vintage`, `geoid`, `geometry`, `source`, `ingested_at`
 
 **Why NHGIS over TIGER?**
@@ -1023,7 +1023,7 @@ coclab list census --type counties
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--type`, `-t` | Filter by type: `tracts` or `counties` | All |
-| `--dir`, `-d` | Directory to scan | `data/curated/census` |
+| `--dir`, `-d` | Directory to scan | `data/curated/tiger` |
 
 **Example Output:**
 ```

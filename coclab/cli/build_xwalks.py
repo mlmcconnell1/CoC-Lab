@@ -203,8 +203,8 @@ def build_xwalks(
         # Load tract geometries (try new naming, then legacy)
         from coclab.naming import tract_filename
 
-        tract_path = Path("data/curated/census") / tract_filename(tracts)
-        legacy_tract_path = Path(f"data/curated/census/tracts__{tracts}.parquet")
+        tract_path = Path("data/curated/tiger") / tract_filename(tracts)
+        legacy_tract_path = Path(f"data/curated/tiger/tracts__{tracts}.parquet")
 
         if not tract_path.exists():
             if legacy_tract_path.exists():
@@ -283,8 +283,8 @@ def build_xwalks(
     # Load county geometries (try new naming, then legacy)
     from coclab.naming import county_filename
 
-    county_path = Path("data/curated/census") / county_filename(county_vintage)
-    legacy_county_path = Path(f"data/curated/census/counties__{county_vintage}.parquet")
+    county_path = Path("data/curated/tiger") / county_filename(county_vintage)
+    legacy_county_path = Path(f"data/curated/tiger/counties__{county_vintage}.parquet")
 
     if not county_path.exists():
         if legacy_county_path.exists():

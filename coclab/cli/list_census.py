@@ -71,7 +71,7 @@ def list_census(
             "-d",
             help="Directory to scan for census files.",
         ),
-    ] = Path("data/curated/census"),
+    ] = Path("data/curated/tiger"),
 ) -> None:
     """List available census geometry files.
 

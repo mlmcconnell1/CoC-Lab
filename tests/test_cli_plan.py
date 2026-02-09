@@ -38,8 +38,8 @@ class TestTigerIngestCommand:
     ):
         """Cached files should skip downloads without --force."""
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            tracts_path = Path("data/curated/census/tracts__T2023.parquet")
-            counties_path = Path("data/curated/census/counties__C2023.parquet")
+            tracts_path = Path("data/curated/tiger/tracts__T2023.parquet")
+            counties_path = Path("data/curated/tiger/counties__C2023.parquet")
             tracts_path.parent.mkdir(parents=True, exist_ok=True)
             tracts_path.touch()
             counties_path.touch()
@@ -102,7 +102,7 @@ class TestBuildXwalksCommand:
             boundary_path.parent.mkdir(parents=True, exist_ok=True)
             boundary_path.touch()
 
-            tracts_path = Path("data/curated/census/tracts__2023.parquet")
+            tracts_path = Path("data/curated/tiger/tracts__2023.parquet")
             tracts_path.parent.mkdir(parents=True, exist_ok=True)
             tracts_path.touch()
 
@@ -194,7 +194,7 @@ class TestBuildXwalksCommand:
             boundary_path.parent.mkdir(parents=True, exist_ok=True)
             boundary_path.touch()
 
-            tracts_path = Path("data/curated/census/tracts__2023.parquet")
+            tracts_path = Path("data/curated/tiger/tracts__2023.parquet")
             tracts_path.parent.mkdir(parents=True, exist_ok=True)
             tracts_path.touch()
 

@@ -74,12 +74,12 @@ All ingest modules now comply with this policy via `coclab.raw_snapshot`:
 | Module | Source Type | Snapshot Format | Raw Path |
 |--------|-----------|----------------|----------|
 | `hud_opendata_arcgis` | API | `response.ndjson` + manifest | `data/raw/hud_opendata/<date>/` |
-| `tiger_tracts` | File | Per-state ZIP | `data/raw/census/<year>/tracts/` |
-| `tiger_counties` | File | National ZIP | `data/raw/census/<year>/counties/` |
+| `tiger_tracts` | File | Per-state ZIP | `data/raw/tiger/<year>/tracts/` |
+| `tiger_counties` | File | National ZIP | `data/raw/tiger/<year>/counties/` |
 | `nhgis/ingest` (tracts & counties) | File | NHGIS ZIP | `data/raw/nhgis/<year>/<geo>/` |
 | `acs/ingest/tract_population` | API | `response.ndjson` + manifest | `data/raw/acs_tract/<snapshot>/` |
 | `rents/weights` | API | `response.ndjson` + manifest | `data/raw/acs_county/<snapshot>/` |
-| `census/ingest/tract_relationship` | File | Downloaded text file | `data/raw/census/tract_relationship/` |
+| `census/ingest/tract_relationship` | File | Downloaded text file | `data/raw/tiger/tract_relationship/` |
 
 `source_registry.local_path` points to the raw artifact in all cases.
 Curated output paths are stored in `metadata["curated_path"]`.

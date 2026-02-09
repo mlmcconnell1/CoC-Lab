@@ -329,8 +329,8 @@ Filenames use temporal shorthand notation (see [[07-Temporal-Terminology]]).
 | Registry | `data/curated/boundary_registry.parquet` | Vintage tracking |
 | Maps | `data/curated/maps/{coc_id}__B{vintage}.html` | Generated HTML maps |
 | Raw downloads | `data/raw/hud_exchange/{vintage}/` | Original source files |
-| Census tracts | `data/curated/census/tracts__T{year}.parquet` | TIGER tract geometries |
-| Census counties | `data/curated/census/counties__C{year}.parquet` | TIGER county geometries |
+| Census tracts | `data/curated/tiger/tracts__T{year}.parquet` | TIGER tract geometries |
+| Census counties | `data/curated/tiger/counties__C{year}.parquet` | TIGER county geometries |
 | Tract crosswalks | `data/curated/xwalks/xwalk__B{boundary}xT{tract}.parquet` | CoC-tract mapping |
 | County crosswalks | `data/curated/xwalks/xwalk__B{boundary}xC{county}.parquet` | CoC-county mapping |
 | CoC measures | `data/curated/measures/measures__A{acs_end}@B{boundary}xT{tract}.parquet` | Aggregated ACS data |
@@ -342,7 +342,7 @@ Filenames use temporal shorthand notation (see [[07-Temporal-Terminology]]).
 | Tract population | `data/curated/acs/acs_tracts__A{acs}xT{tract}.parquet` | ACS tract population |
 | CoC population rollup | `data/curated/acs/coc_population__A{acs}@B{boundary}xT{tract}__{weighting}.parquet` | Aggregated CoC population |
 | Population crosscheck | `data/curated/acs/crosscheck__A{acs}@B{boundary}xT{tract}__{weighting}.parquet` | Validation report |
-| Tract relationship | `data/curated/census/tract_relationship__T2010xT2020.parquet` | 2010↔2020 tract bridge |
+| Tract relationship | `data/curated/tiger/tract_relationship__T2010xT2020.parquet` | 2010↔2020 tract bridge |
 | PEP county | `data/curated/pep/pep_county__v{vintage}.parquet` | PEP county estimates |
 | PEP combined | `data/curated/pep/pep_county__combined.parquet` | Combined PEP series |
 | CoC PEP | `data/curated/pep/coc_pep__B{boundary}xC{county}__w{weight}.parquet` | Aggregated CoC PEP |

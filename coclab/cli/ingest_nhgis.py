@@ -5,8 +5,8 @@ from typing import Annotated, Literal
 
 import typer
 
-# Output directory matches the census ingest modules
-OUTPUT_DIR = Path("data/curated/census")
+# Output directory matches the TIGER ingest modules
+OUTPUT_DIR = Path("data/curated/tiger")
 
 GeoType = Literal["tracts", "counties", "all"]
 

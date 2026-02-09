@@ -84,7 +84,7 @@ def persist_file_snapshot(
     raw_content : bytes
         Raw downloaded bytes (ZIP, CSV, …).
     source_type : str
-        Top-level subdirectory under ``data/raw/`` (e.g. ``"census"``).
+        Top-level subdirectory under ``data/raw/`` (e.g. ``"tiger"``).
     filename : str
         Leaf filename (e.g. ``"tl_2023_06_tract.zip"``).
     subdirs : tuple[str, ...], optional

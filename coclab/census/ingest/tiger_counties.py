@@ -16,7 +16,7 @@ from coclab.sources import CENSUS_TIGER_BASE
 logger = logging.getLogger(__name__)
 
 TIGER_BASE = CENSUS_TIGER_BASE
-OUTPUT_DIR = Path("data/curated/census")
+OUTPUT_DIR = Path("data/curated/tiger")
 
 
 def download_tiger_counties(
@@ -25,7 +25,7 @@ def download_tiger_counties(
 ) -> tuple[gpd.GeoDataFrame, str, int, Path]:
     """Download all US counties for a given year.
 
-    Raw ZIP is persisted under ``data/raw/census/<year>/counties/``.
+    Raw ZIP is persisted under ``data/raw/tiger/<year>/counties/``.
 
     Args:
         year: TIGER vintage year (default 2023)
@@ -59,10 +59,10 @@ def download_tiger_counties(
             raw_content = response.content
             zip_path.write_bytes(raw_content)
 
-        # Persist raw ZIP to data/raw/census/<year>/counties/
+        # Persist raw ZIP to data/raw/tiger/<year>/counties/
         raw_path, content_sha256, content_size = persist_file_snapshot(
             raw_content,
-            "census",
+            "tiger",
             zip_name,
             subdirs=(str(year), "counties"),
             raw_root=raw_root,
@@ -140,7 +140,7 @@ def save_counties(gdf: gpd.GeoDataFrame, year: int = 2023) -> Path:
 def ingest_tiger_counties(year: int = 2023, raw_root: Path | None = None) -> Path:
     """Download and save TIGER counties in one step.
 
-    Raw ZIP is persisted under ``data/raw/census/<year>/counties/``.
+    Raw ZIP is persisted under ``data/raw/tiger/<year>/counties/``.
 
     Args:
         year: TIGER vintage year (default 2023)

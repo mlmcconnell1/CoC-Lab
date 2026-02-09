@@ -793,7 +793,7 @@ def list_census_deprecated(
             "-d",
             help="Directory to scan for census files.",
         ),
-    ] = Path("data/curated/census"),
+    ] = Path("data/curated/tiger"),
 ) -> None:
     """Deprecated: use `coclab list census`."""
     typer.echo(

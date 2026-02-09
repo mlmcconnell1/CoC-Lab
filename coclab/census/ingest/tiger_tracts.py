@@ -19,7 +19,7 @@ from coclab.sources import CENSUS_TIGER_BASE
 logger = logging.getLogger(__name__)
 
 TIGER_BASE = CENSUS_TIGER_BASE
-OUTPUT_DIR = Path("data/curated/census")
+OUTPUT_DIR = Path("data/curated/tiger")
 
 # State and territory FIPS codes for downloading per-state tract files
 STATE_FIPS_CODES = [
@@ -129,7 +129,7 @@ def download_tiger_tracts(
     """Download all US census tracts for a given year.
 
     Downloads per-state tract files and combines them into a single GeoDataFrame.
-    Raw ZIP files are persisted under ``data/raw/census/<year>/tracts/``.
+    Raw ZIP files are persisted under ``data/raw/tiger/<year>/tracts/``.
 
     Args:
         year: TIGER vintage year (default 2023)
@@ -174,11 +174,11 @@ def download_tiger_tracts(
                         all_content.append(raw_content)
                         total_size += len(raw_content)
 
-                        # Persist raw ZIP to data/raw/census/<year>/tracts/
+                        # Persist raw ZIP to data/raw/tiger/<year>/tracts/
                         zip_name = f"tl_{year}_{state_fips}_tract.zip"
                         raw_path, _, _ = persist_file_snapshot(
                             raw_content,
-                            "census",
+                            "tiger",
                             zip_name,
                             subdirs=(str(year), "tracts"),
                             raw_root=raw_root,
@@ -258,7 +258,7 @@ def ingest_tiger_tracts(
 ) -> Path:
     """Download and save TIGER tracts in one step.
 
-    Raw ZIP files are persisted under ``data/raw/census/<year>/tracts/``.
+    Raw ZIP files are persisted under ``data/raw/tiger/<year>/tracts/``.
 
     Args:
         year: TIGER vintage year (default 2023)

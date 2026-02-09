@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Output directory for curated tract files
-OUTPUT_DIR = Path("data/curated/census")
+OUTPUT_DIR = Path("data/curated/tiger")
 
 # Known NHGIS shapefile names for census tracts
 # Format: us_tract_{census_year}_tl{tiger_year}

@@ -8,7 +8,7 @@ import typer
 from coclab.naming import county_filename, tract_filename
 
 # Output directory matches the census ingest modules
-OUTPUT_DIR = Path("data/curated/census")
+OUTPUT_DIR = Path("data/curated/tiger")
 
 
 def ingest_tiger(

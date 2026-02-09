@@ -227,7 +227,7 @@ coclab build export \
 | Phase | Output Location |
 |-------|-----------------|
 | 1a. Boundaries | `data/curated/coc_boundaries/coc__B{year}.parquet` |
-| 1b. Census | `data/curated/census/tracts__T2023.parquet`, `counties__C2023.parquet` |
+| 1b. Census | `data/curated/tiger/tracts__T2023.parquet`, `counties__C2023.parquet` |
 | 1c. PIT | `data/curated/pit/pit_vintage__P2024.parquet` |
 | 1d. ZORI | `data/curated/zori/zori__county.parquet` |
 | 1e. ACS | `data/curated/acs/acs_tracts__A{acs_end}xT2023.parquet` |
