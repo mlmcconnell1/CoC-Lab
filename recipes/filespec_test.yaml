@@ -1,0 +1,42 @@
+version: 1
+name: test_recipe_for_filespecs
+description: Testing new filespec additions
+universe:
+  range: "2015-2024"
+
+targets:
+  - id: coc_panel
+    geometry:
+      type: coc
+      vintage: 2025
+      source: hud_exchange
+    outputs: [panel]
+
+datasets:
+  pit:
+    provider: hud
+    product: pit
+    version: 1
+    native_geometry: { type: coc }
+    params:
+      align: point_in_time_jan
+    file_set:
+      path_template: "coclab/data/curated/pit/pit_vintage__P2024.parquet"
+      segments:
+        - years: "2015-2024"
+          geometry: { type: coc, vintage: { year }, source: hud_exchange }
+
+  acs:
+    provider: census
+    product: acs
+    version: 1
+    native_geometry: { type: tract }
+    params:
+      align: vintage_end_year
+    file_set:
+      path_template: "coclab/data/curated/acs/acs_{year}.parquet"
+      segments:
+        - years: "2015-2019"
+          geometry: { type: tract, vintage: 2010, source: nhgis }
+        - years: "2020-2024"
+          geometry: { type: tract, vintage: 2020, source: nhgis }
