@@ -1,7 +1,7 @@
 # Raw Data Retention Policy
 
 Status: Implemented
-Version: 1.1
+Version: 1.2
 Applies to: All ingestion pipelines that fetch external data
 
 ## Purpose
@@ -40,15 +40,29 @@ Canonicalization must be deterministic so equal upstream data produces equal has
 
 ## Storage Conventions
 
-1. Root path: `data/raw/<source_type>/`
-2. Include temporal identity in path or filename (date and/or vintage/year).
-3. Keep source-specific naming stable and machine-parseable.
+Canonical template:
+
+`data/raw/<ingest_type>/<year>/<variant_or_run_id>/<artifact>`
+
+Rules:
+1. Every ingest must use a top-level ingest folder under `data/raw/` (for example: `pit`, `tiger`, `acs5_tract`).
+2. Every ingest must include a year directory directly below ingest type.
+3. `variant_or_run_id` is required when collisions are possible within a year.
+4. `variant_or_run_id` may be omitted only when each artifact filename is already unique within the year.
+5. The `<year>` should represent the data vintage/release year, not merely download time.
+
+When `variant_or_run_id` is required:
+- API snapshots that always write fixed filenames such as `response.ndjson`, `request.json`, `manifest.json`.
+- Ingests with multiple variants per year (for example ACS weighting method/table variants).
+- Repeated snapshots in the same year where retaining immutable history is required.
 
 Examples:
 - `data/raw/pit/2024/2007-2024-PIT-Counts-by-CoC.xlsb`
-- `data/raw/zori/zori__county__2026-02-07.csv`
-- `data/raw/hud_opendata/2026-02-07/response.ndjson`
-- `data/raw/hud_opendata/2026-02-07/manifest.json`
+- `data/raw/tiger/2017/tracts/tl_2017_06_tract.zip`
+- `data/raw/acs5_tract/2023/full/response.ndjson`
+- `data/raw/acs5_county/2023/B25003__renter_households/response.ndjson`
+- `data/raw/hud_exchange/2025/2026-02-07/response.ndjson`
+- `data/raw/hud_opendata/2026/2026-02-12/response.ndjson`
 
 ## Exceptions
 
@@ -69,17 +83,22 @@ Implicit exceptions based only on source type are not allowed.
 
 ## Implementation Status
 
-All ingest modules now comply with this policy via `coclab.raw_snapshot`:
+Target convention by ingest:
 
-| Module | Source Type | Snapshot Format | Raw Path |
+| Module | Source Type | Snapshot Format | Canonical Raw Path Target |
 |--------|-----------|----------------|----------|
-| `hud_opendata_arcgis` | API | `response.ndjson` + manifest | `data/raw/hud_opendata/<date>/` |
+| `hud_opendata_arcgis` | API | `response.ndjson` + manifest | `data/raw/hud_opendata/<year>/<run_id>/` |
+| `hud_exchange_gis` (ArcGIS path) | API | `response.ndjson` + manifest | `data/raw/hud_exchange/<boundary_vintage>/<run_id>/` |
 | `tiger_tracts` | File | Per-state ZIP | `data/raw/tiger/<year>/tracts/` |
 | `tiger_counties` | File | National ZIP | `data/raw/tiger/<year>/counties/` |
 | `nhgis/ingest` (tracts & counties) | File | NHGIS ZIP | `data/raw/nhgis/<year>/<geo>/` |
-| `acs/ingest/tract_population` | API | `response.ndjson` + manifest | `data/raw/acs5_tract/<snapshot>/` |
-| `rents/weights` | API | `response.ndjson` + manifest | `data/raw/acs5_county/<snapshot>/` |
-| `census/ingest/tract_relationship` | File | Downloaded text file | `data/raw/tiger/tract_relationship/` |
+| `acs/ingest/tract_population` | API | `response.ndjson` + manifest | `data/raw/acs5_tract/<acs_end_year>/full/` |
+| `rents/weights` | API | `response.ndjson` + manifest | `data/raw/acs5_county/<acs_end_year>/<table_and_method>/` |
+| `rents/ingest` (zori) | File | Downloaded CSV | `data/raw/zori/<year>/` |
+| `pep/ingest` | File | Downloaded CSV | `data/raw/pep/<vintage_year>/` |
+| `census/ingest/tract_relationship` | File | Downloaded text file | `data/raw/tiger/<year>/tract_relationship/` |
+
+Some ingests are currently in migration toward this target layout.
 
 `source_registry.local_path` points to the raw artifact in all cases.
 Curated output paths are stored in `metadata["curated_path"]`.
@@ -93,4 +112,3 @@ Compliance is enforced by `tests/test_retention_compliance.py`.
 3. Registers source with raw snapshot `local_path`
 4. Produces curated outputs from retained raw snapshot
 5. Includes tests for raw retention and reproducibility metadata
-
