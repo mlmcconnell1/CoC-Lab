@@ -64,7 +64,7 @@ project-root/
 │   │   ├── pep/
 │   │   │   └── pep_county__v{vintage}__{date}.csv         Census PEP CSV
 │   │   │
-│   │   └── acs_tract/
+│   │   └── acs5_tract/
 │   │       └── {snapshot_id}/
 │   │           ├── response.ndjson                        Census API responses
 │   │           ├── request.json                           request metadata
@@ -85,7 +85,7 @@ project-root/
 │       │   └── pit_vintage__P{year}.parquet               PIT vintage file (ingest)
 │       │
 │       ├── acs/
-│       │   ├── acs_tracts__A{acs}xT{tract}.parquet        ACS tract pop (ingest)
+│       │   ├── acs5_tracts__A{acs}xT{tract}.parquet       ACS 5yr tract pop (ingest)
 │       │   └── county_weights__A{acs}__w{wt}.parquet      county weights (build)
 │       │
 │       ├── xwalks/                                        ── build xwalks ──
@@ -184,7 +184,7 @@ internet ──┤► data/raw/    │           │  data/curated/       │   
 | `coclab ingest tiger`            | internet                | `data/raw/tiger/`, `data/curated/tiger/`          |
 | `coclab ingest nhgis`            | internet (IPUMS API)    | `data/raw/nhgis/`, `data/curated/tiger/`          |
 | `coclab ingest tract-relationship`| internet               | `data/raw/tiger/`, `data/curated/tiger/`          |
-| `coclab ingest acs-population`   | internet                | `data/raw/acs_tract/`, `data/curated/acs/`        |
+| `coclab ingest acs5-tract`       | internet                | `data/raw/acs5_tract/`, `data/curated/acs/`       |
 | `coclab ingest zori`             | internet                | `data/raw/zori/`, `data/curated/zori/`            |
 | `coclab ingest pep`              | internet                | `data/raw/pep/`, `data/curated/pep/`              |
 | `coclab build create`            | `data/curated/coc_boundaries/` | `builds/{name}/`                           |

@@ -156,7 +156,7 @@ def ingest_acs_population(
                 acs_vintage=acs,
                 tract_vintage=tracts,
                 extra={
-                    "dataset": "acs_tract_data",
+                    "dataset": "acs5_tract_data",
                     "tables": ACS_TABLES,
                     "source_tract_vintage": str(source_tract_vintage),
                     "translated": True,

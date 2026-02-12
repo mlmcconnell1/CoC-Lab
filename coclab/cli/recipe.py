@@ -17,21 +17,50 @@ from coclab.recipe.loader import RecipeLoadError, load_recipe
 from coclab.recipe.recipe_schema import RecipeV1, expand_year_spec
 
 
-def _check_dataset_paths(parsed: RecipeV1, recipe_dir: Path) -> list[str]:
+def _missing_file_level(
+    ds_id: str,
+    optional: bool,
+    policy_default: str,
+    policy_extra: dict[str, str],
+) -> str:
+    """Determine diagnostic level for a missing dataset file.
+
+    Priority: per-dataset policy override > optional flag > policy default.
+    Returns ``"error"`` or ``"warning"``.
+    """
+    if ds_id in policy_extra:
+        return "warning" if policy_extra[ds_id] == "warn" else "error"
+    if optional:
+        return "warning"
+    return "warning" if policy_default == "warn" else "error"
+
+
+def _check_dataset_paths(
+    parsed: RecipeV1, recipe_dir: Path,
+) -> list[ValidationDiagnostic]:
     """Check that all referenced dataset files exist on disk.
 
-    Returns a list of error messages for missing files.
+    Returns diagnostics for missing files.  Level (error/warning) is
+    determined by the dataset's ``optional`` flag and the recipe's
+    ``missing_dataset`` validation policy.
     """
-    missing: list[str] = []
+    results: list[ValidationDiagnostic] = []
+    policy = parsed.validation.missing_dataset
+    policy_extra: dict[str, str] = policy.model_extra or {}
 
     for ds_id, ds in parsed.datasets.items():
+        level = _missing_file_level(
+            ds_id, ds.optional, policy.default, policy_extra,
+        )
+
         # Static path
         if ds.path is not None:
             resolved = recipe_dir / ds.path
             if not resolved.exists():
-                missing.append(
-                    f"Dataset '{ds_id}' path not found: {ds.path}"
-                )
+                results.append(ValidationDiagnostic(
+                    level=level,
+                    message=f"Dataset '{ds_id}' path not found: {ds.path}",
+                ))
 
         # File set: check template-expanded paths and overrides
         if ds.file_set is not None:
@@ -44,11 +73,12 @@ def _check_dataset_paths(parsed: RecipeV1, recipe_dir: Path) -> list[str]:
                         p = ds.file_set.path_template.format(year=year)
                     resolved = recipe_dir / p
                     if not resolved.exists():
-                        missing.append(
-                            f"Dataset '{ds_id}' year {year} file not found: {p}"
-                        )
+                        results.append(ValidationDiagnostic(
+                            level=level,
+                            message=f"Dataset '{ds_id}' year {year} file not found: {p}",
+                        ))
 
-    return missing
+    return results
 
 
 def recipe_cmd(
@@ -98,24 +128,29 @@ def recipe_cmd(
 
     # 1c. Pre-flight: check that referenced data files exist
     recipe_dir = Path(recipe).resolve().parent
-    path_errors = _check_dataset_paths(parsed, recipe_dir)
-    for msg in path_errors:
-        typer.echo(f"  Missing file: {msg}", err=True)
+    path_diagnostics = _check_dataset_paths(parsed, recipe_dir)
+    path_warnings = [d for d in path_diagnostics if d.level == "warning"]
+    path_errors = [d for d in path_diagnostics if d.level == "error"]
+    for d in path_warnings:
+        typer.echo(f"  Warning: {d.message}", err=True)
+    for d in path_errors:
+        typer.echo(f"  Missing file: {d.message}", err=True)
 
     # 2. Run adapter registry validation
     diagnostics = validate_recipe_adapters(
         parsed, geometry_registry, dataset_registry,
     )
 
-    errors = [d for d in diagnostics if d.level == "error"]
-    warnings = [d for d in diagnostics if d.level == "warning"]
+    adapter_errors = [d for d in diagnostics if d.level == "error"]
+    adapter_warnings = [d for d in diagnostics if d.level == "warning"]
 
-    for w in warnings:
+    for w in adapter_warnings:
         typer.echo(f"  Warning: {w.message}", err=True)
 
-    all_errors = path_errors + [e.message for e in errors]
+    all_errors = path_errors + adapter_errors
+    all_warnings = path_warnings + adapter_warnings
     if all_errors:
-        for e in errors:
+        for e in adapter_errors:
             typer.echo(f"  Error: {e.message}", err=True)
         typer.echo(
             f"\nRecipe validation failed with {len(all_errors)} error(s).",
@@ -123,8 +158,8 @@ def recipe_cmd(
         )
         raise typer.Exit(code=1)
 
-    if warnings:
-        typer.echo(f"Recipe validated with {len(warnings)} warning(s).")
+    if all_warnings:
+        typer.echo(f"Recipe validated with {len(all_warnings)} warning(s).")
     else:
         typer.echo("Recipe validated successfully.")
 

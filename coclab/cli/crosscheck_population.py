@@ -116,16 +116,20 @@ def _run_population_validation(
 
     # Find ACS tract population file
     if acs is None:
-        # Find the latest ACS file
-        acs_files = sorted(acs_dir.glob("tract_population__*__*.parquet"), reverse=True)
+        # Find the latest ACS file (new naming: acs5_tracts__A{year}xT{tract}.parquet)
+        acs_files = sorted(acs_dir.glob("acs5_tracts__A*xT*.parquet"), reverse=True)
         if not acs_files:
             typer.echo(f"Error: No ACS tract files found in {acs_dir}", err=True)
             raise typer.Exit(1)
         acs_path = acs_files[0]
-        acs_vintage = acs_path.stem.split("__")[1]
+        # Parse ACS vintage from filename: acs5_tracts__A2023xT2023 → "2019-2023"
+        notation = acs_path.stem.split("__")[1]  # "A2023xT2023"
+        acs_end_year = notation.split("x")[0][1:]  # "2023"
+        acs_vintage = f"{int(acs_end_year) - 4}-{acs_end_year}"
     else:
-        # Find matching ACS file
-        pattern = f"tract_population__{acs}__*.parquet"
+        # Find matching ACS file by vintage end year
+        acs_end_year = acs.split("-")[-1] if "-" in acs else acs
+        pattern = f"acs5_tracts__A{acs_end_year}xT*.parquet"
         matches = list(acs_dir.glob(pattern))
         if not matches:
             typer.echo(f"Error: No ACS file found matching {pattern}", err=True)

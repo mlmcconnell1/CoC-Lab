@@ -280,7 +280,7 @@ def fetch_county_acs_totals(
 ) -> tuple[pd.DataFrame, str, int, Path | None]:
     """Fetch county-level ACS totals for all US states and territories.
 
-    Raw API responses are persisted under ``data/raw/acs_county/<snapshot_id>/``.
+    Raw API responses are persisted under ``data/raw/acs5_county/<snapshot_id>/``.
 
     Parameters
     ----------
@@ -349,7 +349,7 @@ def fetch_county_acs_totals(
     snapshot_id = f"A{year}_{var_info['table']}__{method}"
     snap_dir, content_sha256, content_size = write_api_snapshot(
         all_raw_content,
-        "acs_county",
+        "acs5_county",
         snapshot_id=snapshot_id,
         request_metadata={
             "url": source_url,
@@ -526,7 +526,7 @@ def build_county_weights(
 
     # Check for upstream changes in the source registry
     changed, details = check_source_changed(
-        source_type="acs_county",
+        source_type="acs5_county",
         source_url=source_url,
         current_sha256=content_sha256,
     )
@@ -543,7 +543,7 @@ def build_county_weights(
 
     # Register this download in the source registry (local_path → raw snapshot)
     register_source(
-        source_type="acs_county",
+        source_type="acs5_county",
         source_url=source_url,
         source_name=f"ACS 5-Year County {method.replace('_', ' ').title()} ({acs_vintage})",
         raw_sha256=content_sha256,

@@ -21,15 +21,7 @@ datasets:
     years: "2015-2024"
     params:
       align: point_in_time_jan
-<<<<<<< HEAD
-    path: coclab/data/curated/pit/pit_vintage__P2024.parquet
-=======
-    file_set:
-      path_template: "data/curated/pit/pit_vintage__P2024.parquet"
-      segments:
-        - years: "2015-2024"
-          geometry: { type: coc, vintage: { year }, source: hud_exchange }
->>>>>>> 39c5585 (Added updated test yaml file.)
+    path: data/curated/pit/pit_vintage__P2024.parquet
 
   acs:
     provider: census

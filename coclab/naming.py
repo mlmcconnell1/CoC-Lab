@@ -273,18 +273,18 @@ def zori_yearly_filename(
 # =============================================================================
 
 
-def acs_tracts_filename(acs_vintage: str, tract_vintage: str | int) -> str:
-    """Generate filename for ACS tract population data.
+def acs5_tracts_filename(acs_vintage: str, tract_vintage: str | int) -> str:
+    """Generate filename for ACS 5-year tract population data.
 
     Args:
         acs_vintage: ACS vintage (e.g., "2019-2023" or "2023")
         tract_vintage: Tract geometry vintage (e.g., 2023)
 
     Returns:
-        Filename like 'acs_tracts__A2023xT2023.parquet'
+        Filename like 'acs5_tracts__A2023xT2023.parquet'
     """
     acs_year = _normalize_acs_vintage(acs_vintage)
-    return f"acs_tracts__A{acs_year}xT{tract_vintage}.parquet"
+    return f"acs5_tracts__A{acs_year}xT{tract_vintage}.parquet"
 
 
 def county_weights_filename(acs_vintage: str, weighting: str) -> str:

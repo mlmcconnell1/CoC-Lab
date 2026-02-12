@@ -77,8 +77,8 @@ All ingest modules now comply with this policy via `coclab.raw_snapshot`:
 | `tiger_tracts` | File | Per-state ZIP | `data/raw/tiger/<year>/tracts/` |
 | `tiger_counties` | File | National ZIP | `data/raw/tiger/<year>/counties/` |
 | `nhgis/ingest` (tracts & counties) | File | NHGIS ZIP | `data/raw/nhgis/<year>/<geo>/` |
-| `acs/ingest/tract_population` | API | `response.ndjson` + manifest | `data/raw/acs_tract/<snapshot>/` |
-| `rents/weights` | API | `response.ndjson` + manifest | `data/raw/acs_county/<snapshot>/` |
+| `acs/ingest/tract_population` | API | `response.ndjson` + manifest | `data/raw/acs5_tract/<snapshot>/` |
+| `rents/weights` | API | `response.ndjson` + manifest | `data/raw/acs5_county/<snapshot>/` |
 | `census/ingest/tract_relationship` | File | Downloaded text file | `data/raw/tiger/tract_relationship/` |
 
 `source_registry.local_path` points to the raw artifact in all cases.

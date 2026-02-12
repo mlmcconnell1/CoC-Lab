@@ -360,7 +360,7 @@ class TestValidatePopulation:
                 "acs_vintage": ["2019-2023", "2019-2023", "2019-2023"],
             }
         )
-        acs.to_parquet(acs_dir / "tract_population__2019-2023__2023.parquet")
+        acs.to_parquet(acs_dir / "acs5_tracts__A2023xT2023.parquet")
 
         result = runner.invoke(
             app,

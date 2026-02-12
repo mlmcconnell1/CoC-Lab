@@ -339,7 +339,7 @@ Filenames use temporal shorthand notation (see [[08-Temporal-Terminology]]).
 | PIT registry | `data/curated/pit/pit_registry.parquet` | PIT year tracking |
 | PIT vintage registry | `data/curated/pit/pit_vintage_registry.parquet` | PIT vintage tracking |
 | CoC panels | `data/curated/panel/panel__Y{start}-{end}@B{boundary}.parquet` | Analysis-ready panels |
-| Tract population | `data/curated/acs/acs_tracts__A{acs}xT{tract}.parquet` | ACS tract population |
+| Tract population | `data/curated/acs/acs5_tracts__A{acs}xT{tract}.parquet` | ACS tract population |
 | CoC population rollup | `data/curated/acs/coc_population__A{acs}@B{boundary}xT{tract}__{weighting}.parquet` | Aggregated CoC population |
 | Population crosscheck | `data/curated/acs/crosscheck__A{acs}@B{boundary}xT{tract}__{weighting}.parquet` | Validation report |
 | Tract relationship | `data/curated/tiger/tract_relationship__T2010xT2020.parquet` | 2010↔2020 tract bridge |

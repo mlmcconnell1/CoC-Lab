@@ -353,20 +353,12 @@ def _apply_population_weights(
     # Determine ACS vintage to use (5-year ending in tract_vintage)
     acs_vintage = f"{tract_vintage - 4}-{tract_vintage}"
 
-    # Try to load cached population data (new naming convention)
+    # Try to load cached population data
     pop_path = get_output_path(acs_vintage, str(tract_vintage))
-
-    # Also check legacy naming convention
-    legacy_pop_path = Path(
-        f"data/curated/acs/tract_population__{acs_vintage}__{tract_vintage}.parquet"
-    )
 
     if pop_path.exists():
         typer.echo(f"Loading population data from: {pop_path}")
         pop_df = pd.read_parquet(pop_path)
-    elif legacy_pop_path.exists():
-        typer.echo(f"Loading population data from: {legacy_pop_path}")
-        pop_df = pd.read_parquet(legacy_pop_path)
     elif auto_fetch:
         typer.echo(f"Fetching ACS population data ({acs_vintage})...")
         pop_path = ingest_tract_data(

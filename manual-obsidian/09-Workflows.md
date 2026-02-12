@@ -142,16 +142,16 @@ coclab ingest pit-vintage --vintage 2024
 coclab ingest zori --geography county
 
 # 1e. Ingest ACS tract data for each required vintage
-coclab ingest acs --acs 2010-2014 --tracts 2023
-coclab ingest acs --acs 2011-2015 --tracts 2023
-coclab ingest acs --acs 2012-2016 --tracts 2023
-coclab ingest acs --acs 2013-2017 --tracts 2023
-coclab ingest acs --acs 2014-2018 --tracts 2023
-coclab ingest acs --acs 2015-2019 --tracts 2023
-coclab ingest acs --acs 2016-2020 --tracts 2023
-coclab ingest acs --acs 2017-2021 --tracts 2023
-coclab ingest acs --acs 2018-2022 --tracts 2023
-coclab ingest acs --acs 2019-2023 --tracts 2023
+coclab ingest acs5-tract --acs 2010-2014 --tracts 2023
+coclab ingest acs5-tract --acs 2011-2015 --tracts 2023
+coclab ingest acs5-tract --acs 2012-2016 --tracts 2023
+coclab ingest acs5-tract --acs 2013-2017 --tracts 2023
+coclab ingest acs5-tract --acs 2014-2018 --tracts 2023
+coclab ingest acs5-tract --acs 2015-2019 --tracts 2023
+coclab ingest acs5-tract --acs 2016-2020 --tracts 2023
+coclab ingest acs5-tract --acs 2017-2021 --tracts 2023
+coclab ingest acs5-tract --acs 2018-2022 --tracts 2023
+coclab ingest acs5-tract --acs 2019-2023 --tracts 2023
 
 # 1f. Ingest PEP county population estimates
 coclab ingest pep --series auto
@@ -230,7 +230,7 @@ coclab build export \
 | 1b. Census | `data/curated/tiger/tracts__T2023.parquet`, `counties__C2023.parquet` |
 | 1c. PIT | `data/curated/pit/pit_vintage__P2024.parquet` |
 | 1d. ZORI | `data/curated/zori/zori__county.parquet` |
-| 1e. ACS | `data/curated/acs/acs_tracts__A{acs_end}xT2023.parquet` |
+| 1e. ACS | `data/curated/acs/acs5_tracts__A{acs_end}xT2023.parquet` |
 | 1f. PEP | `data/curated/pep/pep_county__v{vintage}.parquet` |
 | 2. Crosswalks | `builds/{name}/data/curated/xwalks/xwalk__B{year}xT2023.parquet` |
 | 3. Measures | `builds/{name}/data/curated/measures/` |

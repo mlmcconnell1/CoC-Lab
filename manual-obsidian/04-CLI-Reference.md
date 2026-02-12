@@ -705,7 +705,7 @@ coclab aggregate pit --build demo --align to_calendar_year
 **Output:**
 - Files written to `builds/{name}/data/curated/pit/`
 
-## `coclab ingest acs`
+## `coclab ingest acs5-tract`
 
 Ingest tract-level ACS 5-year estimates from the Census API. Fetches total population, adult population, median household income, median gross rent, poverty universe, poverty counts (below 50% and 50-99%), and margin of error for total population.
 
@@ -713,16 +713,16 @@ For ACS vintages 2010-2019 (which use 2010 census tract geography), the `--trans
 
 ```bash
 # Ingest ACS 2019-2023 using 2023 tract geometries
-coclab ingest acs --acs 2019-2023 --tracts 2023
+coclab ingest acs5-tract --acs 2019-2023 --tracts 2023
 
 # Ingest older vintage with auto-translation
-coclab ingest acs --acs 2015-2019 --tracts 2023
+coclab ingest acs5-tract --acs 2015-2019 --tracts 2023
 
 # Disable translation
-coclab ingest acs --acs 2015-2019 --tracts 2023 --no-translate
+coclab ingest acs5-tract --acs 2015-2019 --tracts 2023 --no-translate
 
 # Force re-fetch even if cached file exists
-coclab ingest acs --acs 2019-2023 --tracts 2023 --force
+coclab ingest acs5-tract --acs 2019-2023 --tracts 2023 --force
 ```
 
 | Option | Description | Default |
@@ -736,7 +736,7 @@ If translation is required, ensure the tract relationship file is available
 (`coclab ingest tract-relationship`).
 
 **Output:**
-- `data/curated/acs/acs_tracts__A{acs_end}xT{tracts}.parquet`
+- `data/curated/acs/acs5_tracts__A{acs_end}xT{tracts}.parquet`
 
 ## `coclab ingest tract-relationship`
 
@@ -1138,8 +1138,8 @@ coclab show sources --type zori
 - `census_county` - TIGER county geometries
 - `nhgis_tract` - NHGIS tract geometries
 - `nhgis_county` - NHGIS county geometries
-- `acs_tract` - ACS tract-level data
-- `acs_county` - ACS county-level data
+- `acs5_tract` - ACS 5-year tract-level data
+- `acs5_county` - ACS 5-year county-level data
 - `pep_county` - Census PEP county population estimates
 - `pit` - HUD PIT counts
 - `tract_relationship` - Census tract relationship file (2010↔2020)

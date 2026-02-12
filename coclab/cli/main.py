@@ -314,52 +314,6 @@ def ingest_boundaries_deprecated(
     )
 
 
-@wraps(ingest_acs_population)
-def ingest_acs_population_deprecated(
-    acs: Annotated[
-        str,
-        typer.Option(
-            "--acs",
-            "-a",
-            help="ACS 5-year estimate vintage (e.g., '2019-2023').",
-        ),
-    ],
-    tracts: Annotated[
-        str,
-        typer.Option(
-            "--tracts",
-            "-t",
-            help="Census tract vintage (e.g., '2023').",
-        ),
-    ],
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Re-ingest even if cached file exists.",
-        ),
-    ] = False,
-    translate: Annotated[
-        bool,
-        typer.Option(
-            "--translate/--no-translate",
-            help="Auto-translate from 2010 to 2020 tract geography if needed.",
-        ),
-    ] = True,
-) -> None:
-    """Deprecated: use `coclab ingest acs`."""
-    typer.echo(
-        "Warning: 'coclab ingest-acs-population' is deprecated; "
-        "use 'coclab ingest acs' instead.",
-        err=True,
-    )
-    ingest_acs_population(
-        acs=acs,
-        tracts=tracts,
-        force=force,
-        translate=translate,
-    )
-
 
 @wraps(ingest_tiger)
 def ingest_census_deprecated(
@@ -1515,7 +1469,6 @@ app.add_typer(build_app, name="build")
 app.add_typer(aggregate_app, name="aggregate")
 app.add_typer(show_app, name="show")
 app.add_typer(registry_app, name="registry")
-app.command("ingest-acs-population", hidden=True)(ingest_acs_population_deprecated)
 app.command("ingest-boundaries", hidden=True)(ingest_boundaries_deprecated)
 app.command("ingest-census", hidden=True)(ingest_census_deprecated)
 app.command("ingest-nhgis", hidden=True)(ingest_nhgis_deprecated)
@@ -1535,8 +1488,8 @@ app.command("validate-boundaries", hidden=True)(validate_boundaries_deprecated)
 app.command("validate-pit-vintages", hidden=True)(validate_pit_vintages_deprecated)
 app.command("validate-population", hidden=True)(validate_population_deprecated)
 
-ingest_app.command("acs")(ingest_acs_population)
-ingest_app.command("acs-population", hidden=True)(ingest_acs_population)
+ingest_app.command("acs5-tract")(ingest_acs_population)
+ingest_app.command("acs", hidden=True)(ingest_acs_population)
 ingest_app.command("boundaries")(ingest_boundaries)
 ingest_app.command("tiger")(ingest_tiger)
 ingest_app.command("census", hidden=True)(ingest_tiger)

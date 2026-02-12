@@ -253,7 +253,7 @@ def fetch_tract_data(
 ) -> tuple[pd.DataFrame, str, int, Path | None]:
     """Fetch tract-level ACS data for all US states and territories.
 
-    Raw API responses are persisted under ``data/raw/acs_tract/<snapshot_id>/``.
+    Raw API responses are persisted under ``data/raw/acs5_tract/<snapshot_id>/``.
 
     Parameters
     ----------
@@ -302,7 +302,7 @@ def fetch_tract_data(
     snapshot_id = f"A{year}_full"
     snap_dir, content_sha256, content_size = write_api_snapshot(
         all_raw_content,
-        "acs_tract",
+        "acs5_tract",
         snapshot_id=snapshot_id,
         request_metadata={
             "url": source_url,
@@ -360,7 +360,7 @@ def get_output_path(
 ) -> Path:
     """Get the canonical output path for ACS tract data.
 
-    Uses temporal shorthand naming: acs_tracts__A{year}xT{tract}.parquet
+    Uses temporal shorthand naming: acs5_tracts__A{year}xT{tract}.parquet
 
     Parameters
     ----------
@@ -374,13 +374,13 @@ def get_output_path(
     Returns
     -------
     Path
-        Output path like 'data/curated/acs/acs_tracts__A2023xT2023.parquet'.
+        Output path like 'data/curated/acs/acs5_tracts__A2023xT2023.parquet'.
     """
     if base_dir is None:
         base_dir = DEFAULT_DATA_DIR
     else:
         base_dir = Path(base_dir)
-    return base_dir / naming.acs_tracts_filename(acs_vintage, tract_vintage)
+    return base_dir / naming.acs5_tracts_filename(acs_vintage, tract_vintage)
 
 
 def ingest_tract_data(
@@ -428,7 +428,7 @@ def ingest_tract_data(
     source_url = f"{CENSUS_API.format(year=year)}?tables={_TABLES_REF}"
 
     changed, details = check_source_changed(
-        source_type="acs_tract",
+        source_type="acs5_tract",
         source_url=source_url,
         current_sha256=content_sha256,
     )
@@ -447,7 +447,7 @@ def ingest_tract_data(
         acs_vintage=acs_vintage,
         tract_vintage=tract_vintage,
         extra={
-            "dataset": "acs_tract_data",
+            "dataset": "acs5_tract_data",
             "tables": ACS_TABLES,
             "variables": ALL_API_VARS,
             "api_year": year,
@@ -461,7 +461,7 @@ def ingest_tract_data(
     logger.info(f"Wrote ACS tract data to {output_path}")
 
     register_source(
-        source_type="acs_tract",
+        source_type="acs5_tract",
         source_url=source_url,
         source_name=f"ACS Tract Data {acs_vintage}",
         raw_sha256=content_sha256,

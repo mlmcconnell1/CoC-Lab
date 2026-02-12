@@ -8,6 +8,7 @@ import pytest
 from typer.testing import CliRunner
 
 from coclab.cli.main import app
+from coclab.cli.recipe import _missing_file_level
 from coclab.recipe.adapters import (
     DatasetAdapterRegistry,
     GeometryAdapterRegistry,
@@ -393,6 +394,100 @@ class TestRecipeCLI:
             "--recipe", str(recipe_file),
         ])
         assert "Missing file" not in result.output
+
+    def test_optional_dataset_missing_warns_not_errors(self, tmp_path: Path):
+        import yaml
+
+        data = _minimal_recipe()
+        data["datasets"]["acs"]["path"] = "data/missing.parquet"
+        data["datasets"]["acs"]["optional"] = True
+        recipe_file = tmp_path / "recipe.yaml"
+        recipe_file.write_text(yaml.dump(data), encoding="utf-8")
+        result = runner.invoke(app, [
+            "build", "recipe",
+            "--recipe", str(recipe_file),
+        ])
+        # Should appear as warning, not "Missing file" error
+        assert "Warning" in result.output
+        assert "missing.parquet" in result.output
+        assert "Missing file" not in result.output
+
+    def test_policy_default_warn_downgrades_to_warning(self, tmp_path: Path):
+        import yaml
+
+        data = _minimal_recipe()
+        data["datasets"]["acs"]["path"] = "data/missing.parquet"
+        data["validation"] = {"missing_dataset": {"default": "warn"}}
+        recipe_file = tmp_path / "recipe.yaml"
+        recipe_file.write_text(yaml.dump(data), encoding="utf-8")
+        result = runner.invoke(app, [
+            "build", "recipe",
+            "--recipe", str(recipe_file),
+        ])
+        assert "Warning" in result.output
+        assert "missing.parquet" in result.output
+        assert "Missing file" not in result.output
+
+    def test_per_dataset_policy_override(self, tmp_path: Path):
+        import yaml
+
+        data = _minimal_recipe()
+        data["datasets"]["acs"]["path"] = "data/missing.parquet"
+        # Default is fail, but override acs to warn
+        data["validation"] = {"missing_dataset": {"default": "fail", "acs": "warn"}}
+        recipe_file = tmp_path / "recipe.yaml"
+        recipe_file.write_text(yaml.dump(data), encoding="utf-8")
+        result = runner.invoke(app, [
+            "build", "recipe",
+            "--recipe", str(recipe_file),
+        ])
+        assert "Warning" in result.output
+        assert "Missing file" not in result.output
+
+    def test_per_dataset_policy_fail_overrides_optional(self, tmp_path: Path):
+        import yaml
+
+        data = _minimal_recipe()
+        data["datasets"]["acs"]["path"] = "data/missing.parquet"
+        data["datasets"]["acs"]["optional"] = True
+        # Policy explicitly says fail for this dataset
+        data["validation"] = {"missing_dataset": {"default": "warn", "acs": "fail"}}
+        recipe_file = tmp_path / "recipe.yaml"
+        recipe_file.write_text(yaml.dump(data), encoding="utf-8")
+        result = runner.invoke(app, [
+            "build", "recipe",
+            "--recipe", str(recipe_file),
+        ])
+        assert "Missing file" in result.output
+
+
+# ===========================================================================
+# _missing_file_level unit tests
+# ===========================================================================
+
+
+class TestMissingFileLevel:
+
+    def test_default_fail_returns_error(self):
+        assert _missing_file_level("ds", False, "fail", {}) == "error"
+
+    def test_default_warn_returns_warning(self):
+        assert _missing_file_level("ds", False, "warn", {}) == "warning"
+
+    def test_optional_returns_warning(self):
+        assert _missing_file_level("ds", True, "fail", {}) == "warning"
+
+    def test_per_dataset_warn_overrides_default_fail(self):
+        assert _missing_file_level("ds", False, "fail", {"ds": "warn"}) == "warning"
+
+    def test_per_dataset_fail_overrides_optional(self):
+        assert _missing_file_level("ds", True, "warn", {"ds": "fail"}) == "error"
+
+    def test_per_dataset_takes_precedence_over_default(self):
+        assert _missing_file_level("ds", False, "warn", {"ds": "fail"}) == "error"
+
+    def test_unmatched_per_dataset_key_ignored(self):
+        assert _missing_file_level("ds", False, "fail", {"other": "warn"}) == "error"
 
 
 # ===========================================================================
