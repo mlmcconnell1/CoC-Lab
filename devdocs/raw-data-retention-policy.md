@@ -61,8 +61,8 @@ Examples:
 - `data/raw/tiger/2017/tracts/tl_2017_06_tract.zip`
 - `data/raw/acs5_tract/2023/full/response.ndjson`
 - `data/raw/acs5_county/2023/B25003__renter_households/response.ndjson`
-- `data/raw/hud_exchange/2025/2026-02-07/response.ndjson`
-- `data/raw/hud_opendata/2026/2026-02-12/response.ndjson`
+- `data/raw/hud_exchange/2025/20260207-143022/response.ndjson`
+- `data/raw/hud_opendata/2026/20260212-091500/response.ndjson`
 
 ## Exceptions
 

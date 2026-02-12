@@ -1,5 +1,6 @@
 """Tests for the HUD Open Data ArcGIS ingester."""
 
+import re
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
@@ -16,6 +17,7 @@ from coclab.ingest.hud_opendata_arcgis import (
     _map_to_canonical_schema,
     ingest_hud_opendata,
 )
+from coclab.raw_snapshot import make_run_id
 
 # Sample polygon coordinates (kept short for readability)
 SAMPLE_COORDS_1 = [
@@ -297,3 +299,59 @@ class TestIngestHudOpendata:
         ]
         for col in required_columns:
             assert col in gdf.columns, f"Missing column: {col}"
+
+    def test_raw_snapshot_uses_extracted_year(self, mock_http_client, tmp_path):
+        """Raw snapshot year segment should be the 4-digit year, not the full vintage tag."""
+        raw_root = tmp_path / "raw"
+        ingest_hud_opendata(
+            snapshot_tag="HUDOpenData_2025-01-04",
+            base_dir=tmp_path,
+            http_client=mock_http_client,
+            raw_root=raw_root,
+        )
+
+        # Year dir should be "2025", not "HUDOpenData_2025-01-04"
+        year_dir = raw_root / "hud_opendata" / "2025"
+        assert year_dir.is_dir(), f"Expected year dir at {year_dir}"
+        # There should be no dir named after the full vintage tag
+        bad_dir = raw_root / "hud_opendata" / "HUDOpenData_2025-01-04"
+        assert not bad_dir.exists(), f"Full vintage tag should not be used as year dir"
+
+    def test_raw_snapshot_uses_timestamp_run_id(self, mock_http_client, tmp_path):
+        """Run-id should be a timestamp, not just a date."""
+        raw_root = tmp_path / "raw"
+        ingest_hud_opendata(
+            snapshot_tag="HUDOpenData_2025-01-04",
+            base_dir=tmp_path,
+            http_client=mock_http_client,
+            raw_root=raw_root,
+        )
+
+        year_dir = raw_root / "hud_opendata" / "2025"
+        run_dirs = list(year_dir.iterdir())
+        assert len(run_dirs) == 1
+        run_id = run_dirs[0].name
+        # Should match YYYYMMDD-HHMMSS pattern
+        assert re.fullmatch(r"\d{8}-\d{6}", run_id), (
+            f"Run-id {run_id!r} should match YYYYMMDD-HHMMSS"
+        )
+
+
+class TestMakeRunId:
+    """Tests for the make_run_id helper."""
+
+    def test_format(self):
+        """make_run_id returns YYYYMMDD-HHMMSS format."""
+        rid = make_run_id()
+        assert re.fullmatch(r"\d{8}-\d{6}", rid), (
+            f"make_run_id() returned {rid!r}, expected YYYYMMDD-HHMMSS"
+        )
+
+    def test_collision_resistance(self):
+        """Two sequential calls should differ (at least at the second level)."""
+        import time
+
+        rid1 = make_run_id()
+        time.sleep(1.1)
+        rid2 = make_run_id()
+        assert rid1 != rid2

@@ -29,6 +29,14 @@ logger = logging.getLogger(__name__)
 RAW_DATA_ROOT = Path("data/raw")
 
 
+def make_run_id() -> str:
+    """Return a collision-resistant run identifier for raw snapshot variants.
+
+    Format: ``YYYYMMDD-HHMMSS`` (compact ISO 8601, filesystem-safe, sortable).
+    """
+    return datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+
+
 # ---------------------------------------------------------------------------
 # Canonical path builders
 # ---------------------------------------------------------------------------

@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from shapely.geometry import shape
 
-from coclab.raw_snapshot import write_api_snapshot
+from coclab.raw_snapshot import make_run_id, write_api_snapshot
 from coclab.source_registry import check_source_changed, register_source
 from coclab.sources import (
     HUD_ARCGIS_COC_FEATURE_SERVICE,
@@ -569,7 +569,7 @@ def ingest_hud_exchange(
         source_url = ARCGIS_FEATURE_SERVICE_URL
 
         # Persist raw API snapshot per retention policy
-        run_id = datetime.now(UTC).strftime("%Y-%m-%d")
+        run_id = make_run_id()
         snap_dir, content_sha256, content_size = write_api_snapshot(
             raw_pages,
             "hud_exchange",

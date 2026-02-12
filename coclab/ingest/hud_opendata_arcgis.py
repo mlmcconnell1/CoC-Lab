@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -18,7 +19,7 @@ from shapely.geometry import shape
 
 from coclab.geo import normalize_boundaries, validate_boundaries
 from coclab.geo.io import curated_boundary_path, write_geoparquet
-from coclab.raw_snapshot import write_api_snapshot
+from coclab.raw_snapshot import make_run_id, write_api_snapshot
 from coclab.source_registry import check_source_changed, register_source
 from coclab.sources import HUD_ARCGIS_COC_FEATURE_SERVICE, HUD_ARCGIS_COC_SOURCE_REF
 
@@ -212,12 +213,15 @@ def ingest_hud_opendata(
         raise ValueError("No features returned from HUD Open Data API")
 
     # Persist raw API snapshot under data/raw/hud_opendata/<year>/<run_id>/
-    run_id = datetime.now(UTC).strftime("%Y-%m-%d")
+    # Extract canonical year from boundary_vintage (e.g. "HUDOpenData_2025-01-04" → "2025")
+    year_match = re.search(r"\d{4}", boundary_vintage)
+    raw_year = year_match.group() if year_match else str(ingested_at.year)
+    run_id = make_run_id()
     raw_pages = [raw_content] if raw_content else []
     snap_dir, content_sha256, content_size = write_api_snapshot(
         raw_pages,
         "hud_opendata",
-        year=boundary_vintage,
+        year=raw_year,
         variant=run_id,
         request_metadata={
             "url": FEATURE_SERVICE_URL,

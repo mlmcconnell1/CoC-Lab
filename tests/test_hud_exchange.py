@@ -1,5 +1,6 @@
 """Tests for HUD Exchange GIS Tools ingester."""
 
+import re
 import tempfile
 import zipfile
 from datetime import datetime
@@ -285,6 +286,17 @@ class TestIngestHudExchange:
             assert all(gdf["geom_hash"].notna())
             # Hashes should be SHA-256 hex strings (64 chars)
             assert all(len(h) == 64 for h in gdf["geom_hash"])
+
+    def test_arcgis_path_uses_make_run_id(self):
+        """hud_exchange_gis should import and use make_run_id for collision-resistant run_ids."""
+        import coclab.ingest.hud_exchange_gis as mod
+
+        assert hasattr(mod, "make_run_id"), "hud_exchange_gis should import make_run_id"
+        # Verify make_run_id produces timestamp format, not date-only
+        rid = mod.make_run_id()
+        assert re.fullmatch(r"\d{8}-\d{6}", rid), (
+            f"make_run_id() returned {rid!r}, expected YYYYMMDD-HHMMSS"
+        )
 
 
 # Helper functions for creating test data
