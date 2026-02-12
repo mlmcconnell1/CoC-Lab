@@ -116,9 +116,9 @@ class TestGetCountyWeightsPath:
     """Tests for get_county_weights_path function."""
 
     def test_default_path(self):
-        """Test default output path generation."""
+        """Test default output path generation (new temporal shorthand naming)."""
         path = get_county_weights_path("2019-2023", "renter_households")
-        assert path == Path("data/curated/acs/county_weights__2019-2023__renter_households.parquet")
+        assert path == Path("data/curated/acs/county_weights__A2023__wrenter.parquet")
 
     def test_custom_base_dir(self):
         """Test output path with custom base directory."""
