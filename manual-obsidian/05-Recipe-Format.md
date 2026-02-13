@@ -147,8 +147,20 @@ datasets:
     version: 1
     native_geometry: { type: tract }
     params: { vintage: "2019-2023", measures: [total_population, median_household_income] }
-    path: data/curated/measures/coc_measures__2025__2019-2023.parquet
+    path: data/curated/measures/measures__A2023@B2025xT2020.parquet
+
+  zori_county:
+    provider: zillow
+    product: zori
+    version: 1
+    native_geometry: { type: county }
+    params: { align: point_in_time_jan }
+    path: data/curated/zori/zori__county__Z2025.parquet
 ```
+
+For ZORI ingest outputs, the canonical curated path format is
+`data/curated/zori/zori__{geography}__Z{max_year}.parquet`, where `max_year`
+is the maximum year present in the ingested series.
 
 Like geometry types, provider/product combinations are an open set validated by runtime dataset adapters.
 
