@@ -52,6 +52,7 @@ flowchart LR
     build --> build-create[create]
     build --> build-list[list]
     build --> build-panel[panel]
+    build --> build-recipe[recipe]
     build --> build-export[export]
     aggregate --> aggregate-acs[acs]
     aggregate --> aggregate-zori[zori]
@@ -67,6 +68,7 @@ flowchart LR
     generate-xwalks --> XWALK[Create tract/county crosswalks]
     generate-catalog --> CATALOG[Sync base asset catalog]
     build-panel --> PANEL[Assemble CoC × year panels]
+    build-recipe --> RECIPE[Execute YAML recipe build]
     validate-pit-vintages --> PITXCHECK[Validate PIT across vintages]
     validate-population --> POPCHECK[Validate CoC pop vs national]
     build-create --> CREATE[Create build scaffold with pinned assets]
@@ -250,6 +252,54 @@ columns in the data indicates rent integration.
 
 When `--build` is provided and `--output` is not set, panels are written to
 `builds/{name}/data/curated/panel/`.
+
+## `coclab build recipe`
+
+Execute a declarative YAML recipe that defines datasets, transforms, and pipelines to produce analysis-ready panels.
+
+```bash
+# Validate and execute a recipe
+coclab build recipe --recipe recipes/glynn_fox_v1.yaml
+
+# Dry-run: validate only, do not execute
+coclab build recipe --recipe recipes/glynn_fox_v1.yaml --dry-run
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--recipe`, `-r` | Path to a YAML recipe file | Required |
+| `--dry-run`, `-n` | Validate only; do not execute the build | `False` |
+
+**Validation phases (always run):**
+
+1. **Schema validation** — Parses YAML against the versioned recipe schema
+2. **Missing-data check** — Verifies that dataset paths and file-set templates resolve to files on disk; levels controlled by the recipe's `validation.missing_dataset` policy
+3. **Adapter validation** — Confirms geometry types and dataset providers are registered in the adapter registry
+
+**Execution phases (skipped with `--dry-run`):**
+
+The executor runs each pipeline through four phases in order:
+
+1. **Materialize** — Resolves transform specs (e.g., tract→CoC crosswalks) to canonical file paths and verifies they exist on disk. Missing crosswalks fail with a hint to run `coclab generate xwalks`.
+2. **Resample** — Loads each dataset and applies one of three resampling methods:
+   - `identity` — passthrough for data already native to the target geometry
+   - `aggregate` — many-to-few via crosswalk weights (sum, mean, weighted_mean)
+   - `allocate` — few-to-many via crosswalk weights
+3. **Join** — Merges resampled datasets per year on `[geo_id, year]` using progressive outer join
+4. **Persist** — Concatenates all year-joined frames into a single panel Parquet with provenance metadata
+
+**Output:**
+
+- Panel Parquet at `data/curated/panel/panel__Y{start}-{end}@B{boundary}.parquet`
+- Provenance metadata embedded in the Parquet schema under `coclab_provenance`, recording recipe name, version, pipeline ID, dataset sources, and transform paths
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Runtime or execution error |
+| `2` | Validation or schema error |
 
 ## `coclab validate boundaries`
 

@@ -36,7 +36,7 @@ datasets:
       # this is just a declarative hint to the adapter.
       vintage: "2015-2024"
       measures: [total_population, median_household_income]
-    path: data/curated/acs/acs5_tract__Y2015-2024.parquet
+    path: data/curated/acs/acs5_tracts__A2024xT2020.parquet
 
   # ZORI at county level (county→CoC population-weighted aggregation)
   zori_county:
@@ -48,7 +48,7 @@ datasets:
       align: point_in_time_jan
       # optional: any adapter-specific series selection / smoothing flags
       # series: "smoothed"  # example only
-    path: data/curated/zillow/zori_county__Y2015-2024.parquet
+    path: data/curated/zori/zori__county__Z2025.parquet
 
 transforms:
   # Population-weighted tract→CoC crosswalk (used to aggregate ACS to CoC)

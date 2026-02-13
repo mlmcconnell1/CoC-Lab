@@ -1,9 +1,10 @@
-"""Tests for recipe loading, adapter registries, and CLI command."""
+"""Tests for recipe loading, adapter registries, executor, and CLI command."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import pandas as pd
 import pytest
 from typer.testing import CliRunner
 
@@ -15,6 +16,17 @@ from coclab.recipe.adapters import (
     ValidationDiagnostic,
     validate_recipe_adapters,
 )
+from coclab.recipe.executor import (
+    ExecutionContext,
+    ExecutorError,
+    PipelineResult,
+    StepResult,
+    _execute_materialize,
+    _execute_resample,
+    _resolve_transform_path,
+    execute_recipe,
+)
+from coclab.recipe.planner import MaterializeTask, ResampleTask
 from coclab.recipe.loader import RecipeLoadError, load_recipe
 from coclab.recipe.recipe_schema import (
     DatasetSpec,
@@ -1272,3 +1284,732 @@ class TestExpandVintageSet:
         recipe = load_recipe(recipe_data)
         with pytest.raises(PlannerError, match="no rule covering"):
             resolve_vintage_tuple("test_vs", 2025, recipe)
+
+
+# ===========================================================================
+# Executor unit tests
+# ===========================================================================
+
+
+def _recipe_with_pipeline() -> dict:
+    """Build a recipe with a full pipeline (materialize, resample, join)."""
+    return {
+        "version": 1,
+        "name": "executor-test",
+        "universe": {"range": "2020-2021"},
+        "targets": [
+            {"id": "coc_panel", "geometry": {"type": "coc", "vintage": 2025}},
+        ],
+        "datasets": {
+            "pit": {
+                "provider": "hud",
+                "product": "pit",
+                "version": 1,
+                "native_geometry": {"type": "coc"},
+            },
+            "acs": {
+                "provider": "census",
+                "product": "acs5",
+                "version": 1,
+                "native_geometry": {"type": "tract", "vintage": 2020},
+            },
+        },
+        "transforms": [
+            {
+                "id": "tract_to_coc",
+                "type": "crosswalk",
+                "from": {"type": "tract", "vintage": 2020},
+                "to": {"type": "coc", "vintage": 2025},
+                "spec": {"weighting": {"scheme": "area"}},
+            },
+        ],
+        "pipelines": [
+            {
+                "id": "main",
+                "target": "coc_panel",
+                "steps": [
+                    {"materialize": {"transforms": ["tract_to_coc"]}},
+                    {
+                        "resample": {
+                            "dataset": "pit",
+                            "to_geometry": {"type": "coc", "vintage": 2025},
+                            "method": "identity",
+                            "measures": ["pit_total"],
+                        },
+                    },
+                    {
+                        "resample": {
+                            "dataset": "acs",
+                            "to_geometry": {"type": "coc", "vintage": 2025},
+                            "method": "aggregate",
+                            "via": "tract_to_coc",
+                            "measures": ["total_population"],
+                            "aggregation": "sum",
+                        },
+                    },
+                    {
+                        "join": {
+                            "datasets": ["pit", "acs"],
+                            "join_on": ["geo_id", "year"],
+                        },
+                    },
+                ],
+            },
+        ],
+    }
+
+
+def _setup_pipeline_fixtures(tmp_path: Path) -> None:
+    """Create the crosswalk + dataset files needed by _recipe_with_pipeline."""
+    # Crosswalk
+    xwalk_dir = tmp_path / "data" / "curated" / "xwalks"
+    xwalk_dir.mkdir(parents=True)
+    xwalk = pd.DataFrame({
+        "coc_id": ["COC1", "COC2"],
+        "tract_geoid": ["T1", "T2"],
+        "area_share": [1.0, 1.0],
+    })
+    xwalk.to_parquet(xwalk_dir / "xwalk__B2025xT2020.parquet")
+
+    # PIT dataset (identity passthrough)
+    pit_path = tmp_path / "data" / "pit.parquet"
+    pit_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({
+        "coc_id": ["COC1", "COC2"],
+        "year": [2020, 2020],
+        "pit_total": [10, 20],
+    }).to_parquet(pit_path)
+
+    # ACS dataset (aggregate)
+    acs_path = tmp_path / "data" / "acs.parquet"
+    pd.DataFrame({
+        "GEOID": ["T1", "T2"],
+        "year": [2020, 2020],
+        "total_population": [100, 200],
+    }).to_parquet(acs_path)
+
+
+class TestExecutor:
+
+    def test_execute_recipe_returns_results(self, tmp_path: Path):
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        # Use the fixture dataset paths
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        recipe = load_recipe(data)
+        results = execute_recipe(recipe, project_root=tmp_path)
+        assert len(results) == 1
+        assert results[0].pipeline_id == "main"
+        assert results[0].success
+
+    def test_execute_recipe_runs_all_step_types(self, tmp_path: Path):
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        recipe = load_recipe(data)
+        results = execute_recipe(recipe, project_root=tmp_path)
+        kinds = [s.step_kind for s in results[0].steps]
+        assert "materialize" in kinds
+        assert "resample" in kinds
+        assert "join" in kinds
+
+    def test_execute_recipe_step_count(self, tmp_path: Path):
+        """1 materialize + 2×2 resample + 2 join + 1 persist = 8 steps."""
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        recipe = load_recipe(data)
+        results = execute_recipe(recipe, project_root=tmp_path)
+        assert len(results[0].steps) == 8
+
+    def test_execute_recipe_no_pipelines(self, tmp_path: Path):
+        data = _minimal_recipe()
+        data["pipelines"] = []
+        recipe = load_recipe(data)
+        results = execute_recipe(recipe, project_root=tmp_path)
+        assert results == []
+
+    def test_planner_error_wrapped_in_executor_error(self, tmp_path: Path):
+        """Planner failures should be raised as ExecutorError with pipeline context."""
+        data = _recipe_with_pipeline()
+        # Add a resample with via:auto but no matching transform
+        data["pipelines"][0]["steps"].insert(1, {
+            "resample": {
+                "dataset": "acs",
+                "to_geometry": {"type": "county"},
+                "method": "aggregate",
+                "via": "auto",
+                "measures": ["total_population"],
+            },
+        })
+        recipe = load_recipe(data)
+        with pytest.raises(ExecutorError, match="Pipeline 'main'.*planning failed"):
+            execute_recipe(recipe, project_root=tmp_path)
+
+
+class TestPipelineResult:
+
+    def test_success_all_ok(self):
+        r = PipelineResult(pipeline_id="test", steps=[
+            StepResult(step_kind="resample", detail="ok", success=True),
+            StepResult(step_kind="join", detail="ok", success=True),
+        ])
+        assert r.success
+        assert r.error_count == 0
+
+    def test_failure_detected(self):
+        r = PipelineResult(pipeline_id="test", steps=[
+            StepResult(step_kind="resample", detail="ok", success=True),
+            StepResult(step_kind="join", detail="boom", success=False, error="fail"),
+        ])
+        assert not r.success
+        assert r.error_count == 1
+
+
+class TestExecutorCLI:
+    """Test that the CLI invokes the executor when --dry-run is not set."""
+
+    def test_non_dry_run_invokes_executor(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        import yaml
+
+        monkeypatch.chdir(tmp_path)
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        recipe_file = tmp_path / "recipe.yaml"
+        recipe_file.write_text(yaml.dump(data), encoding="utf-8")
+        result = runner.invoke(app, [
+            "build", "recipe",
+            "--recipe", str(recipe_file),
+        ])
+        # Should see execution output (not just validation)
+        assert "Executing pipeline" in result.output
+        assert "completed" in result.output or "executed" in result.output
+
+    def test_dry_run_does_not_execute(self, tmp_path: Path):
+        import yaml
+
+        recipe_file = tmp_path / "recipe.yaml"
+        recipe_file.write_text(yaml.dump(_recipe_with_pipeline()), encoding="utf-8")
+        result = runner.invoke(app, [
+            "build", "recipe",
+            "--recipe", str(recipe_file),
+            "--dry-run",
+        ])
+        assert "Executing pipeline" not in result.output
+
+    def test_executor_error_exits_1(self, tmp_path: Path):
+        import yaml
+
+        data = _recipe_with_pipeline()
+        # Add an auto-resample that can't resolve a transform
+        data["pipelines"][0]["steps"].insert(1, {
+            "resample": {
+                "dataset": "acs",
+                "to_geometry": {"type": "county"},
+                "method": "aggregate",
+                "via": "auto",
+                "measures": ["total_population"],
+            },
+        })
+        recipe_file = tmp_path / "recipe.yaml"
+        recipe_file.write_text(yaml.dump(data), encoding="utf-8")
+        result = runner.invoke(app, [
+            "build", "recipe",
+            "--recipe", str(recipe_file),
+        ])
+        assert result.exit_code == 1
+        assert "Execution error" in result.output
+
+
+# ===========================================================================
+# Materialize step tests
+# ===========================================================================
+
+
+class TestMaterialize:
+
+    def _make_ctx(self, tmp_path: Path) -> ExecutionContext:
+        recipe = load_recipe(_recipe_with_pipeline())
+        return ExecutionContext(
+            project_root=tmp_path,
+            recipe=recipe,
+        )
+
+    def test_resolve_tract_to_coc_crosswalk_path(self, tmp_path: Path):
+        recipe = load_recipe(_recipe_with_pipeline())
+        path = _resolve_transform_path("tract_to_coc", recipe, tmp_path)
+        assert "xwalk__B2025xT2020" in str(path)
+        assert path.suffix == ".parquet"
+
+    def test_resolve_county_to_coc_crosswalk_path(self, tmp_path: Path):
+        data = _recipe_with_pipeline()
+        data["transforms"] = [{
+            "id": "county_to_coc",
+            "type": "crosswalk",
+            "from": {"type": "county", "vintage": 2023},
+            "to": {"type": "coc", "vintage": 2025},
+            "spec": {"weighting": {"scheme": "area"}},
+        }]
+        data["pipelines"][0]["steps"] = [
+            {"materialize": {"transforms": ["county_to_coc"]}},
+            {
+                "resample": {
+                    "dataset": "acs",
+                    "to_geometry": {"type": "coc", "vintage": 2025},
+                    "method": "aggregate",
+                    "via": "county_to_coc",
+                    "measures": ["total_population"],
+                    "aggregation": "sum",
+                },
+            },
+        ]
+        recipe = load_recipe(data)
+        path = _resolve_transform_path("county_to_coc", recipe, tmp_path)
+        assert "xwalk__B2025xC2023" in str(path)
+
+    def test_unknown_transform_raises(self, tmp_path: Path):
+        recipe = load_recipe(_recipe_with_pipeline())
+        with pytest.raises(ExecutorError, match="not found in recipe"):
+            _resolve_transform_path("nonexistent", recipe, tmp_path)
+
+    def test_unsupported_geometry_pair_raises(self, tmp_path: Path):
+        data = _recipe_with_pipeline()
+        # zip↔state: no crosswalk path resolver for this pair
+        data["transforms"] = [{
+            "id": "zip_to_state",
+            "type": "crosswalk",
+            "from": {"type": "zip", "vintage": 2023},
+            "to": {"type": "state", "vintage": 2023},
+            "spec": {"weighting": {"scheme": "area"}},
+        }]
+        data["pipelines"][0]["steps"] = [
+            {"materialize": {"transforms": ["zip_to_state"]}},
+        ]
+        recipe = load_recipe(data)
+        with pytest.raises(ExecutorError, match="no 'coc' geometry"):
+            _resolve_transform_path("zip_to_state", recipe, tmp_path)
+
+    def test_materialize_reuses_existing_artifact(self, tmp_path: Path):
+        ctx = self._make_ctx(tmp_path)
+        # Create the expected crosswalk file
+        xwalk_dir = tmp_path / "data" / "curated" / "xwalks"
+        xwalk_dir.mkdir(parents=True)
+        xwalk_file = xwalk_dir / "xwalk__B2025xT2020.parquet"
+        pd.DataFrame({"a": [1]}).to_parquet(xwalk_file)
+
+        from coclab.recipe.planner import MaterializeTask
+        task = MaterializeTask(transform_ids=["tract_to_coc"])
+        result = _execute_materialize(task, ctx)
+        assert result.success
+        assert "tract_to_coc" in ctx.transform_paths
+
+    def test_materialize_fails_missing_artifact(self, tmp_path: Path):
+        ctx = self._make_ctx(tmp_path)
+        from coclab.recipe.planner import MaterializeTask
+        task = MaterializeTask(transform_ids=["tract_to_coc"])
+        result = _execute_materialize(task, ctx)
+        assert not result.success
+        assert "not found" in result.error
+        assert "coclab generate xwalks" in result.error
+
+
+# ===========================================================================
+# Resample step tests
+# ===========================================================================
+
+
+def _make_dataset_parquet(path: Path, geo_col: str = "geo_id") -> None:
+    """Write a minimal dataset parquet for testing."""
+    df = pd.DataFrame({
+        geo_col: ["A", "B", "C"],
+        "year": [2020, 2020, 2020],
+        "pop": [100, 200, 300],
+        "income": [50000, 60000, 70000],
+    })
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(path)
+
+
+def _make_xwalk_parquet(path: Path, geo_type: str = "tract") -> None:
+    """Write a minimal crosswalk parquet for testing."""
+    if geo_type == "tract":
+        df = pd.DataFrame({
+            "coc_id": ["COC1", "COC1", "COC2"],
+            "tract_geoid": ["A", "B", "C"],
+            "area_share": [0.8, 0.5, 1.0],
+            "pop_share": [0.6, 0.4, 1.0],
+        })
+    else:
+        df = pd.DataFrame({
+            "coc_id": ["COC1", "COC1", "COC2"],
+            "county_fips": ["A", "B", "C"],
+            "area_share": [0.8, 0.5, 1.0],
+        })
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(path)
+
+
+class TestResampleIdentity:
+
+    def test_identity_passthrough(self, tmp_path: Path):
+        ds_path = tmp_path / "data" / "pit.parquet"
+        _make_dataset_parquet(ds_path, geo_col="coc_id")
+
+        recipe = load_recipe(_recipe_with_pipeline())
+        ctx = ExecutionContext(project_root=tmp_path, recipe=recipe)
+
+        task = ResampleTask(
+            dataset_id="pit",
+            year=2020,
+            input_path="data/pit.parquet",
+            effective_geometry=GeometryRef(type="coc"),
+            method="identity",
+            transform_id=None,
+            to_geometry=GeometryRef(type="coc", vintage=2025),
+            measures=["pop"],
+        )
+        result = _execute_resample(task, ctx)
+        assert result.success
+        df = ctx.intermediates[("pit", 2020)]
+        assert "geo_id" in df.columns
+        assert "pop" in df.columns
+        assert len(df) == 3
+
+    def test_identity_missing_measures_fails(self, tmp_path: Path):
+        ds_path = tmp_path / "data" / "pit.parquet"
+        _make_dataset_parquet(ds_path, geo_col="coc_id")
+
+        recipe = load_recipe(_recipe_with_pipeline())
+        ctx = ExecutionContext(project_root=tmp_path, recipe=recipe)
+
+        task = ResampleTask(
+            dataset_id="pit",
+            year=2020,
+            input_path="data/pit.parquet",
+            effective_geometry=GeometryRef(type="coc"),
+            method="identity",
+            transform_id=None,
+            to_geometry=GeometryRef(type="coc", vintage=2025),
+            measures=["nonexistent"],
+        )
+        result = _execute_resample(task, ctx)
+        assert not result.success
+        assert "missing measure columns" in result.error
+
+    def test_identity_no_input_path_fails(self, tmp_path: Path):
+        recipe = load_recipe(_recipe_with_pipeline())
+        ctx = ExecutionContext(project_root=tmp_path, recipe=recipe)
+
+        task = ResampleTask(
+            dataset_id="pit",
+            year=2020,
+            input_path=None,
+            effective_geometry=GeometryRef(type="coc"),
+            method="identity",
+            transform_id=None,
+            to_geometry=GeometryRef(type="coc", vintage=2025),
+            measures=["pop"],
+        )
+        result = _execute_resample(task, ctx)
+        assert not result.success
+        assert "no input path" in result.error
+
+    def test_identity_missing_file_fails(self, tmp_path: Path):
+        recipe = load_recipe(_recipe_with_pipeline())
+        ctx = ExecutionContext(project_root=tmp_path, recipe=recipe)
+
+        task = ResampleTask(
+            dataset_id="pit",
+            year=2020,
+            input_path="data/nonexistent.parquet",
+            effective_geometry=GeometryRef(type="coc"),
+            method="identity",
+            transform_id=None,
+            to_geometry=GeometryRef(type="coc", vintage=2025),
+            measures=["pop"],
+        )
+        result = _execute_resample(task, ctx)
+        assert not result.success
+        assert "not found" in result.error
+
+
+class TestResampleAggregate:
+
+    def _setup(self, tmp_path: Path) -> ExecutionContext:
+        ds_path = tmp_path / "data" / "acs.parquet"
+        _make_dataset_parquet(ds_path, geo_col="GEOID")
+
+        xwalk_path = tmp_path / "data" / "curated" / "xwalks" / "xwalk__B2025xT2020.parquet"
+        _make_xwalk_parquet(xwalk_path, geo_type="tract")
+
+        recipe = load_recipe(_recipe_with_pipeline())
+        ctx = ExecutionContext(project_root=tmp_path, recipe=recipe)
+        ctx.transform_paths["tract_to_coc"] = xwalk_path
+        return ctx
+
+    def test_aggregate_sum(self, tmp_path: Path):
+        ctx = self._setup(tmp_path)
+        task = ResampleTask(
+            dataset_id="acs",
+            year=2020,
+            input_path="data/acs.parquet",
+            effective_geometry=GeometryRef(type="tract", vintage=2020),
+            method="aggregate",
+            transform_id="tract_to_coc",
+            to_geometry=GeometryRef(type="coc", vintage=2025),
+            measures=["pop"],
+            aggregation="sum",
+        )
+        result = _execute_resample(task, ctx)
+        assert result.success
+        df = ctx.intermediates[("acs", 2020)]
+        assert "geo_id" in df.columns
+        assert "year" in df.columns
+        # COC1 = 100*0.8 + 200*0.5 = 180, COC2 = 300*1.0 = 300
+        coc1 = df[df.geo_id == "COC1"]["pop"].iloc[0]
+        coc2 = df[df.geo_id == "COC2"]["pop"].iloc[0]
+        assert coc1 == pytest.approx(180.0)
+        assert coc2 == pytest.approx(300.0)
+
+    def test_aggregate_weighted_mean(self, tmp_path: Path):
+        ctx = self._setup(tmp_path)
+        task = ResampleTask(
+            dataset_id="acs",
+            year=2020,
+            input_path="data/acs.parquet",
+            effective_geometry=GeometryRef(type="tract", vintage=2020),
+            method="aggregate",
+            transform_id="tract_to_coc",
+            to_geometry=GeometryRef(type="coc", vintage=2025),
+            measures=["income"],
+            aggregation="weighted_mean",
+        )
+        result = _execute_resample(task, ctx)
+        assert result.success
+        df = ctx.intermediates[("acs", 2020)]
+        # COC1: pop_share = [0.6, 0.4], income = [50000, 60000]
+        # weighted_mean = (50000*0.6 + 60000*0.4) / (0.6+0.4) = 54000
+        coc1_income = df[df.geo_id == "COC1"]["income"].iloc[0]
+        assert coc1_income == pytest.approx(54000.0)
+
+    def test_aggregate_missing_transform_fails(self, tmp_path: Path):
+        ds_path = tmp_path / "data" / "acs.parquet"
+        _make_dataset_parquet(ds_path, geo_col="GEOID")
+
+        recipe = load_recipe(_recipe_with_pipeline())
+        ctx = ExecutionContext(project_root=tmp_path, recipe=recipe)
+        # Don't populate transform_paths
+
+        task = ResampleTask(
+            dataset_id="acs",
+            year=2020,
+            input_path="data/acs.parquet",
+            effective_geometry=GeometryRef(type="tract", vintage=2020),
+            method="aggregate",
+            transform_id="tract_to_coc",
+            to_geometry=GeometryRef(type="coc", vintage=2025),
+            measures=["pop"],
+            aggregation="sum",
+        )
+        result = _execute_resample(task, ctx)
+        assert not result.success
+        assert "not materialized" in result.error
+
+    def test_aggregate_zero_join_rows_fails(self, tmp_path: Path):
+        # Dataset has geo_ids that don't match crosswalk
+        ds_path = tmp_path / "data" / "acs.parquet"
+        df = pd.DataFrame({
+            "GEOID": ["X", "Y"],
+            "pop": [100, 200],
+        })
+        ds_path.parent.mkdir(parents=True)
+        df.to_parquet(ds_path)
+
+        xwalk_path = tmp_path / "data" / "curated" / "xwalks" / "xwalk__B2025xT2020.parquet"
+        _make_xwalk_parquet(xwalk_path, geo_type="tract")
+
+        recipe = load_recipe(_recipe_with_pipeline())
+        ctx = ExecutionContext(project_root=tmp_path, recipe=recipe)
+        ctx.transform_paths["tract_to_coc"] = xwalk_path
+
+        task = ResampleTask(
+            dataset_id="acs",
+            year=2020,
+            input_path="data/acs.parquet",
+            effective_geometry=GeometryRef(type="tract", vintage=2020),
+            method="aggregate",
+            transform_id="tract_to_coc",
+            to_geometry=GeometryRef(type="coc", vintage=2025),
+            measures=["pop"],
+            aggregation="sum",
+        )
+        result = _execute_resample(task, ctx)
+        assert not result.success
+        assert "zero rows" in result.error
+
+    def test_aggregate_mean(self, tmp_path: Path):
+        ctx = self._setup(tmp_path)
+        task = ResampleTask(
+            dataset_id="acs",
+            year=2020,
+            input_path="data/acs.parquet",
+            effective_geometry=GeometryRef(type="tract", vintage=2020),
+            method="aggregate",
+            transform_id="tract_to_coc",
+            to_geometry=GeometryRef(type="coc", vintage=2025),
+            measures=["pop"],
+            aggregation="mean",
+        )
+        result = _execute_resample(task, ctx)
+        assert result.success
+        df = ctx.intermediates[("acs", 2020)]
+        # COC1 has tracts A(100) and B(200) → mean = 150
+        coc1 = df[df.geo_id == "COC1"]["pop"].iloc[0]
+        assert coc1 == pytest.approx(150.0)
+
+    def test_aggregate_county_crosswalk(self, tmp_path: Path):
+        ds_path = tmp_path / "data" / "zori.parquet"
+        _make_dataset_parquet(ds_path, geo_col="geo_id")
+
+        xwalk_path = tmp_path / "xwalk_county.parquet"
+        _make_xwalk_parquet(xwalk_path, geo_type="county")
+
+        data = _recipe_with_pipeline()
+        data["transforms"] = [{
+            "id": "county_to_coc",
+            "type": "crosswalk",
+            "from": {"type": "county"},
+            "to": {"type": "coc", "vintage": 2025},
+            "spec": {"weighting": {"scheme": "area"}},
+        }]
+        data["pipelines"][0]["steps"] = [
+            {"materialize": {"transforms": ["county_to_coc"]}},
+            {"resample": {
+                "dataset": "acs",
+                "to_geometry": {"type": "coc", "vintage": 2025},
+                "method": "aggregate",
+                "via": "county_to_coc",
+                "measures": ["pop"],
+                "aggregation": "sum",
+            }},
+        ]
+        recipe = load_recipe(data)
+        ctx = ExecutionContext(project_root=tmp_path, recipe=recipe)
+        ctx.transform_paths["county_to_coc"] = xwalk_path
+
+        task = ResampleTask(
+            dataset_id="zori",
+            year=2020,
+            input_path="data/zori.parquet",
+            effective_geometry=GeometryRef(type="county"),
+            method="aggregate",
+            transform_id="county_to_coc",
+            to_geometry=GeometryRef(type="coc", vintage=2025),
+            measures=["pop"],
+            aggregation="sum",
+        )
+        result = _execute_resample(task, ctx)
+        assert result.success
+
+
+# ===========================================================================
+# Join output persistence and provenance tests
+# ===========================================================================
+
+
+class TestJoinPersistence:
+
+    def test_full_pipeline_writes_panel(self, tmp_path: Path):
+        """End-to-end: materialize → resample → join → persist."""
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        recipe = load_recipe(data)
+        results = execute_recipe(recipe, project_root=tmp_path)
+        assert len(results) == 1
+        assert results[0].success
+        # Check panel file was written
+        panel_file = tmp_path / "data" / "curated" / "panel" / "panel__Y2020-2021@B2025.parquet"
+        assert panel_file.exists()
+
+    def test_panel_contains_all_years(self, tmp_path: Path):
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        recipe = load_recipe(data)
+        execute_recipe(recipe, project_root=tmp_path)
+        panel_file = tmp_path / "data" / "curated" / "panel" / "panel__Y2020-2021@B2025.parquet"
+        panel = pd.read_parquet(panel_file)
+        assert set(panel["year"].unique()) == {2020, 2021}
+
+    def test_panel_has_provenance_metadata(self, tmp_path: Path):
+        import json as json_mod
+        import pyarrow.parquet as pq
+
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        recipe = load_recipe(data)
+        execute_recipe(recipe, project_root=tmp_path)
+        panel_file = tmp_path / "data" / "curated" / "panel" / "panel__Y2020-2021@B2025.parquet"
+        table = pq.read_table(panel_file)
+        metadata = table.schema.metadata
+        assert b"coclab_provenance" in metadata
+        prov = json_mod.loads(metadata[b"coclab_provenance"])
+        assert prov["recipe_name"] == "executor-test"
+        assert prov["pipeline_id"] == "main"
+        assert "pit" in prov["datasets"]
+        assert "acs" in prov["datasets"]
+        assert "tract_to_coc" in prov["transforms"]
+
+    def test_persist_step_in_results(self, tmp_path: Path):
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        recipe = load_recipe(data)
+        results = execute_recipe(recipe, project_root=tmp_path)
+        kinds = [s.step_kind for s in results[0].steps]
+        assert "persist" in kinds
+
+    def test_no_join_no_persist(self, tmp_path: Path):
+        """Pipeline with no join steps should skip persist."""
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        # Remove the join step
+        data["pipelines"][0]["steps"] = [
+            s for s in data["pipelines"][0]["steps"]
+            if not (isinstance(s, dict) and "join" in s)
+        ]
+        recipe = load_recipe(data)
+        results = execute_recipe(recipe, project_root=tmp_path)
+        kinds = [s.step_kind for s in results[0].steps]
+        assert "persist" not in kinds
+
+    def test_cli_shows_persist_summary(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        import yaml
+
+        monkeypatch.chdir(tmp_path)
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        recipe_file = tmp_path / "recipe.yaml"
+        recipe_file.write_text(yaml.dump(data), encoding="utf-8")
+        result = runner.invoke(app, [
+            "build", "recipe",
+            "--recipe", str(recipe_file),
+        ])
+        assert result.exit_code == 0
+        assert "persist" in result.output.lower()
+        assert "panel" in result.output.lower()

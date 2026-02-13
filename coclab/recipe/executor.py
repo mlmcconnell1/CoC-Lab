@@ -1,0 +1,789 @@
+"""Recipe execution orchestrator.
+
+Given a validated RecipeV1 and pipeline id, resolves the execution plan
+via the planner and executes materialize → resample → join tasks in
+deterministic order.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import json
+
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+import typer
+
+from coclab.naming import (
+    county_xwalk_path,
+    panel_filename,
+    tract_xwalk_path,
+)
+from coclab.recipe.planner import (
+    ExecutionPlan,
+    JoinTask,
+    MaterializeTask,
+    PlannerError,
+    ResampleTask,
+    resolve_plan,
+)
+from coclab.recipe.recipe_schema import (
+    CrosswalkTransform,
+    GeometryRef,
+    RecipeV1,
+    RollupTransform,
+    expand_year_spec,
+)
+
+
+class ExecutorError(Exception):
+    """Raised when recipe execution fails at runtime."""
+
+
+@dataclass
+class StepResult:
+    """Outcome of a single execution step."""
+
+    step_kind: str
+    detail: str
+    success: bool
+    error: str | None = None
+
+
+@dataclass
+class PipelineResult:
+    """Aggregate outcome for one pipeline execution."""
+
+    pipeline_id: str
+    steps: list[StepResult] = field(default_factory=list)
+
+    @property
+    def success(self) -> bool:
+        return all(s.success for s in self.steps)
+
+    @property
+    def error_count(self) -> int:
+        return sum(1 for s in self.steps if not s.success)
+
+
+@dataclass
+class ExecutionContext:
+    """Shared mutable state across step executions within a pipeline."""
+
+    project_root: Path
+    recipe: RecipeV1
+    # transform_id → resolved file path on disk
+    transform_paths: dict[str, Path] = field(default_factory=dict)
+    # (dataset_id, year) → resampled DataFrame
+    intermediates: dict[tuple[str, int], pd.DataFrame] = field(
+        default_factory=dict,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Transform artifact resolution
+# ---------------------------------------------------------------------------
+
+
+def _resolve_transform_path(
+    transform_id: str,
+    recipe: RecipeV1,
+    project_root: Path,
+) -> Path:
+    """Map a transform spec to its expected crosswalk file path.
+
+    Uses the transform's ``from_`` / ``to`` geometry refs to determine
+    the canonical crosswalk filename via the naming module.
+
+    Raises ExecutorError if the geometry pair is not recognised.
+    """
+    transform = None
+    for t in recipe.transforms:
+        if t.id == transform_id:
+            transform = t
+            break
+    if transform is None:
+        raise ExecutorError(
+            f"Transform '{transform_id}' referenced in materialize step "
+            f"but not found in recipe transforms."
+        )
+
+    from_ = transform.from_
+    to = transform.to
+
+    # Determine which geometry is the CoC boundary and which is the
+    # base geography so we can build the right crosswalk filename.
+    coc_ref, base_ref = _identify_coc_and_base(from_, to)
+    if coc_ref is None:
+        raise ExecutorError(
+            f"Transform '{transform_id}' connects "
+            f"{from_.type}@{from_.vintage} → {to.type}@{to.vintage}: "
+            f"cannot resolve crosswalk path (no 'coc' geometry in pair)."
+        )
+
+    boundary_vintage = str(coc_ref.vintage) if coc_ref.vintage else "latest"
+    base_vintage: str | int = base_ref.vintage if base_ref.vintage else "latest"
+
+    if base_ref.type == "tract":
+        return project_root / tract_xwalk_path(boundary_vintage, base_vintage)
+    elif base_ref.type == "county":
+        return project_root / county_xwalk_path(boundary_vintage, base_vintage)
+    else:
+        raise ExecutorError(
+            f"Transform '{transform_id}': unsupported geometry pair "
+            f"{from_.type} → {to.type}. Only tract↔coc and county↔coc "
+            f"crosswalks are currently supported."
+        )
+
+
+def _identify_coc_and_base(
+    from_: GeometryRef, to: GeometryRef,
+) -> tuple[GeometryRef | None, GeometryRef]:
+    """Identify which end of a transform is the CoC boundary."""
+    if to.type == "coc":
+        return to, from_
+    if from_.type == "coc":
+        return from_, to
+    return None, from_
+
+
+# ---------------------------------------------------------------------------
+# Resample helpers
+# ---------------------------------------------------------------------------
+
+# Maps geometry types to the column name used as join key in crosswalks.
+_XWALK_JOIN_KEYS: dict[str, str] = {
+    "tract": "tract_geoid",
+    "county": "county_fips",
+}
+
+# Column names commonly used for geo IDs in input datasets.
+_DATASET_GEO_COLUMNS: list[str] = ["geo_id", "GEOID", "geoid", "coc_id"]
+
+
+def _find_geo_column(df: pd.DataFrame) -> str:
+    """Find the geo-ID column in a DataFrame."""
+    for col in _DATASET_GEO_COLUMNS:
+        if col in df.columns:
+            return col
+    raise ExecutorError(
+        f"Cannot find geo-ID column in dataset. "
+        f"Expected one of {_DATASET_GEO_COLUMNS}, "
+        f"got columns: {list(df.columns)}"
+    )
+
+
+def _validate_columns(
+    df: pd.DataFrame,
+    measures: list[str],
+    dataset_id: str,
+    year: int,
+) -> None:
+    """Validate that all required measure columns exist."""
+    missing = [m for m in measures if m not in df.columns]
+    if missing:
+        raise ExecutorError(
+            f"Dataset '{dataset_id}' year {year}: missing measure columns "
+            f"{missing}. Available: {sorted(df.columns)}"
+        )
+
+
+def _resample_identity(
+    df: pd.DataFrame,
+    task: ResampleTask,
+) -> pd.DataFrame:
+    """Identity resample: passthrough with column standardisation."""
+    geo_col = _find_geo_column(df)
+    _validate_columns(df, task.measures, task.dataset_id, task.year)
+
+    cols = [geo_col] + task.measures
+    if "year" in df.columns and "year" not in cols:
+        cols.insert(1, "year")
+
+    result = df[cols].copy()
+    if geo_col != "geo_id":
+        result = result.rename(columns={geo_col: "geo_id"})
+    return result
+
+
+def _resample_aggregate(
+    df: pd.DataFrame,
+    xwalk: pd.DataFrame,
+    task: ResampleTask,
+) -> pd.DataFrame:
+    """Aggregate resample: many-to-few via crosswalk weights."""
+    geo_col = _find_geo_column(df)
+    _validate_columns(df, task.measures, task.dataset_id, task.year)
+
+    # Determine join key in crosswalk based on effective geometry type
+    geo_type = task.effective_geometry.type
+    xwalk_key = _XWALK_JOIN_KEYS.get(geo_type)
+    if xwalk_key is None or xwalk_key not in xwalk.columns:
+        raise ExecutorError(
+            f"Resample aggregate for '{task.dataset_id}' year {task.year}: "
+            f"crosswalk does not have expected join key '{xwalk_key}' "
+            f"for geometry type '{geo_type}'. "
+            f"Crosswalk columns: {sorted(xwalk.columns)}"
+        )
+
+    # Determine weight column (prefer pop_share for weighted_mean if available)
+    if task.aggregation == "weighted_mean" and "pop_share" in xwalk.columns:
+        weight_col = "pop_share"
+    else:
+        weight_col = "area_share"
+
+    if weight_col not in xwalk.columns:
+        raise ExecutorError(
+            f"Crosswalk missing weight column '{weight_col}'. "
+            f"Available: {sorted(xwalk.columns)}"
+        )
+
+    # Merge dataset with crosswalk
+    merged = df.merge(
+        xwalk[["coc_id", xwalk_key, weight_col]],
+        left_on=geo_col,
+        right_on=xwalk_key,
+        how="inner",
+    )
+
+    if merged.empty:
+        raise ExecutorError(
+            f"Resample aggregate for '{task.dataset_id}' year {task.year}: "
+            f"zero rows after joining dataset ({geo_col}) with crosswalk "
+            f"({xwalk_key}). Check that geo-ID formats match."
+        )
+
+    # Apply aggregation per CoC
+    agg = task.aggregation or "sum"
+    if agg == "sum":
+        # Weighted sum: measure_value * weight, summed per CoC
+        for m in task.measures:
+            merged[m] = merged[m] * merged[weight_col]
+        result = merged.groupby("coc_id")[task.measures].sum().reset_index()
+    elif agg == "mean":
+        result = merged.groupby("coc_id")[task.measures].mean().reset_index()
+    elif agg == "weighted_mean":
+        # Weighted mean: sum(measure * weight) / sum(weight) per CoC
+        rows = []
+        for coc_id, group in merged.groupby("coc_id"):
+            w = group[weight_col].values
+            w_sum = w.sum()
+            row: dict[str, object] = {"coc_id": coc_id}
+            for m in task.measures:
+                if w_sum > 0:
+                    row[m] = (group[m].values * w).sum() / w_sum
+                else:
+                    row[m] = None
+            rows.append(row)
+        result = pd.DataFrame(rows)
+    else:
+        raise ExecutorError(
+            f"Unsupported aggregation method '{agg}' for "
+            f"dataset '{task.dataset_id}'."
+        )
+
+    result = result.rename(columns={"coc_id": "geo_id"})
+    result["year"] = task.year
+    return result
+
+
+def _resample_allocate(
+    df: pd.DataFrame,
+    xwalk: pd.DataFrame,
+    task: ResampleTask,
+) -> pd.DataFrame:
+    """Allocate resample: few-to-many via crosswalk weights."""
+    geo_col = _find_geo_column(df)
+    _validate_columns(df, task.measures, task.dataset_id, task.year)
+
+    # For allocate, the target geometry is finer-grained.
+    # The crosswalk connects target (fine) ↔ source (coarse).
+    target_type = task.to_geometry.type
+    target_key = _XWALK_JOIN_KEYS.get(target_type)
+    if target_key is None or target_key not in xwalk.columns:
+        raise ExecutorError(
+            f"Resample allocate for '{task.dataset_id}' year {task.year}: "
+            f"crosswalk does not have target key '{target_key}' "
+            f"for target geometry '{target_type}'. "
+            f"Crosswalk columns: {sorted(xwalk.columns)}"
+        )
+
+    weight_col = "area_share"
+    if weight_col not in xwalk.columns:
+        raise ExecutorError(
+            f"Crosswalk missing weight column '{weight_col}'. "
+            f"Available: {sorted(xwalk.columns)}"
+        )
+
+    # Merge dataset (coarse) with crosswalk
+    merged = df.merge(
+        xwalk[["coc_id", target_key, weight_col]],
+        left_on=geo_col,
+        right_on="coc_id",
+        how="inner",
+    )
+
+    if merged.empty:
+        raise ExecutorError(
+            f"Resample allocate for '{task.dataset_id}' year {task.year}: "
+            f"zero rows after join."
+        )
+
+    # Allocate: distribute source value by weight
+    for m in task.measures:
+        merged[m] = merged[m] * merged[weight_col]
+
+    result = merged[[target_key] + task.measures].copy()
+    result = result.rename(columns={target_key: "geo_id"})
+    result["year"] = task.year
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Step executors
+# ---------------------------------------------------------------------------
+
+
+def _execute_materialize(
+    task: MaterializeTask,
+    ctx: ExecutionContext,
+) -> StepResult:
+    """Resolve or verify transform artifacts on disk.
+
+    For each transform_id, maps the transform spec to a canonical
+    crosswalk file path and checks whether it exists.  Stores resolved
+    paths in ``ctx.transform_paths`` for subsequent resample steps.
+    """
+    detail = f"materialize transforms: {task.transform_ids}"
+    typer.echo(f"  [materialize] {detail}")
+
+    for tid in task.transform_ids:
+        try:
+            path = _resolve_transform_path(
+                tid, ctx.recipe, ctx.project_root,
+            )
+        except ExecutorError as exc:
+            return StepResult(
+                step_kind="materialize",
+                detail=detail,
+                success=False,
+                error=str(exc),
+            )
+
+        if path.exists():
+            typer.echo(f"    reuse: {path.relative_to(ctx.project_root)}")
+            ctx.transform_paths[tid] = path
+        else:
+            return StepResult(
+                step_kind="materialize",
+                detail=detail,
+                success=False,
+                error=(
+                    f"Transform '{tid}' artifact not found at "
+                    f"{path.relative_to(ctx.project_root)}. "
+                    f"Run 'coclab generate xwalks' to build it first."
+                ),
+            )
+
+    return StepResult(step_kind="materialize", detail=detail, success=True)
+
+
+def _execute_resample(
+    task: ResampleTask,
+    ctx: ExecutionContext,
+) -> StepResult:
+    """Execute a resample step (identity/aggregate/allocate).
+
+    Loads the input dataset, applies the resampling method, validates
+    required columns, and stores the result in ``ctx.intermediates``.
+    """
+    detail = (
+        f"resample {task.dataset_id} year={task.year} "
+        f"method={task.method}"
+    )
+    if task.transform_id:
+        detail += f" via={task.transform_id}"
+    typer.echo(f"  [resample] {detail}")
+
+    # Load input dataset
+    if task.input_path is None:
+        return StepResult(
+            step_kind="resample",
+            detail=detail,
+            success=False,
+            error=(
+                f"Dataset '{task.dataset_id}' year {task.year}: "
+                f"no input path resolved by planner."
+            ),
+        )
+
+    input_file = ctx.project_root / task.input_path
+    if not input_file.exists():
+        return StepResult(
+            step_kind="resample",
+            detail=detail,
+            success=False,
+            error=(
+                f"Dataset '{task.dataset_id}' year {task.year}: "
+                f"input file not found at {task.input_path}"
+            ),
+        )
+
+    try:
+        df = pd.read_parquet(input_file)
+    except Exception as exc:
+        return StepResult(
+            step_kind="resample",
+            detail=detail,
+            success=False,
+            error=(
+                f"Dataset '{task.dataset_id}' year {task.year}: "
+                f"failed to read {task.input_path}: {exc}"
+            ),
+        )
+
+    try:
+        if task.method == "identity":
+            result_df = _resample_identity(df, task)
+        elif task.method in ("aggregate", "allocate"):
+            # Load crosswalk
+            if task.transform_id is None:
+                return StepResult(
+                    step_kind="resample",
+                    detail=detail,
+                    success=False,
+                    error=(
+                        f"Dataset '{task.dataset_id}' year {task.year}: "
+                        f"method={task.method} requires a transform but "
+                        f"none was resolved."
+                    ),
+                )
+            xwalk_path = ctx.transform_paths.get(task.transform_id)
+            if xwalk_path is None:
+                return StepResult(
+                    step_kind="resample",
+                    detail=detail,
+                    success=False,
+                    error=(
+                        f"Transform '{task.transform_id}' not materialized. "
+                        f"Ensure a materialize step runs first."
+                    ),
+                )
+            xwalk = pd.read_parquet(xwalk_path)
+
+            if task.method == "aggregate":
+                result_df = _resample_aggregate(df, xwalk, task)
+            else:
+                result_df = _resample_allocate(df, xwalk, task)
+        else:
+            return StepResult(
+                step_kind="resample",
+                detail=detail,
+                success=False,
+                error=f"Unknown resample method '{task.method}'.",
+            )
+    except ExecutorError as exc:
+        return StepResult(
+            step_kind="resample",
+            detail=detail,
+            success=False,
+            error=str(exc),
+        )
+
+    # Store intermediate
+    ctx.intermediates[(task.dataset_id, task.year)] = result_df
+    return StepResult(step_kind="resample", detail=detail, success=True)
+
+
+def _execute_join(
+    task: JoinTask,
+    ctx: ExecutionContext,
+) -> StepResult:
+    """Execute a join step (merge resampled datasets for a year).
+
+    Looks up intermediates for each dataset at the given year and
+    performs an outer join on the specified keys.  Stores the result
+    back in ``ctx.intermediates`` keyed as ``("__joined__", year)``.
+    """
+    detail = (
+        f"join datasets={task.datasets} year={task.year} "
+        f"on={task.join_on}"
+    )
+    typer.echo(f"  [join] {detail}")
+
+    frames: list[pd.DataFrame] = []
+    for ds_id in task.datasets:
+        key = (ds_id, task.year)
+        if key not in ctx.intermediates:
+            return StepResult(
+                step_kind="join",
+                detail=detail,
+                success=False,
+                error=(
+                    f"Intermediate for dataset '{ds_id}' year {task.year} "
+                    f"not found. Ensure a resample step produces it first."
+                ),
+            )
+        frames.append(ctx.intermediates[key])
+
+    if not frames:
+        return StepResult(
+            step_kind="join",
+            detail=detail,
+            success=False,
+            error="No datasets to join.",
+        )
+
+    # Use the available join keys that exist in all frames
+    join_keys = [k for k in task.join_on if all(k in f.columns for f in frames)]
+    if not join_keys:
+        return StepResult(
+            step_kind="join",
+            detail=detail,
+            success=False,
+            error=(
+                f"None of the join keys {task.join_on} are present "
+                f"in all intermediate datasets."
+            ),
+        )
+
+    # Progressive outer join
+    merged = frames[0]
+    for frame in frames[1:]:
+        merged = merged.merge(frame, on=join_keys, how="outer")
+
+    ctx.intermediates[("__joined__", task.year)] = merged
+    return StepResult(step_kind="join", detail=detail, success=True)
+
+
+# ---------------------------------------------------------------------------
+# Output persistence
+# ---------------------------------------------------------------------------
+
+
+def _build_provenance(
+    recipe: RecipeV1,
+    pipeline_id: str,
+    ctx: ExecutionContext,
+) -> dict[str, object]:
+    """Build provenance metadata for the output artifact."""
+    return {
+        "recipe_name": recipe.name,
+        "recipe_version": recipe.version,
+        "pipeline_id": pipeline_id,
+        "datasets": {
+            ds_id: {
+                "provider": ds.provider,
+                "product": ds.product,
+                "version": ds.version,
+                "path": ds.path,
+            }
+            for ds_id, ds in recipe.datasets.items()
+        },
+        "transforms": {
+            tid: str(path.relative_to(ctx.project_root))
+            for tid, path in ctx.transform_paths.items()
+        },
+    }
+
+
+def _persist_outputs(
+    plan: ExecutionPlan,
+    ctx: ExecutionContext,
+) -> StepResult:
+    """Collect joined intermediates and write panel output.
+
+    Concatenates all ``("__joined__", year)`` intermediates into a
+    single DataFrame, writes it to the canonical panel path, and
+    attaches provenance metadata.
+    """
+    # Find the pipeline target to determine output geometry
+    pipeline = None
+    for p in ctx.recipe.pipelines:
+        if p.id == plan.pipeline_id:
+            pipeline = p
+            break
+    if pipeline is None:
+        return StepResult(
+            step_kind="persist",
+            detail="persist outputs",
+            success=False,
+            error=f"Pipeline '{plan.pipeline_id}' not found in recipe.",
+        )
+
+    target = None
+    for t in ctx.recipe.targets:
+        if t.id == pipeline.target:
+            target = t
+            break
+    if target is None:
+        return StepResult(
+            step_kind="persist",
+            detail="persist outputs",
+            success=False,
+            error=f"Target '{pipeline.target}' not found in recipe.",
+        )
+
+    # Collect joined DataFrames
+    universe_years = expand_year_spec(ctx.recipe.universe)
+    frames: list[pd.DataFrame] = []
+    for year in universe_years:
+        key = ("__joined__", year)
+        if key in ctx.intermediates:
+            frames.append(ctx.intermediates[key])
+
+    if not frames:
+        return StepResult(
+            step_kind="persist",
+            detail="persist outputs",
+            success=False,
+            error="No joined outputs to persist.",
+        )
+
+    panel = pd.concat(frames, ignore_index=True)
+
+    # Determine output path using canonical naming
+    boundary_vintage = str(target.geometry.vintage or "unknown")
+    start_year = min(universe_years)
+    end_year = max(universe_years)
+    output_dir = ctx.project_root / "data" / "curated" / "panel"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file = output_dir / panel_filename(start_year, end_year, boundary_vintage)
+
+    # Build provenance and write with metadata
+    provenance = _build_provenance(ctx.recipe, plan.pipeline_id, ctx)
+    table = pa.Table.from_pandas(panel)
+    metadata = table.schema.metadata or {}
+    metadata[b"coclab_provenance"] = json.dumps(provenance).encode()
+    table = table.replace_schema_metadata(metadata)
+    pq.write_table(table, output_file)
+
+    detail = (
+        f"persist panel: {len(frames)} year(s), "
+        f"{len(panel)} rows → "
+        f"{output_file.relative_to(ctx.project_root)}"
+    )
+    typer.echo(f"  [persist] {detail}")
+    return StepResult(step_kind="persist", detail=detail, success=True)
+
+
+# ---------------------------------------------------------------------------
+# Pipeline orchestrator
+# ---------------------------------------------------------------------------
+
+
+def _execute_plan(
+    plan: ExecutionPlan,
+    recipe: RecipeV1,
+    project_root: Path,
+) -> PipelineResult:
+    """Execute all tasks in a resolved plan in deterministic order.
+
+    Order: materialize → resample → join → persist.
+    Stops on first failure and reports context.
+    """
+    ctx = ExecutionContext(
+        project_root=project_root,
+        recipe=recipe,
+    )
+    result = PipelineResult(pipeline_id=plan.pipeline_id)
+
+    # Phase 1: materialize
+    for task in plan.materialize_tasks:
+        step = _execute_materialize(task, ctx)
+        result.steps.append(step)
+        if not step.success:
+            return result
+
+    # Phase 2: resample
+    for task in plan.resample_tasks:
+        step = _execute_resample(task, ctx)
+        result.steps.append(step)
+        if not step.success:
+            return result
+
+    # Phase 3: join
+    for task in plan.join_tasks:
+        step = _execute_join(task, ctx)
+        result.steps.append(step)
+        if not step.success:
+            return result
+
+    # Phase 4: persist outputs (only if there are join tasks)
+    if plan.join_tasks:
+        step = _persist_outputs(plan, ctx)
+        result.steps.append(step)
+        if not step.success:
+            return result
+
+    return result
+
+
+def execute_recipe(
+    recipe: RecipeV1,
+    project_root: Path | None = None,
+) -> list[PipelineResult]:
+    """Execute all pipelines in a recipe.
+
+    Parameters
+    ----------
+    recipe : RecipeV1
+        A validated recipe.
+    project_root : Path | None
+        Project root for resolving dataset paths.  Defaults to cwd.
+
+    Returns
+    -------
+    list[PipelineResult]
+        One result per pipeline.
+
+    Raises
+    ------
+    ExecutorError
+        If a planner or runtime error occurs.  The message includes
+        pipeline and step context for actionable diagnostics.
+    """
+    if project_root is None:
+        project_root = Path.cwd()
+
+    results: list[PipelineResult] = []
+
+    for pipeline in recipe.pipelines:
+        typer.echo(f"\nExecuting pipeline '{pipeline.id}'...")
+
+        # Resolve the execution plan
+        try:
+            plan = resolve_plan(recipe, pipeline.id)
+        except PlannerError as exc:
+            raise ExecutorError(
+                f"Pipeline '{pipeline.id}': planning failed: {exc}"
+            ) from exc
+
+        task_count = (
+            len(plan.materialize_tasks)
+            + len(plan.resample_tasks)
+            + len(plan.join_tasks)
+        )
+        typer.echo(f"  Resolved {task_count} tasks")
+
+        # Execute the plan
+        result = _execute_plan(plan, recipe, project_root)
+        results.append(result)
+
+        if result.success:
+            typer.echo(
+                f"  Pipeline '{pipeline.id}' completed: "
+                f"{len(result.steps)} steps OK"
+            )
+        else:
+            failed = next(s for s in result.steps if not s.success)
+            raise ExecutorError(
+                f"Pipeline '{pipeline.id}': step failed: "
+                f"[{failed.step_kind}] {failed.detail}"
+                + (f" — {failed.error}" if failed.error else "")
+            )
+
+    return results

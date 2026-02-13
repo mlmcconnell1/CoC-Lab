@@ -14,6 +14,7 @@ from coclab.recipe.adapters import (
     validate_recipe_adapters,
 )
 from coclab.recipe.default_adapters import register_defaults
+from coclab.recipe.executor import ExecutorError, execute_recipe
 from coclab.recipe.loader import RecipeLoadError, load_recipe
 from coclab.recipe.recipe_schema import RecipeV1, expand_year_spec
 
@@ -190,4 +191,15 @@ def recipe_cmd(
     if dry_run:
         return
 
-    # TODO: execute the build pipeline here
+    # Execute the build pipeline
+    try:
+        results = execute_recipe(parsed)
+    except ExecutorError as exc:
+        typer.echo(f"\nExecution error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    total_steps = sum(len(r.steps) for r in results)
+    typer.echo(
+        f"\nRecipe '{parsed.name}' executed: "
+        f"{len(results)} pipeline(s), {total_steps} steps completed."
+    )
