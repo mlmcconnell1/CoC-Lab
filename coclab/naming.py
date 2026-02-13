@@ -706,3 +706,25 @@ def _abbreviate_weighting(weighting: str) -> str:
         "area": "area",
     }
     return abbreviations.get(weighting, weighting)
+
+
+# ---------------------------------------------------------------------------
+# PEP (Population Estimates Program) filenames
+# ---------------------------------------------------------------------------
+
+
+def coc_pep_filename(
+    boundary_vintage: int | str,
+    county_vintage: int | str,
+    weighting: str,
+    start_year: int,
+    end_year: int,
+) -> str:
+    """Canonical filename for CoC-level PEP aggregate output.
+
+    Pattern: ``coc_pep__B{boundary}xC{county}__w{weighting}__{start}_{end}.parquet``
+    """
+    return (
+        f"coc_pep__B{boundary_vintage}xC{county_vintage}"
+        f"__w{weighting}__{start_year}_{end_year}.parquet"
+    )

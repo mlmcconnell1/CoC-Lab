@@ -1,7 +1,7 @@
 # Curated Data Policy + Recipe Vintage-Set Plan (Option 1)
 
-Status: Proposed
-Version: 0.1
+Status: Mostly Implemented (Feb 2026)
+Version: 0.2
 Applies to: `data/curated/**`, recipe schema/planner, export selection, and migration utilities
 
 ## Goal
@@ -94,33 +94,41 @@ vintage_sets:
 
 Then allow dataset file_sets to reference that set (or inline equivalent) and map template variables.
 
-### 4) Planner requirements
+### 4) Planner requirements -- IMPLEMENTED
 
-- Expand all set rules deterministically into `(year -> tuple)` mappings.
-- Enforce exactly-one resolution per dataset-year.
-- Validate template variable coverage per segment/rule.
-- Emit clear diagnostics for:
-  - missing tuple for year
-  - multiple tuples for year
-  - unresolved path template vars
+Functions in `coclab/recipe/planner.py`:
+- `expand_vintage_set(spec)` — expands rules into `{year: {dim: value}}` mapping.
+- `resolve_vintage_tuple(name, year, recipe)` — resolves one year from a named set.
+
+Diagnostics for:
+- Overlapping rules (multiple tuples for year)
+- Missing dimension coverage
+- Uncovered year (no rule applies)
+- Missing template variables in file_set path expansion
 
 ## Enforcement and Migration
 
-### Phase 1: Policy + validation
-- Add curated compliance tests mirroring raw retention style.
-- Add `coclab validate curated-layout` command.
+### Phase 1: Policy + validation -- DONE
+- Curated compliance tests in `tests/test_curated_compliance.py`.
+- `coclab validate curated-layout` command in `coclab/cli/validate_curated.py`.
+- Policy module at `coclab/curated_policy.py`.
 
-### Phase 2: Canonical writes
-- Update remaining writers to canonical filenames only.
-- Keep readers/fallbacks during transition window.
+### Phase 2: Canonical writes -- DONE
+- All curated writers now use `coclab/naming.py` helpers.
+- PEP was the last holdout; `coc_pep_filename()` added and wired in.
+- Readers retain legacy fallback during transition.
 
-### Phase 3: Backfill + dedupe
-- Add migration utility to rename/normalize legacy artifacts.
-- Keep a manifest of moved files and duplicate resolutions.
+### Phase 3: Backfill + dedupe -- DONE (tooling)
+- Migration utility at `coclab/curated_migrate.py`.
+- CLI command: `coclab migrate curated-layout [--apply]`.
+- Dry-run mode (default) shows planned renames and conflicts.
+- Apply mode renames deterministically.
+- Execution on actual repository data is a manual step (coclab-oizg.7).
 
-### Phase 4: Tighten defaults
+### Phase 4: Tighten defaults -- PLANNED
 - Deprecation warnings for legacy reads.
 - Remove legacy fallback in high-confidence modules once migration target met.
+- Target: after migration has been executed and validated.
 
 ## Acceptance Criteria
 

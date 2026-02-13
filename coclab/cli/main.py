@@ -13,6 +13,7 @@ from typing import Annotated
 import typer
 
 from coclab.cli.aggregate import aggregate_app
+from coclab.cli.migrate_curated import migrate_curated_cmd
 from coclab.cli.validate_curated import validate_curated_layout_cmd
 from coclab.cli.build_panel import build_panel_cmd
 from coclab.cli.build_xwalks import build_xwalks
@@ -98,6 +99,11 @@ validate_app = typer.Typer(
 diagnostics_app = typer.Typer(
     name="diagnostics",
     help="Run diagnostics on datasets",
+    no_args_is_help=True,
+)
+migrate_app = typer.Typer(
+    name="migrate",
+    help="Run data migration utilities",
     no_args_is_help=True,
 )
 generate_app = typer.Typer(
@@ -1474,6 +1480,7 @@ app.add_typer(build_app, name="build")
 app.add_typer(aggregate_app, name="aggregate")
 app.add_typer(show_app, name="show")
 app.add_typer(registry_app, name="registry")
+app.add_typer(migrate_app, name="migrate")
 app.command("ingest-boundaries", hidden=True)(ingest_boundaries_deprecated)
 app.command("ingest-census", hidden=True)(ingest_census_deprecated)
 app.command("ingest-nhgis", hidden=True)(ingest_nhgis_deprecated)
@@ -1528,6 +1535,7 @@ show_app.command("measures")(show_measures)
 show_app.command("sources")(source_status)
 registry_app.command("delete-entry")(delete_boundaries)
 registry_app.command("rebuild")(registry_rebuild)
+migrate_app.command("curated-layout")(migrate_curated_cmd)
 
 
 if __name__ == "__main__":

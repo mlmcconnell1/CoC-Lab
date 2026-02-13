@@ -112,8 +112,10 @@ def list_measures(
         typer.echo(f"No measure files found in: {measures_dir}")
         return
 
-    # Sort by boundary vintage, then ACS vintage
-    measure_files.sort(key=lambda x: (x[1], x[2]))
+    # Sort by boundary vintage, then ACS vintage; canonical names first
+    measure_files.sort(
+        key=lambda x: (x[1], x[2], not x[0].name.startswith("measures__"))
+    )
 
     # Collect metadata for each file
     rows = []

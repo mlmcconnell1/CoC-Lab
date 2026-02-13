@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from coclab.naming import coc_pep_filename
 from coclab.provenance import ProvenanceBlock, read_provenance, write_parquet_with_provenance
 
 logger = logging.getLogger(__name__)
@@ -163,9 +164,8 @@ def get_output_path(
     else:
         output_dir = Path(output_dir)
 
-    filename = (
-        f"coc_pep__B{boundary_vintage}xC{county_vintage}"
-        f"__w{weighting}__{start_year}_{end_year}.parquet"
+    filename = coc_pep_filename(
+        boundary_vintage, county_vintage, weighting, start_year, end_year,
     )
     return output_dir / filename
 

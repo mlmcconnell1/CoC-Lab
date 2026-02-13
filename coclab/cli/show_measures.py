@@ -24,8 +24,11 @@ def _find_latest_measures_file(measures_dir: Path) -> Path | None:
 
     if not files:
         return None
-    # Sort by modification time, most recent first
-    return max(files, key=lambda p: p.stat().st_mtime)
+    # Prefer canonical names, then most recent modification time
+    return max(
+        files,
+        key=lambda p: (p.name.startswith("measures__"), p.stat().st_mtime),
+    )
 
 
 def _parse_measures_filename(filename: str) -> tuple[str | None, str | None]:
@@ -96,8 +99,12 @@ def _find_measures_file(
     if not matching:
         return None
 
-    # Return most recent if multiple matches
-    return max(matching, key=lambda p: p.stat().st_mtime)
+    # Prefer canonical (measures__A*) over legacy (coc_measures__*),
+    # then most recent modification time as tiebreaker.
+    return max(
+        matching,
+        key=lambda p: (p.name.startswith("measures__"), p.stat().st_mtime),
+    )
 
 
 def _format_number(value: float | None, prefix: str = "", suffix: str = "") -> str:
@@ -187,7 +194,7 @@ def show_measures(
     if not measures_dir.exists():
         typer.echo(
             f"Error: Measures directory not found: {measures_dir}. "
-            "Run 'coclab build-measures' first.",
+            "Run 'coclab aggregate acs --build <name>' to generate measures.",
             err=True,
         )
         raise typer.Exit(1)
@@ -215,7 +222,7 @@ def show_measures(
             )
         else:
             typer.echo(
-                "Error: No measures files found. Run 'coclab build-measures' first.",
+                "Error: No measures files found. Run 'coclab aggregate acs --build <name>' to generate measures.",
                 err=True,
             )
         raise typer.Exit(1)

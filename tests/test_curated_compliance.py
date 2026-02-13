@@ -269,3 +269,104 @@ class TestPatternCoverage:
     def test_all_subdirs_have_patterns(self) -> None:
         missing = CURATED_SUBDIRS - set(CANONICAL_PATTERNS.keys())
         assert not missing, f"Subdirs without canonical patterns: {missing}"
+
+
+# ---------------------------------------------------------------------------
+# Migration utility tests
+# ---------------------------------------------------------------------------
+
+
+class TestCuratedMigration:
+    """Tests for the curated data migration utility."""
+
+    def test_empty_dir_returns_empty_plan(self, tmp_path: Path) -> None:
+        from coclab.curated_migrate import scan_curated_for_migration
+
+        plan = scan_curated_for_migration(tmp_path)
+        assert plan.renames == []
+        assert plan.duplicates == []
+        assert plan.unknown == []
+
+    def test_canonical_files_not_flagged(self, tmp_path: Path) -> None:
+        from coclab.curated_migrate import scan_curated_for_migration
+
+        (tmp_path / "coc_boundaries").mkdir()
+        (tmp_path / "coc_boundaries" / "coc__B2025.parquet").touch()
+        plan = scan_curated_for_migration(tmp_path)
+        assert plan.renames == []
+        assert plan.unknown == []
+
+    def test_legacy_boundary_rename_proposed(self, tmp_path: Path) -> None:
+        from coclab.curated_migrate import scan_curated_for_migration
+
+        (tmp_path / "coc_boundaries").mkdir()
+        (tmp_path / "coc_boundaries" / "boundaries__B2025.parquet").touch()
+        plan = scan_curated_for_migration(tmp_path)
+        # boundaries__B{year} is recognized as canonical by policy, so no rename
+        assert plan.renames == []
+
+    def test_legacy_measures_rename_proposed(self, tmp_path: Path) -> None:
+        from coclab.curated_migrate import scan_curated_for_migration
+
+        (tmp_path / "measures").mkdir()
+        (tmp_path / "measures" / "coc_measures__2025__2023.parquet").touch()
+        plan = scan_curated_for_migration(tmp_path)
+        assert len(plan.renames) == 1
+        assert plan.renames[0].action == "rename"
+        assert "measures__A2023@B2025" in str(plan.renames[0].target)
+
+    def test_duplicate_detected(self, tmp_path: Path) -> None:
+        from coclab.curated_migrate import scan_curated_for_migration
+
+        (tmp_path / "measures").mkdir()
+        # Both legacy and canonical exist
+        (tmp_path / "measures" / "coc_measures__2025__2023.parquet").touch()
+        (tmp_path / "measures" / "measures__A2023@B2025.parquet").touch()
+        plan = scan_curated_for_migration(tmp_path)
+        assert len(plan.duplicates) == 1
+        assert plan.duplicates[0].action == "duplicate"
+
+    def test_apply_dry_run_does_not_rename(self, tmp_path: Path) -> None:
+        from coclab.curated_migrate import apply_migration, scan_curated_for_migration
+
+        (tmp_path / "measures").mkdir()
+        src = tmp_path / "measures" / "coc_measures__2025__2023.parquet"
+        src.touch()
+        plan = scan_curated_for_migration(tmp_path)
+        log = apply_migration(plan, dry_run=True)
+        assert src.exists()  # Not renamed
+        assert len(log) >= 1
+        assert "[DRY-RUN]" in log[0]
+
+    def test_apply_executes_rename(self, tmp_path: Path) -> None:
+        from coclab.curated_migrate import apply_migration, scan_curated_for_migration
+
+        (tmp_path / "measures").mkdir()
+        src = tmp_path / "measures" / "coc_measures__2025__2023.parquet"
+        src.touch()
+        plan = scan_curated_for_migration(tmp_path)
+        log = apply_migration(plan, dry_run=False)
+        assert not src.exists()
+        assert (tmp_path / "measures" / "measures__A2023@B2025.parquet").exists()
+        assert "[DRY-RUN]" not in log[0]
+
+
+# ---------------------------------------------------------------------------
+# PEP naming helper tests
+# ---------------------------------------------------------------------------
+
+
+class TestPepNaming:
+    """Tests for the PEP canonical naming helper."""
+
+    def test_coc_pep_filename(self) -> None:
+        from coclab.naming import coc_pep_filename
+
+        result = coc_pep_filename(2024, 2024, "area_share", 2020, 2024)
+        assert result == "coc_pep__B2024xC2024__warea_share__2020_2024.parquet"
+
+    def test_coc_pep_filename_string_vintages(self) -> None:
+        from coclab.naming import coc_pep_filename
+
+        result = coc_pep_filename("2025", "2020", "pop", 2018, 2024)
+        assert result == "coc_pep__B2025xC2020__wpop__2018_2024.parquet"

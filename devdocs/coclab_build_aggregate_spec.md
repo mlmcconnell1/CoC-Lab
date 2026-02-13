@@ -112,7 +112,8 @@ Alignment modes:
 
 - `vintage_end_year` (default)
 - `window_center_year`
-- `as_reported`
+
+> `as_reported` is reserved for future implementation.
 
 ## 3.4 `coclab aggregate zori`
 

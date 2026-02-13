@@ -13,6 +13,7 @@ from coclab.recipe.adapters import (
     geometry_registry,
     validate_recipe_adapters,
 )
+from coclab.recipe.default_adapters import register_defaults
 from coclab.recipe.loader import RecipeLoadError, load_recipe
 from coclab.recipe.recipe_schema import RecipeV1, expand_year_spec
 
@@ -76,7 +77,22 @@ def _check_dataset_paths(
                     if year in seg.overrides:
                         p = seg.overrides[year]
                     else:
-                        p = ds.file_set.path_template.format(year=year)
+                        render_ctx: dict[str, object] = {"year": year}
+                        render_ctx.update(seg.constants)
+                        render_ctx.update(
+                            {k: year + offset for k, offset in seg.year_offsets.items()}
+                        )
+                        try:
+                            p = ds.file_set.path_template.format(**render_ctx)
+                        except KeyError as exc:
+                            results.append(ValidationDiagnostic(
+                                level=level,
+                                message=(
+                                    f"Dataset '{ds_id}' file_set template variable "
+                                    f"'{exc.args[0]}' not provided for year {year}."
+                                ),
+                            ))
+                            continue
                     resolved = project_root / p
                     if not resolved.exists():
                         results.append(ValidationDiagnostic(
@@ -117,6 +133,9 @@ def recipe_cmd(
 
         coclab build recipe --recipe my_build.yaml --dry-run
     """
+    # 0. Ensure built-in adapters are registered
+    register_defaults()
+
     # 1. Load and structurally validate the recipe
     try:
         parsed = load_recipe(recipe)

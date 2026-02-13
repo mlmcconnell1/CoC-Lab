@@ -22,6 +22,8 @@ from coclab.recipe.recipe_schema import (
     FileSetSpec,
     GeometryRef,
     RecipeV1,
+    VintageSetRule,
+    VintageSetSpec,
     YearSpec,
     expand_year_spec,
 )
@@ -901,3 +903,372 @@ class TestVintageSetsSchema:
         }
         recipe = load_recipe(data)
         assert len(recipe.vintage_sets) == 2
+
+
+# ---------------------------------------------------------------------------
+# Default adapter registration tests
+# ---------------------------------------------------------------------------
+
+
+class TestDefaultAdapters:
+    """Tests for built-in adapter registration."""
+
+    def test_register_defaults_idempotent(self):
+        from coclab.recipe.default_adapters import register_defaults
+        from coclab.recipe.adapters import geometry_registry, dataset_registry
+
+        geometry_registry.reset()
+        dataset_registry.reset()
+        register_defaults()
+        types_1 = geometry_registry.registered_types()
+        products_1 = dataset_registry.registered_products()
+        register_defaults()
+        assert geometry_registry.registered_types() == types_1
+        assert dataset_registry.registered_products() == products_1
+
+    def test_geometry_types_registered(self):
+        from coclab.recipe.default_adapters import register_defaults
+        from coclab.recipe.adapters import geometry_registry
+
+        geometry_registry.reset()
+        register_defaults()
+        assert "coc" in geometry_registry.registered_types()
+        assert "tract" in geometry_registry.registered_types()
+        assert "county" in geometry_registry.registered_types()
+
+    def test_dataset_products_registered(self):
+        from coclab.recipe.default_adapters import register_defaults
+        from coclab.recipe.adapters import dataset_registry
+
+        dataset_registry.reset()
+        register_defaults()
+        products = dataset_registry.registered_products()
+        assert ("hud", "pit") in products
+        assert ("census", "acs5") in products
+        assert ("census", "acs") in products
+        assert ("zillow", "zori") in products
+
+    def test_coc_valid(self):
+        from coclab.recipe.default_geometry_adapters import _validate_coc
+
+        diags = _validate_coc(GeometryRef(type="coc", vintage=2025, source="hud_exchange"))
+        assert diags == []
+
+    def test_coc_no_vintage_valid(self):
+        from coclab.recipe.default_geometry_adapters import _validate_coc
+
+        diags = _validate_coc(GeometryRef(type="coc"))
+        assert diags == []
+
+    def test_coc_early_vintage_warns(self):
+        from coclab.recipe.default_geometry_adapters import _validate_coc
+
+        diags = _validate_coc(GeometryRef(type="coc", vintage=1990))
+        assert len(diags) == 1
+        assert diags[0].level == "warning"
+
+    def test_tract_decennial_valid(self):
+        from coclab.recipe.default_geometry_adapters import _validate_tract
+
+        diags = _validate_tract(GeometryRef(type="tract", vintage=2020))
+        assert diags == []
+
+    def test_tract_non_decennial_warns(self):
+        from coclab.recipe.default_geometry_adapters import _validate_tract
+
+        diags = _validate_tract(GeometryRef(type="tract", vintage=2023))
+        assert len(diags) == 1
+        assert diags[0].level == "warning"
+        assert "decennial" in diags[0].message
+
+    def test_hud_pit_valid(self):
+        from coclab.recipe.default_dataset_adapters import _validate_hud_pit
+
+        spec = DatasetSpec(
+            provider="hud", product="pit", version=1,
+            native_geometry=GeometryRef(type="coc"),
+            params={"vintage": 2024, "align": "point_in_time_jan"},
+        )
+        diags = _validate_hud_pit(spec)
+        assert diags == []
+
+    def test_hud_pit_bad_version(self):
+        from coclab.recipe.default_dataset_adapters import _validate_hud_pit
+
+        spec = DatasetSpec(
+            provider="hud", product="pit", version=2,
+            native_geometry=GeometryRef(type="coc"),
+        )
+        diags = _validate_hud_pit(spec)
+        assert any(d.level == "error" and "version" in d.message for d in diags)
+
+    def test_hud_pit_wrong_geometry(self):
+        from coclab.recipe.default_dataset_adapters import _validate_hud_pit
+
+        spec = DatasetSpec(
+            provider="hud", product="pit", version=1,
+            native_geometry=GeometryRef(type="tract"),
+        )
+        diags = _validate_hud_pit(spec)
+        assert any(d.level == "error" and "coc" in d.message for d in diags)
+
+    def test_hud_pit_unknown_params_warns(self):
+        from coclab.recipe.default_dataset_adapters import _validate_hud_pit
+
+        spec = DatasetSpec(
+            provider="hud", product="pit", version=1,
+            native_geometry=GeometryRef(type="coc"),
+            params={"vintage": 2024, "unknown_param": True},
+        )
+        diags = _validate_hud_pit(spec)
+        assert any(d.level == "warning" and "unrecognized" in d.message for d in diags)
+
+    def test_census_acs5_valid(self):
+        from coclab.recipe.default_dataset_adapters import _validate_census_acs5
+
+        spec = DatasetSpec(
+            provider="census", product="acs5", version=1,
+            native_geometry=GeometryRef(type="tract", vintage=2020),
+        )
+        assert _validate_census_acs5(spec) == []
+
+    def test_census_acs_valid(self):
+        from coclab.recipe.default_dataset_adapters import _validate_census_acs
+
+        spec = DatasetSpec(
+            provider="census", product="acs", version=1,
+            native_geometry=GeometryRef(type="tract"),
+        )
+        assert _validate_census_acs(spec) == []
+
+    def test_zillow_zori_valid(self):
+        from coclab.recipe.default_dataset_adapters import _validate_zillow_zori
+
+        spec = DatasetSpec(
+            provider="zillow", product="zori", version=1,
+            native_geometry=GeometryRef(type="county"),
+        )
+        assert _validate_zillow_zori(spec) == []
+
+    def test_zillow_zori_wrong_geometry_warns(self):
+        from coclab.recipe.default_dataset_adapters import _validate_zillow_zori
+
+        spec = DatasetSpec(
+            provider="zillow", product="zori", version=1,
+            native_geometry=GeometryRef(type="zip"),
+        )
+        diags = _validate_zillow_zori(spec)
+        assert any(d.level == "warning" and "county" in d.message for d in diags)
+
+    def test_recipe_integration_no_adapter_errors(self):
+        """Full recipe validation with defaults registered produces no errors."""
+        from coclab.recipe.default_adapters import register_defaults
+        from coclab.recipe.adapters import geometry_registry, dataset_registry
+
+        geometry_registry.reset()
+        dataset_registry.reset()
+        register_defaults()
+
+        recipe = load_recipe({
+            "version": 1,
+            "name": "test",
+            "universe": {"range": "2020-2022"},
+            "targets": [{"id": "t", "geometry": {"type": "coc", "vintage": 2025}}],
+            "datasets": {
+                "pit": {
+                    "provider": "hud", "product": "pit", "version": 1,
+                    "native_geometry": {"type": "coc"},
+                    "params": {"vintage": 2024, "align": "point_in_time_jan"},
+                },
+            },
+        })
+        diags = validate_recipe_adapters(recipe, geometry_registry, dataset_registry)
+        errors = [d for d in diags if d.level == "error"]
+        assert errors == [], f"Unexpected errors: {[e.message for e in errors]}"
+
+
+# ---------------------------------------------------------------------------
+# Check dataset paths (file_set template expansion) tests
+# ---------------------------------------------------------------------------
+
+
+class TestCheckDatasetPathsFileSet:
+    """Tests for _check_dataset_paths with file_set templates."""
+
+    def test_file_set_template_variables_expanded(self, tmp_path):
+        """file_set path template should expand segment constants and year_offsets."""
+        from coclab.cli.recipe import _check_dataset_paths
+
+        recipe = load_recipe({
+            "version": 1,
+            "name": "test",
+            "universe": {"range": "2020-2021"},
+            "targets": [{"id": "t", "geometry": {"type": "coc"}}],
+            "datasets": {
+                "acs": {
+                    "provider": "census",
+                    "product": "acs",
+                    "version": 1,
+                    "native_geometry": {"type": "tract"},
+                    "file_set": {
+                        "path_template": "data/acs__A{acs_end}xT{tract}.parquet",
+                        "segments": [{
+                            "years": "2020-2021",
+                            "geometry": {"type": "tract", "vintage": 2020},
+                            "constants": {"tract": 2020},
+                            "year_offsets": {"acs_end": -1},
+                        }],
+                    },
+                },
+            },
+        })
+
+        # Create the expected files
+        for year in [2020, 2021]:
+            acs_end = year - 1
+            p = tmp_path / f"data/acs__A{acs_end}xT2020.parquet"
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.touch()
+
+        diags = _check_dataset_paths(recipe, project_root=tmp_path)
+        assert diags == [], f"Expected no diagnostics, got: {[d.message for d in diags]}"
+
+    def test_file_set_template_missing_file_reported(self, tmp_path):
+        """Missing file with correct template expansion should be reported."""
+        from coclab.cli.recipe import _check_dataset_paths
+
+        recipe = load_recipe({
+            "version": 1,
+            "name": "test",
+            "universe": {"range": "2020-2020"},
+            "targets": [{"id": "t", "geometry": {"type": "coc"}}],
+            "datasets": {
+                "acs": {
+                    "provider": "census",
+                    "product": "acs",
+                    "version": 1,
+                    "native_geometry": {"type": "tract"},
+                    "file_set": {
+                        "path_template": "data/acs__A{acs_end}xT{tract}.parquet",
+                        "segments": [{
+                            "years": "2020-2020",
+                            "geometry": {"type": "tract", "vintage": 2020},
+                            "constants": {"tract": 2020},
+                            "year_offsets": {"acs_end": -1},
+                        }],
+                    },
+                },
+            },
+        })
+
+        # Don't create the file - should report missing
+        diags = _check_dataset_paths(recipe, project_root=tmp_path)
+        assert len(diags) == 1
+        assert "A2019xT2020" in diags[0].message
+
+
+# ---------------------------------------------------------------------------
+# Vintage set expansion tests
+# ---------------------------------------------------------------------------
+
+
+class TestExpandVintageSet:
+    """Tests for vintage set tuple expansion."""
+
+    def test_basic_expansion(self):
+        from coclab.recipe.planner import expand_vintage_set
+
+        spec = VintageSetSpec(
+            dimensions=["analysis_year", "acs_end", "tract"],
+            rules=[
+                VintageSetRule(
+                    years=YearSpec(range="2015-2017"),
+                    constants={"tract": 2010},
+                    year_offsets={"analysis_year": 0, "acs_end": -1},
+                ),
+                VintageSetRule(
+                    years=YearSpec(range="2020-2022"),
+                    constants={"tract": 2020},
+                    year_offsets={"analysis_year": 0, "acs_end": -1},
+                ),
+            ],
+        )
+        result = expand_vintage_set(spec)
+        assert result[2015] == {"analysis_year": 2015, "acs_end": 2014, "tract": 2010}
+        assert result[2017] == {"analysis_year": 2017, "acs_end": 2016, "tract": 2010}
+        assert result[2020] == {"analysis_year": 2020, "acs_end": 2019, "tract": 2020}
+        assert result[2022] == {"analysis_year": 2022, "acs_end": 2021, "tract": 2020}
+        assert 2018 not in result
+
+    def test_overlapping_rules_raises(self):
+        from coclab.recipe.planner import PlannerError, expand_vintage_set
+
+        spec = VintageSetSpec(
+            dimensions=["x"],
+            rules=[
+                VintageSetRule(
+                    years=YearSpec(range="2015-2020"),
+                    year_offsets={"x": 0},
+                ),
+                VintageSetRule(
+                    years=YearSpec(range="2019-2024"),
+                    year_offsets={"x": 0},
+                ),
+            ],
+        )
+        with pytest.raises(PlannerError, match="overlapping"):
+            expand_vintage_set(spec)
+
+    def test_missing_dimension_raises(self):
+        from coclab.recipe.planner import PlannerError, expand_vintage_set
+
+        spec = VintageSetSpec(
+            dimensions=["x", "y"],
+            rules=[
+                VintageSetRule(
+                    years=YearSpec(range="2020-2020"),
+                    year_offsets={"x": 0},
+                ),
+            ],
+        )
+        with pytest.raises(PlannerError, match="dimensions"):
+            expand_vintage_set(spec)
+
+    def test_single_tuple_resolution(self):
+        from coclab.recipe.planner import resolve_vintage_tuple
+
+        recipe_data = _minimal_recipe()
+        recipe_data["vintage_sets"] = {
+            "test_vs": {
+                "dimensions": ["boundary", "tract"],
+                "rules": [{
+                    "years": "2020-2022",
+                    "year_offsets": {"boundary": 0},
+                    "constants": {"tract": 2020},
+                }],
+            },
+        }
+        recipe = load_recipe(recipe_data)
+        result = resolve_vintage_tuple("test_vs", 2021, recipe)
+        assert result == {"boundary": 2021, "tract": 2020}
+
+    def test_resolve_missing_vintage_set(self):
+        from coclab.recipe.planner import PlannerError, resolve_vintage_tuple
+
+        recipe = load_recipe(_minimal_recipe())
+        with pytest.raises(PlannerError, match="not found"):
+            resolve_vintage_tuple("nonexistent", 2020, recipe)
+
+    def test_resolve_uncovered_year(self):
+        from coclab.recipe.planner import PlannerError, resolve_vintage_tuple
+
+        recipe_data = _minimal_recipe()
+        recipe_data["vintage_sets"] = {
+            "test_vs": {
+                "dimensions": ["x"],
+                "rules": [{"years": "2020-2022", "year_offsets": {"x": 0}}],
+            },
+        }
+        recipe = load_recipe(recipe_data)
+        with pytest.raises(PlannerError, match="no rule covering"):
+            resolve_vintage_tuple("test_vs", 2025, recipe)

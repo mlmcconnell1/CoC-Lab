@@ -90,9 +90,22 @@ _VERSION_REGISTRY: dict[int, type] = {
 
 The loader dispatches on the `version` key in the YAML, so existing `version: 1` recipes continue to parse through `RecipeV1` with no code changes.
 
-## Adapter Registration
+## Built-in Adapter Bootstrap
 
-Geometry and dataset validation live in adapter registries, not in the schema.
+The recipe CLI automatically registers built-in adapters before validation via `register_defaults()` in `coclab/recipe/default_adapters.py`. This is called at the top of `recipe_cmd()` in `coclab/cli/recipe.py`.
+
+Built-in adapters are organized into two modules:
+
+| Module | Adapters |
+|--------|----------|
+| `coclab/recipe/default_geometry_adapters.py` | `coc`, `tract`, `county` |
+| `coclab/recipe/default_dataset_adapters.py` | `(hud, pit)`, `(census, acs5)`, `(census, acs)`, `(zillow, zori)` |
+
+Registration is idempotent — calling `register_defaults()` multiple times has no side effects beyond the first call (re-registration overwrites with the same function).
+
+## Adding Custom Adapters
+
+Geometry and dataset validation live in adapter registries, not in the schema. Custom adapters can be registered alongside the built-in defaults.
 
 ### Adding a geometry adapter
 
@@ -124,6 +137,13 @@ def validate_mit_election(spec: DatasetSpec) -> list[ValidationDiagnostic]:
 
 dataset_registry.register("mit-election", "county-returns", validate_mit_election)
 ```
+
+### Custom adapter lifecycle
+
+1. Built-in adapters are registered automatically when the recipe CLI runs.
+2. Custom adapters can be registered at any time before `validate_recipe_adapters()` is called.
+3. Unregistered geometry types or (provider, product) pairs produce clear `"error"` diagnostics.
+4. Custom adapters can override built-in ones by registering with the same key.
 
 ## Backward Compatibility Rules
 
