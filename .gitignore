@@ -22,3 +22,6 @@ wheels/
 
 # Obsidian
 .obsidian/
+
+# bv (beads viewer) local config and caches
+.bv/
