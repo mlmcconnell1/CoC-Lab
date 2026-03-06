@@ -16,6 +16,7 @@ from coclab.recipe.adapters import (
     ValidationDiagnostic,
     validate_recipe_adapters,
 )
+from coclab.recipe.cache import RecipeCache, _sha256_file
 from coclab.recipe.executor import (
     ExecutionContext,
     ExecutorError,
@@ -26,6 +27,13 @@ from coclab.recipe.executor import (
     _execute_resample,
     _resolve_transform_path,
     execute_recipe,
+)
+from coclab.recipe.manifest import (
+    AssetRecord,
+    RecipeManifest,
+    export_bundle,
+    read_manifest,
+    write_manifest,
 )
 from coclab.recipe.planner import MaterializeTask, ResampleTask
 from coclab.recipe.loader import RecipeLoadError, load_recipe
@@ -2320,3 +2328,323 @@ class TestJoinPersistence:
         assert result.exit_code == 0
         assert "persist" in result.output.lower()
         assert "panel" in result.output.lower()
+
+
+# ===========================================================================
+# Asset caching tests
+# ===========================================================================
+
+
+class TestRecipeCache:
+
+    def test_cache_avoids_reread(self, tmp_path: Path):
+        """Second read of same file returns cached DataFrame."""
+        f = tmp_path / "data.parquet"
+        pd.DataFrame({"x": [1, 2]}).to_parquet(f)
+        cache = RecipeCache(enabled=True)
+        df1 = cache.read_parquet(f)
+        df2 = cache.read_parquet(f)
+        assert df1.equals(df2)
+        assert cache.cached_count == 1
+
+    def test_cache_returns_copy(self, tmp_path: Path):
+        """Mutating a cached result does not corrupt the cache."""
+        f = tmp_path / "data.parquet"
+        pd.DataFrame({"x": [1, 2, 3]}).to_parquet(f)
+        cache = RecipeCache(enabled=True)
+        df1 = cache.read_parquet(f)
+        df1["x"] = 999
+        df2 = cache.read_parquet(f)
+        assert list(df2["x"]) == [1, 2, 3]
+
+    def test_disabled_cache_does_not_store(self, tmp_path: Path):
+        f = tmp_path / "data.parquet"
+        pd.DataFrame({"x": [1]}).to_parquet(f)
+        cache = RecipeCache(enabled=False)
+        cache.read_parquet(f)
+        assert cache.cached_count == 0
+
+    def test_file_identity(self, tmp_path: Path):
+        f = tmp_path / "data.parquet"
+        pd.DataFrame({"x": [1]}).to_parquet(f)
+        cache = RecipeCache()
+        identity = cache.file_identity(f)
+        assert len(identity.sha256) == 64
+        assert identity.size == f.stat().st_size
+        # Repeated call returns cached identity
+        identity2 = cache.file_identity(f)
+        assert identity2 is identity
+
+    def test_sha256_file(self, tmp_path: Path):
+        f = tmp_path / "hello.txt"
+        f.write_text("hello world")
+        h = _sha256_file(f)
+        assert len(h) == 64
+        assert h == _sha256_file(f)  # deterministic
+
+
+# ===========================================================================
+# Manifest tests
+# ===========================================================================
+
+
+class TestRecipeManifest:
+
+    def test_roundtrip_json(self):
+        m = RecipeManifest(
+            recipe_name="test",
+            recipe_version=1,
+            pipeline_id="main",
+            assets=[
+                AssetRecord(
+                    role="dataset",
+                    path="data/pit.parquet",
+                    sha256="abc123",
+                    size=1000,
+                    dataset_id="pit",
+                ),
+            ],
+        )
+        json_str = m.to_json()
+        m2 = RecipeManifest.from_json(json_str)
+        assert m2.recipe_name == "test"
+        assert len(m2.assets) == 1
+        assert m2.assets[0].sha256 == "abc123"
+
+    def test_write_and_read_manifest(self, tmp_path: Path):
+        m = RecipeManifest(
+            recipe_name="test",
+            recipe_version=1,
+            pipeline_id="main",
+        )
+        path = tmp_path / "manifest.json"
+        write_manifest(m, path)
+        assert path.exists()
+        m2 = read_manifest(path)
+        assert m2.recipe_name == "test"
+
+    def test_export_bundle_copies_assets(self, tmp_path: Path):
+        # Create source files
+        (tmp_path / "data").mkdir()
+        src = tmp_path / "data" / "pit.parquet"
+        pd.DataFrame({"x": [1]}).to_parquet(src)
+
+        m = RecipeManifest(
+            recipe_name="test",
+            recipe_version=1,
+            pipeline_id="main",
+            assets=[
+                AssetRecord(
+                    role="dataset",
+                    path="data/pit.parquet",
+                    sha256="abc",
+                    size=100,
+                ),
+            ],
+        )
+        out = tmp_path / "bundle"
+        export_bundle(m, tmp_path, out)
+        assert (out / "manifest.json").exists()
+        assert (out / "assets" / "data" / "pit.parquet").exists()
+
+    def test_export_skips_missing_files(self, tmp_path: Path):
+        """Non-existent assets are skipped without error."""
+        m = RecipeManifest(
+            recipe_name="test",
+            recipe_version=1,
+            pipeline_id="main",
+            assets=[
+                AssetRecord(
+                    role="dataset",
+                    path="does/not/exist.parquet",
+                    sha256="abc",
+                    size=0,
+                ),
+            ],
+        )
+        out = tmp_path / "bundle"
+        export_bundle(m, tmp_path, out)
+        assert (out / "manifest.json").exists()
+
+
+# ===========================================================================
+# Provenance manifest integration tests
+# ===========================================================================
+
+
+class TestProvenanceManifest:
+
+    def test_execution_writes_manifest_sidecar(self, tmp_path: Path):
+        """Full pipeline writes both panel and manifest.json sidecar."""
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        recipe = load_recipe(data)
+        execute_recipe(recipe, project_root=tmp_path)
+        manifest_file = (
+            tmp_path / "data" / "curated" / "panel"
+            / "panel__Y2020-2021@B2025.manifest.json"
+        )
+        assert manifest_file.exists()
+        m = read_manifest(manifest_file)
+        assert m.recipe_name == "executor-test"
+        assert m.pipeline_id == "main"
+
+    def test_manifest_records_consumed_assets(self, tmp_path: Path):
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        recipe = load_recipe(data)
+        execute_recipe(recipe, project_root=tmp_path)
+        manifest_file = (
+            tmp_path / "data" / "curated" / "panel"
+            / "panel__Y2020-2021@B2025.manifest.json"
+        )
+        m = read_manifest(manifest_file)
+        # Should have crosswalk + 2 datasets (pit, acs) deduplicated
+        roles = {a.role for a in m.assets}
+        assert "crosswalk" in roles
+        assert "dataset" in roles
+        # Each asset should have a sha256
+        for a in m.assets:
+            assert len(a.sha256) == 64
+
+    def test_provenance_includes_consumed_assets(self, tmp_path: Path):
+        """Parquet metadata provenance includes consumed_assets."""
+        import json as json_mod
+        import pyarrow.parquet as pq
+
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        recipe = load_recipe(data)
+        execute_recipe(recipe, project_root=tmp_path)
+        panel_file = (
+            tmp_path / "data" / "curated" / "panel"
+            / "panel__Y2020-2021@B2025.parquet"
+        )
+        table = pq.read_table(panel_file)
+        prov = json_mod.loads(table.schema.metadata[b"coclab_provenance"])
+        assert "consumed_assets" in prov
+        assert len(prov["consumed_assets"]) > 0
+        asset = prov["consumed_assets"][0]
+        assert "sha256" in asset
+        assert "size" in asset
+
+    def test_cache_reuse_during_execution(self, tmp_path: Path):
+        """Cache should avoid re-reading the same file for multiple years."""
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        recipe = load_recipe(data)
+        cache = RecipeCache(enabled=True)
+        execute_recipe(recipe, project_root=tmp_path, cache=cache)
+        # With 2 years and 2 datasets in same files + 1 crosswalk,
+        # cache should hold 3 unique files (pit, acs, crosswalk)
+        assert cache.cached_count == 3
+
+    def test_no_cache_flag_disables_caching(self, tmp_path: Path):
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        recipe = load_recipe(data)
+        cache = RecipeCache(enabled=False)
+        execute_recipe(recipe, project_root=tmp_path, cache=cache)
+        assert cache.cached_count == 0
+
+
+# ===========================================================================
+# CLI provenance / export command tests
+# ===========================================================================
+
+
+class TestRecipeProvenanceCLI:
+
+    def test_provenance_shows_manifest(self, tmp_path: Path):
+        m = RecipeManifest(
+            recipe_name="demo",
+            recipe_version=1,
+            pipeline_id="main",
+            assets=[
+                AssetRecord(
+                    role="dataset",
+                    path="data/pit.parquet",
+                    sha256="a" * 64,
+                    size=2048,
+                    dataset_id="pit",
+                ),
+            ],
+            output_path="data/curated/panel/out.parquet",
+        )
+        mf = tmp_path / "test.manifest.json"
+        write_manifest(m, mf)
+
+        result = runner.invoke(app, [
+            "build", "recipe-provenance",
+            "--manifest", str(mf),
+        ])
+        assert result.exit_code == 0
+        assert "demo" in result.output
+        assert "pit" in result.output
+        assert "aaaaaaaaaaaa" in result.output  # sha256 prefix
+
+    def test_provenance_missing_manifest(self, tmp_path: Path):
+        result = runner.invoke(app, [
+            "build", "recipe-provenance",
+            "--manifest", str(tmp_path / "nope.json"),
+        ])
+        assert result.exit_code == 1
+
+    def test_export_creates_bundle(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "data").mkdir()
+        pd.DataFrame({"x": [1]}).to_parquet(tmp_path / "data" / "pit.parquet")
+
+        m = RecipeManifest(
+            recipe_name="demo",
+            recipe_version=1,
+            pipeline_id="main",
+            assets=[
+                AssetRecord(
+                    role="dataset",
+                    path="data/pit.parquet",
+                    sha256="a" * 64,
+                    size=100,
+                ),
+            ],
+        )
+        mf = tmp_path / "test.manifest.json"
+        write_manifest(m, mf)
+        out = tmp_path / "my_bundle"
+
+        result = runner.invoke(app, [
+            "build", "recipe-export",
+            "--manifest", str(mf),
+            "--output", str(out),
+        ])
+        assert result.exit_code == 0
+        assert (out / "manifest.json").exists()
+        assert (out / "assets" / "data" / "pit.parquet").exists()
+
+    def test_no_cache_cli_flag(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        import yaml
+
+        monkeypatch.chdir(tmp_path)
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        recipe_file = tmp_path / "recipe.yaml"
+        recipe_file.write_text(yaml.dump(data), encoding="utf-8")
+        result = runner.invoke(app, [
+            "build", "recipe",
+            "--recipe", str(recipe_file),
+            "--no-cache",
+        ])
+        assert result.exit_code == 0
+        assert "executed" in result.output.lower()

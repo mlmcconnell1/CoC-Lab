@@ -1,4 +1,4 @@
-"""CLI command for recipe-driven builds."""
+"""CLI commands for recipe-driven builds."""
 
 from __future__ import annotations
 
@@ -13,9 +13,12 @@ from coclab.recipe.adapters import (
     geometry_registry,
     validate_recipe_adapters,
 )
+from coclab.recipe.cache import RecipeCache
 from coclab.recipe.default_adapters import register_defaults
 from coclab.recipe.executor import ExecutorError, execute_recipe
 from coclab.recipe.loader import RecipeLoadError, load_recipe
+from coclab.recipe.manifest import export_bundle as do_export_bundle
+from coclab.recipe.manifest import read_manifest
 from coclab.recipe.recipe_schema import RecipeV1, expand_year_spec
 
 
@@ -121,6 +124,13 @@ def recipe_cmd(
             help="Validate only; do not execute the build.",
         ),
     ] = False,
+    no_cache: Annotated[
+        bool,
+        typer.Option(
+            "--no-cache",
+            help="Disable asset caching (re-read every file from disk).",
+        ),
+    ] = False,
 ) -> None:
     """Load, validate, and execute a build recipe.
 
@@ -175,7 +185,7 @@ def recipe_cmd(
     all_errors = path_errors + adapter_errors
     all_warnings = path_warnings + adapter_warnings
     if all_errors:
-        for e in adapter_errors:
+        for e in all_errors:
             typer.echo(f"  Error: {e.message}", err=True)
         typer.echo(
             f"\nRecipe validation failed with {len(all_errors)} error(s).",
@@ -192,8 +202,9 @@ def recipe_cmd(
         return
 
     # Execute the build pipeline
+    cache = RecipeCache(enabled=not no_cache)
     try:
-        results = execute_recipe(parsed)
+        results = execute_recipe(parsed, cache=cache)
     except ExecutorError as exc:
         typer.echo(f"\nExecution error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
@@ -203,3 +214,90 @@ def recipe_cmd(
         f"\nRecipe '{parsed.name}' executed: "
         f"{len(results)} pipeline(s), {total_steps} steps completed."
     )
+
+
+def recipe_provenance_cmd(
+    manifest: Annotated[
+        Path,
+        typer.Option(
+            "--manifest",
+            "-m",
+            help="Path to a .manifest.json file produced by a recipe build.",
+        ),
+    ],
+) -> None:
+    """Show provenance from a recipe build manifest.
+
+    Displays the recipe identity, consumed assets (with SHA-256 hashes
+    and sizes), and output path recorded during the build.
+
+    Examples:
+
+        coclab build recipe-provenance \\
+            --manifest data/curated/panel/panel__Y2020-2021@B2025.manifest.json
+    """
+    if not manifest.exists():
+        typer.echo(f"Error: Manifest not found: {manifest}", err=True)
+        raise typer.Exit(code=1)
+
+    m = read_manifest(manifest)
+    typer.echo(f"Recipe: {m.recipe_name} (v{m.recipe_version})")
+    typer.echo(f"Pipeline: {m.pipeline_id}")
+    typer.echo(f"Executed: {m.executed_at}")
+    if m.output_path:
+        typer.echo(f"Output: {m.output_path}")
+
+    if m.assets:
+        typer.echo(f"\nConsumed assets ({len(m.assets)}):")
+        for a in m.assets:
+            label = a.dataset_id or a.transform_id or ""
+            size_kb = a.size / 1024
+            typer.echo(
+                f"  [{a.role}] {a.path}"
+                f"  ({size_kb:.1f} KB, sha256:{a.sha256[:12]}...)"
+            )
+            if label:
+                typer.echo(f"         id: {label}")
+
+
+def recipe_export_cmd(
+    manifest: Annotated[
+        Path,
+        typer.Option(
+            "--manifest",
+            "-m",
+            help="Path to a .manifest.json file produced by a recipe build.",
+        ),
+    ],
+    output: Annotated[
+        Path,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Destination directory for the replication bundle.",
+        ),
+    ],
+) -> None:
+    """Export a replication bundle from a recipe build manifest.
+
+    Copies all consumed assets (datasets, crosswalks) into a
+    self-contained directory alongside the manifest, so a replicator
+    can reproduce the build without the original project tree.
+
+    Examples:
+
+        coclab build recipe-export --manifest panel.manifest.json --output /tmp/bundle
+    """
+    if not manifest.exists():
+        typer.echo(f"Error: Manifest not found: {manifest}", err=True)
+        raise typer.Exit(code=1)
+
+    m = read_manifest(manifest)
+    project_root = Path.cwd()
+
+    typer.echo(f"Exporting bundle for '{m.recipe_name}' pipeline '{m.pipeline_id}'...")
+    do_export_bundle(m, project_root, output)
+
+    typer.echo(f"  {len(m.assets)} asset(s) copied")
+    typer.echo(f"  Manifest written to {output / 'manifest.json'}")
+    typer.echo(f"Bundle: {output}")

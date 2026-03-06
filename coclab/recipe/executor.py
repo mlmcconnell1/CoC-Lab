@@ -23,6 +23,8 @@ from coclab.naming import (
     panel_filename,
     tract_xwalk_path,
 )
+from coclab.recipe.cache import RecipeCache
+from coclab.recipe.manifest import AssetRecord, RecipeManifest, write_manifest
 from coclab.recipe.planner import (
     ExecutionPlan,
     JoinTask,
@@ -32,10 +34,8 @@ from coclab.recipe.planner import (
     resolve_plan,
 )
 from coclab.recipe.recipe_schema import (
-    CrosswalkTransform,
     GeometryRef,
     RecipeV1,
-    RollupTransform,
     TemporalFilter,
     expand_year_spec,
 )
@@ -83,6 +83,10 @@ class ExecutionContext:
     intermediates: dict[tuple[str, int], pd.DataFrame] = field(
         default_factory=dict,
     )
+    # Asset cache for avoiding redundant reads
+    cache: RecipeCache = field(default_factory=RecipeCache)
+    # Assets consumed during execution (for provenance manifest)
+    consumed_assets: list[AssetRecord] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -502,6 +506,14 @@ def _execute_materialize(
         if path.exists():
             typer.echo(f"    reuse: {path.relative_to(ctx.project_root)}")
             ctx.transform_paths[tid] = path
+            identity = ctx.cache.file_identity(path)
+            ctx.consumed_assets.append(AssetRecord(
+                role="crosswalk",
+                path=str(path.relative_to(ctx.project_root)),
+                sha256=identity.sha256,
+                size=identity.size,
+                transform_id=tid,
+            ))
         else:
             return StepResult(
                 step_kind="materialize",
@@ -559,7 +571,7 @@ def _execute_resample(
         )
 
     try:
-        df = pd.read_parquet(input_file)
+        df = ctx.cache.read_parquet(input_file)
     except (FileNotFoundError, OSError, pa.ArrowInvalid) as exc:
         return StepResult(
             step_kind="resample",
@@ -570,6 +582,16 @@ def _execute_resample(
                 f"failed to read {task.input_path}: {exc}"
             ),
         )
+
+    # Record consumed asset (deduplicated by path later in manifest)
+    identity = ctx.cache.file_identity(input_file)
+    ctx.consumed_assets.append(AssetRecord(
+        role="dataset",
+        path=str(input_file.relative_to(ctx.project_root)),
+        sha256=identity.sha256,
+        size=identity.size,
+        dataset_id=task.dataset_id,
+    ))
 
     # Apply temporal filter if declared for this dataset
     filt = ctx.recipe.filters.get(task.dataset_id)
@@ -635,7 +657,7 @@ def _execute_resample(
                     ),
                 )
             try:
-                xwalk = pd.read_parquet(xwalk_path)
+                xwalk = ctx.cache.read_parquet(xwalk_path)
             except (FileNotFoundError, OSError, pa.ArrowInvalid) as exc:
                 return StepResult(
                     step_kind="resample",
@@ -738,12 +760,27 @@ def _execute_join(
 # ---------------------------------------------------------------------------
 
 
+def _deduplicate_assets(
+    assets: list[AssetRecord],
+) -> list[AssetRecord]:
+    """Deduplicate asset records by (role, path)."""
+    seen: set[tuple[str, str]] = set()
+    result: list[AssetRecord] = []
+    for a in assets:
+        key = (a.role, a.path)
+        if key not in seen:
+            seen.add(key)
+            result.append(a)
+    return result
+
+
 def _build_provenance(
     recipe: RecipeV1,
     pipeline_id: str,
     ctx: ExecutionContext,
 ) -> dict[str, object]:
     """Build provenance metadata for the output artifact."""
+    deduped = _deduplicate_assets(ctx.consumed_assets)
     return {
         "recipe_name": recipe.name,
         "recipe_version": recipe.version,
@@ -761,7 +798,47 @@ def _build_provenance(
             tid: str(path.relative_to(ctx.project_root))
             for tid, path in ctx.transform_paths.items()
         },
+        "consumed_assets": [
+            {
+                "role": a.role,
+                "path": a.path,
+                "sha256": a.sha256,
+                "size": a.size,
+                "dataset_id": a.dataset_id,
+                "transform_id": a.transform_id,
+            }
+            for a in deduped
+        ],
     }
+
+
+def _build_manifest(
+    recipe: RecipeV1,
+    pipeline_id: str,
+    ctx: ExecutionContext,
+    output_path: str | None = None,
+) -> RecipeManifest:
+    """Build a full provenance manifest for the execution."""
+    return RecipeManifest(
+        recipe_name=recipe.name,
+        recipe_version=recipe.version,
+        pipeline_id=pipeline_id,
+        assets=_deduplicate_assets(ctx.consumed_assets),
+        datasets={
+            ds_id: {
+                "provider": ds.provider,
+                "product": ds.product,
+                "version": ds.version,
+                "path": ds.path,
+            }
+            for ds_id, ds in recipe.datasets.items()
+        },
+        transforms={
+            tid: str(path.relative_to(ctx.project_root))
+            for tid, path in ctx.transform_paths.items()
+        },
+        output_path=output_path,
+    )
 
 
 def _persist_outputs(
@@ -828,12 +905,20 @@ def _persist_outputs(
     output_file = output_dir / panel_filename(start_year, end_year, boundary_vintage)
 
     # Build provenance and write with metadata
+    output_rel = str(output_file.relative_to(ctx.project_root))
     provenance = _build_provenance(ctx.recipe, plan.pipeline_id, ctx)
     table = pa.Table.from_pandas(panel)
     metadata = table.schema.metadata or {}
     metadata[b"coclab_provenance"] = json.dumps(provenance).encode()
     table = table.replace_schema_metadata(metadata)
     pq.write_table(table, output_file)
+
+    # Write manifest sidecar JSON
+    manifest = _build_manifest(
+        ctx.recipe, plan.pipeline_id, ctx, output_path=output_rel,
+    )
+    manifest_file = output_file.with_suffix(".manifest.json")
+    write_manifest(manifest, manifest_file)
 
     detail = (
         f"persist panel: {len(frames)} year(s), "
@@ -853,6 +938,8 @@ def _execute_plan(
     plan: ExecutionPlan,
     recipe: RecipeV1,
     project_root: Path,
+    *,
+    cache: RecipeCache | None = None,
 ) -> PipelineResult:
     """Execute all tasks in a resolved plan in deterministic order.
 
@@ -862,6 +949,7 @@ def _execute_plan(
     ctx = ExecutionContext(
         project_root=project_root,
         recipe=recipe,
+        cache=cache or RecipeCache(),
     )
     result = PipelineResult(pipeline_id=plan.pipeline_id)
 
@@ -899,6 +987,8 @@ def _execute_plan(
 def execute_recipe(
     recipe: RecipeV1,
     project_root: Path | None = None,
+    *,
+    cache: RecipeCache | None = None,
 ) -> list[PipelineResult]:
     """Execute all pipelines in a recipe.
 
@@ -908,6 +998,9 @@ def execute_recipe(
         A validated recipe.
     project_root : Path | None
         Project root for resolving dataset paths.  Defaults to cwd.
+    cache : RecipeCache | None
+        Asset cache.  Pass ``RecipeCache(enabled=False)`` to disable
+        caching.  Defaults to an enabled cache.
 
     Returns
     -------
@@ -922,6 +1015,8 @@ def execute_recipe(
     """
     if project_root is None:
         project_root = Path.cwd()
+    if cache is None:
+        cache = RecipeCache()
 
     results: list[PipelineResult] = []
 
@@ -944,7 +1039,7 @@ def execute_recipe(
         typer.echo(f"  Resolved {task_count} tasks")
 
         # Execute the plan
-        result = _execute_plan(plan, recipe, project_root)
+        result = _execute_plan(plan, recipe, project_root, cache=cache)
         results.append(result)
 
         if result.success:
