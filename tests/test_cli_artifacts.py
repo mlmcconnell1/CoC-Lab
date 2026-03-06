@@ -53,11 +53,18 @@ class TestListArtifacts:
                 index=False,
             )
 
-            # Global artifact
+            # Global artifacts
             pit_dir = Path("data/curated/pit")
             pit_dir.mkdir(parents=True, exist_ok=True)
             pd.DataFrame({"coc_id": ["CO-500"], "pit_year": [2024], "pit_total": [10]}).to_parquet(
                 pit_dir / "pit__P2024.parquet",
+                index=False,
+            )
+
+            acs_dir = Path("data/curated/acs")
+            acs_dir.mkdir(parents=True, exist_ok=True)
+            pd.DataFrame({"tract_fips": ["08031000100"], "total_pop": [5000]}).to_parquet(
+                acs_dir / "acs5_tracts__A2023xT2023.parquet",
                 index=False,
             )
 
@@ -69,12 +76,13 @@ class TestListArtifacts:
         payload = json.loads(result.output[json_start:])
         assert payload["status"] == "ok"
         assert payload["build"] == "demo"
-        assert payload["count"] >= 3
+        assert payload["count"] >= 4
 
         roles = {(a["scope"], a["role"]) for a in payload["artifacts"]}
         assert ("build", "panel") in roles
         assert ("build", "crosswalk") in roles
         assert ("global", "pit") in roles
+        assert ("global", "acs") in roles
 
 
 class TestNonInteractiveMode:

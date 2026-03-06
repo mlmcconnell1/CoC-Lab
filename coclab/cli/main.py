@@ -143,7 +143,25 @@ registry_app = typer.Typer(
     no_args_is_help=True,
 )
 
-AGENTS_INFO_TEXT = """# CoC Crosswalk Rules: Geography-to-Year Matching
+AGENTS_INFO_TEXT = """# CoC-Lab Agent Quick Reference
+
+## Automation Defaults
+
+- Prefer machine-readable JSON output when available:
+  - `coclab status --json`
+  - `coclab list artifacts --build <build> --json`
+  - `coclab build recipe --recipe <file> --dry-run --json`
+  - `coclab build recipe-plan --recipe <file> --json`
+- Run non-interactively for automation:
+  - `coclab --non-interactive ...`
+  - or set `COCLAB_NON_INTERACTIVE=1`
+- Validate curated layout policy before/after writes:
+  - `coclab validate curated-layout`
+- Preview curated migration changes before applying:
+  - `coclab migrate curated-layout`
+  - `coclab migrate curated-layout --apply`
+
+## Crosswalk Rules: Geography-to-Year Matching
 
 ## Core Principle
 
@@ -156,8 +174,8 @@ of the crosswalk. The rules below govern which vintage to use for each source.
 |---|---|---|
 | **PIT Counts** | CoC | Direct match; no crosswalk needed. |
 | **ACS Estimates** | Census Tracts -> CoC | Use ACS tract vintage, then map to CoC boundary year. |
-| **PEP Estimates** | Counties → CoC | Use the county-to-CoC crosswalk for the PEP estimate year. |
-| **ZORI (Zillow)** | Counties → CoC | Use the county-to-CoC crosswalk for the CoC boundary year. |
+| **PEP Estimates** | Counties -> CoC | Use the county-to-CoC crosswalk for the PEP estimate year. |
+| **ZORI (Zillow)** | Counties -> CoC | Use the county-to-CoC crosswalk for the CoC boundary year. |
 | **CHAS** | Census Tracts -> CoC | Follow ACS tract-vintage rule, not CHAS release year. |
 
 ## Important Notes
@@ -205,7 +223,7 @@ def main_callback(
     help="Information for agents who are using the coclab package.",
 )
 def agents() -> None:
-    """Display crosswalk rules for agents."""
+    """Display automation and crosswalk guidance for agents."""
     typer.echo(AGENTS_INFO_TEXT)
 
 

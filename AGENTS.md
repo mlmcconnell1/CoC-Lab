@@ -23,6 +23,26 @@ Use `$BR` (or just the resolved command) for all beads operations below. Prefer 
 | Close issue | `br close <id>` | `bd close <id> --reason="Completed"` |
 | Sync to disk | `br sync --flush-only` | `bd sync` |
 
+## CoC-Lab Agent-Friendly CLI
+
+Prefer these CoC-Lab runtime features when automating:
+
+- Use machine-readable output whenever available (`--json`) to avoid parsing human text.
+- Run non-interactively for CI/agents: pass `--non-interactive` or set `COCLAB_NON_INTERACTIVE=1`.
+- Use `coclab agents` for built-in geography/year matching rules and operational guidance.
+- Discover artifacts deterministically with:
+  - `coclab list artifacts --build <build> --json`
+- Preflight environment and prerequisites with:
+  - `coclab status --json`
+- Validate curated naming/layout policy before and after writes:
+  - `coclab validate curated-layout`
+- For curated filename migrations, default to dry-run first:
+  - `coclab migrate curated-layout`
+  - `coclab migrate curated-layout --apply`
+- For recipe workflows, validate/plan before execute:
+  - `coclab build recipe --recipe <file> --dry-run --json`
+  - `coclab build recipe-plan --recipe <file> --json`
+
 ## Adding Beads (Problem Noticed)
 
 If you identify a problem in the code, even incidentally while working on something else, add a bead to make sure it is addressed later.

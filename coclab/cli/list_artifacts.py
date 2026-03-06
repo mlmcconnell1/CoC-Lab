@@ -31,6 +31,7 @@ def _classify_role(path: Path) -> str:
         (("measures/",), "measures"),
         (("zori/",), "zori"),
         (("pep/",), "pep"),
+        (("acs/",), "acs"),
     )
     for prefixes, role in starts:
         if any(p.startswith(prefix) for prefix in prefixes):
@@ -54,6 +55,10 @@ def _classify_role(path: Path) -> str:
         return "zori"
     if "/pep/" in p:
         return "pep"
+    if "/acs/" in p:
+        return "acs"
+    if p.endswith("_registry.parquet"):
+        return "registry"
     return "artifact"
 
 

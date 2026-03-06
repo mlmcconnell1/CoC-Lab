@@ -98,7 +98,10 @@ def list_measures(
     measures_dir = Path(dir)
 
     if not measures_dir.exists():
-        typer.echo(f"Directory not found: {measures_dir}")
+        if json_output:
+            typer.echo(json.dumps({"status": "ok", "count": 0, "measures": []}, indent=2))
+        else:
+            typer.echo(f"Directory not found: {measures_dir}")
         return
 
     # Find all parquet files matching the measures pattern (new and legacy)
@@ -117,7 +120,10 @@ def list_measures(
             measure_files.append((filepath, boundary_vintage, acs_vintage))
 
     if not measure_files:
-        typer.echo(f"No measure files found in: {measures_dir}")
+        if json_output:
+            typer.echo(json.dumps({"status": "ok", "count": 0, "measures": []}, indent=2))
+        else:
+            typer.echo(f"No measure files found in: {measures_dir}")
         return
 
     # Sort by boundary vintage, then ACS vintage; canonical names first

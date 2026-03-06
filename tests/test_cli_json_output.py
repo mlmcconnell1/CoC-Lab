@@ -36,7 +36,7 @@ class TestListMeasuresJson:
         assert payload["count"] == 1
         assert payload["measures"][0]["boundary_vintage"] == "2025"
 
-    def test_json_empty(self, tmp_path):
+    def test_json_empty_dir(self, tmp_path):
         measures_dir = tmp_path / "measures"
         measures_dir.mkdir()
 
@@ -44,8 +44,18 @@ class TestListMeasuresJson:
             app, ["list", "measures", "--dir", str(measures_dir), "--json"]
         )
 
-        # Human output returns 0 and prints "No measure files" - JSON not reached
         assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload == {"status": "ok", "count": 0, "measures": []}
+
+    def test_json_missing_dir(self, tmp_path):
+        result = runner.invoke(
+            app, ["list", "measures", "--dir", str(tmp_path / "nope"), "--json"]
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload == {"status": "ok", "count": 0, "measures": []}
 
 
 class TestListCensusJson:
@@ -70,6 +80,27 @@ class TestListCensusJson:
         assert payload["count"] == 2
         types = {f["type"] for f in payload["census_files"]}
         assert types == {"tracts", "counties"}
+
+    def test_json_missing_dir(self, tmp_path):
+        result = runner.invoke(
+            app, ["list", "census", "--dir", str(tmp_path / "nope"), "--json"]
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload == {"status": "ok", "count": 0, "census_files": []}
+
+    def test_json_empty_dir(self, tmp_path):
+        census_dir = tmp_path / "tiger"
+        census_dir.mkdir()
+
+        result = runner.invoke(
+            app, ["list", "census", "--dir", str(census_dir), "--json"]
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload == {"status": "ok", "count": 0, "census_files": []}
 
     def test_json_with_type_filter(self, tmp_path):
         census_dir = tmp_path / "tiger"
@@ -115,6 +146,28 @@ class TestListXwalksJson:
         assert xw["type"] == "tract"
         assert xw["boundary_vintage"] == "2025"
         assert xw["census_vintage"] == "2023"
+
+
+    def test_json_missing_dir(self, tmp_path):
+        result = runner.invoke(
+            app, ["list", "xwalks", "--dir", str(tmp_path / "nope"), "--json"]
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload == {"status": "ok", "count": 0, "crosswalks": []}
+
+    def test_json_empty_dir(self, tmp_path):
+        xwalk_dir = tmp_path / "xwalks"
+        xwalk_dir.mkdir()
+
+        result = runner.invoke(
+            app, ["list", "xwalks", "--dir", str(xwalk_dir), "--json"]
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload == {"status": "ok", "count": 0, "crosswalks": []}
 
 
 class TestDiagnosticsXwalkJson:
@@ -166,6 +219,18 @@ class TestDiagnosticsPanelJson:
         payload = json.loads(result.output)
         assert payload["status"] == "ok"
         assert "panel_info" in payload
+
+
+    def test_json_missing_file(self, tmp_path):
+        result = runner.invoke(
+            app,
+            ["diagnostics", "panel", "--panel", str(tmp_path / "missing.parquet"), "--json"],
+        )
+
+        assert result.exit_code == 1
+        payload = json.loads(result.output)
+        assert payload["status"] == "error"
+        assert "not found" in payload["error"]
 
 
 class TestJsonHelp:

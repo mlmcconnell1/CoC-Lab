@@ -133,8 +133,11 @@ def list_xwalks(
 
     # Check if directory exists
     if not directory.exists():
-        typer.echo(f"Directory not found: {directory}")
-        typer.echo("No crosswalk files available.")
+        if json_output:
+            typer.echo(json.dumps({"status": "ok", "count": 0, "crosswalks": []}, indent=2))
+        else:
+            typer.echo(f"Directory not found: {directory}")
+            typer.echo("No crosswalk files available.")
         return
 
     if not directory.is_dir():
@@ -145,7 +148,10 @@ def list_xwalks(
     parquet_files = list(directory.glob("*.parquet"))
 
     if not parquet_files:
-        typer.echo(f"No crosswalk files found in: {directory}")
+        if json_output:
+            typer.echo(json.dumps({"status": "ok", "count": 0, "crosswalks": []}, indent=2))
+        else:
+            typer.echo(f"No crosswalk files found in: {directory}")
         return
 
     # Parse files and collect metadata
@@ -190,10 +196,13 @@ def list_xwalks(
         )
 
     if not crosswalks:
-        if xwalk_type != "all":
-            typer.echo(f"No {xwalk_type} crosswalk files found in: {directory}")
+        if json_output:
+            typer.echo(json.dumps({"status": "ok", "count": 0, "crosswalks": []}, indent=2))
         else:
-            typer.echo(f"No crosswalk files found in: {directory}")
+            if xwalk_type != "all":
+                typer.echo(f"No {xwalk_type} crosswalk files found in: {directory}")
+            else:
+                typer.echo(f"No crosswalk files found in: {directory}")
         return
 
     # Sort by type, then boundary vintage, then census vintage

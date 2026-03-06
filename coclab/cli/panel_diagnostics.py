@@ -71,7 +71,10 @@ def panel_diagnostics(
 
     # Check if panel file exists
     if not panel.exists():
-        typer.echo(f"Error: Panel file not found: {panel}", err=True)
+        if json_output:
+            typer.echo(json.dumps({"status": "error", "error": f"Panel file not found: {panel}"}, indent=2))
+        else:
+            typer.echo(f"Error: Panel file not found: {panel}", err=True)
         raise typer.Exit(1)
 
     if not json_output:

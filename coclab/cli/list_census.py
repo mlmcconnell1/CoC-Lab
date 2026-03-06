@@ -108,8 +108,11 @@ def list_census(
 
     # Check if directory exists
     if not directory.exists():
-        typer.echo(f"Directory not found: {directory}")
-        typer.echo("No census files available.")
+        if json_output:
+            typer.echo(json.dumps({"status": "ok", "count": 0, "census_files": []}, indent=2))
+        else:
+            typer.echo(f"Directory not found: {directory}")
+            typer.echo("No census files available.")
         return
 
     if not directory.is_dir():
@@ -120,7 +123,10 @@ def list_census(
     parquet_files = list(directory.glob("*.parquet"))
 
     if not parquet_files:
-        typer.echo(f"No census files found in: {directory}")
+        if json_output:
+            typer.echo(json.dumps({"status": "ok", "count": 0, "census_files": []}, indent=2))
+        else:
+            typer.echo(f"No census files found in: {directory}")
         return
 
     # Parse files and collect metadata
@@ -162,10 +168,13 @@ def list_census(
         )
 
     if not census_files:
-        if census_type is not None:
-            typer.echo(f"No {census_type} files found in: {directory}")
+        if json_output:
+            typer.echo(json.dumps({"status": "ok", "count": 0, "census_files": []}, indent=2))
         else:
-            typer.echo(f"No census files found in: {directory}")
+            if census_type is not None:
+                typer.echo(f"No {census_type} files found in: {directory}")
+            else:
+                typer.echo(f"No census files found in: {directory}")
         return
 
     # Sort by type, then year
