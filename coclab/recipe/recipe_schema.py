@@ -78,6 +78,11 @@ def expand_year_spec(spec: YearSpec | str | list[int]) -> list[int]:
         if len(parts) != 2:
             raise ValueError(f"Invalid year range format: '{spec.range}'. Expected 'YYYY-YYYY'.")
         start, end = int(parts[0]), int(parts[1])
+        if start > end:
+            raise ValueError(
+                f"Invalid year range '{spec.range}': start ({start}) > end ({end}). "
+                f"Did you mean '{end}-{start}'?"
+            )
         return list(range(start, end + 1))
     raise ValueError("YearSpec has neither 'range' nor 'years'.")
 

@@ -7,10 +7,10 @@ deterministic order.
 
 from __future__ import annotations
 
+import json
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-
-import json
 
 import numpy as np
 import pandas as pd
@@ -356,7 +356,15 @@ def _resample_aggregate(
 
     # Convert measures to float64 to handle nullable Pandas types (Int64, Float64)
     for m in task.measures:
+        before_notna = merged[m].notna().sum()
         merged[m] = pd.to_numeric(merged[m], errors="coerce").astype("float64")
+        lost = before_notna - merged[m].notna().sum()
+        if lost > 0:
+            warnings.warn(
+                f"Dataset '{task.dataset_id}' year {task.year}: "
+                f"{lost} non-numeric value(s) in measure '{m}' coerced to NaN.",
+                stacklevel=2,
+            )
     merged["area_share"] = merged["area_share"].astype("float64")
     if "pop_share" in merged.columns:
         merged["pop_share"] = pd.to_numeric(merged["pop_share"], errors="coerce").astype("float64")
@@ -552,7 +560,7 @@ def _execute_resample(
 
     try:
         df = pd.read_parquet(input_file)
-    except Exception as exc:
+    except (FileNotFoundError, OSError, pa.ArrowInvalid) as exc:
         return StepResult(
             step_kind="resample",
             detail=detail,
@@ -586,6 +594,16 @@ def _execute_resample(
     year_col = _resolve_year_column(df, task.year_column)
     if year_col is not None:
         df = df[df[year_col] == task.year].copy()
+        if df.empty:
+            return StepResult(
+                step_kind="resample",
+                detail=detail,
+                success=False,
+                error=(
+                    f"Dataset '{task.dataset_id}' year {task.year}: "
+                    f"no rows after filtering {year_col}=={task.year}."
+                ),
+            )
         if year_col != "year":
             df = df.rename(columns={year_col: "year"})
 
@@ -616,7 +634,19 @@ def _execute_resample(
                         f"Ensure a materialize step runs first."
                     ),
                 )
-            xwalk = pd.read_parquet(xwalk_path)
+            try:
+                xwalk = pd.read_parquet(xwalk_path)
+            except (FileNotFoundError, OSError, pa.ArrowInvalid) as exc:
+                return StepResult(
+                    step_kind="resample",
+                    detail=detail,
+                    success=False,
+                    error=(
+                        f"Dataset '{task.dataset_id}' year {task.year}: "
+                        f"failed to read crosswalk "
+                        f"'{task.transform_id}': {exc}"
+                    ),
+                )
 
             if task.method == "aggregate":
                 result_df = _resample_aggregate(df, xwalk, task)

@@ -8,6 +8,7 @@ apply changes deterministically.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -34,13 +35,7 @@ class MigrationPlan:
 # ---- Legacy -> Canonical rename rules ----
 # Each rule: (subdir, legacy_pattern, canonical_builder)
 
-_LEGACY_RULES: list[tuple[str, re.Pattern[str], callable]] = [
-    # coc_boundaries: boundaries__B{year}.parquet -> coc__B{year}.parquet
-    (
-        "coc_boundaries",
-        re.compile(r"^boundaries__B(\d{4})\.parquet$"),
-        lambda m: f"coc__B{m.group(1)}.parquet",
-    ),
+_LEGACY_RULES: list[tuple[str, re.Pattern[str], Callable[[re.Match[str]], str]]] = [
     # measures: coc_measures__{boundary}__{acs}.parquet
     #        -> measures__A{acs}@B{boundary}.parquet
     (
@@ -168,7 +163,10 @@ def apply_migration(plan: MigrationPlan, *, dry_run: bool = True) -> list[str]:
     prefix = "[DRY-RUN] " if dry_run else ""
 
     for action in plan.renames:
-        assert action.target is not None
+        if action.target is None:
+            raise ValueError(
+                f"Rename action for {action.source} has no target path."
+            )
         msg = f"{prefix}Rename: {action.source} -> {action.target}"
         log.append(msg)
         if not dry_run:

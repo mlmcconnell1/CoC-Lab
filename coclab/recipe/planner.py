@@ -168,12 +168,14 @@ def _resolve_via_file_set(
 # ---------------------------------------------------------------------------
 
 def _geometry_matches(a: GeometryRef, b: GeometryRef) -> bool:
-    """Check if two geometry refs match on type and vintage."""
+    """Check if two geometry refs match on type and vintage.
+
+    Both type and vintage must match exactly.  A None vintage only
+    matches another None vintage — it is *not* treated as a wildcard.
+    """
     if a.type != b.type:
         return False
-    if a.vintage is not None and b.vintage is not None:
-        return a.vintage == b.vintage
-    return True
+    return a.vintage == b.vintage
 
 
 def _resolve_auto_transform(
@@ -181,19 +183,12 @@ def _resolve_auto_transform(
     year: int,
     effective_geometry: GeometryRef,
     to_geometry: GeometryRef,
-    method: str,
     recipe: RecipeV1,
 ) -> str:
     """Select a compatible transform for via:auto.
 
-    For aggregate: the transform's `from` should match to_geometry (the target)
-    and the transform's `to` should match the dataset's effective native geometry.
-
-    For allocate: the transform's `from` should match to_geometry and the
-    transform's `to` should match the effective native geometry.
-
-    In both cases, we look for a crosswalk/rollup whose endpoints connect
-    to_geometry <-> effective_geometry.
+    Looks for a crosswalk/rollup whose endpoints connect
+    to_geometry <-> effective_geometry (in either direction).
     """
     candidates: list[str] = []
 
@@ -275,7 +270,6 @@ def resolve_plan(recipe: RecipeV1, pipeline_id: str) -> ExecutionPlan:
                             year=year,
                             effective_geometry=resolved.effective_geometry,
                             to_geometry=step.to_geometry,
-                            method=step.method,
                             recipe=recipe,
                         )
                     else:

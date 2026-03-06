@@ -371,8 +371,8 @@ def _apply_population_weights(
         typer.echo(
             f"Warning: Population data not found for ACS {acs_vintage}. "
             f"Use --auto-fetch to download, or run:\n"
-            f"  coclab ingest-acs-population --acs-vintage {acs_vintage} "
-            f"--tract-vintage {tract_vintage}",
+            f"  coclab ingest acs5-tract --acs {acs_vintage} "
+            f"--tracts {tract_vintage}",
             err=True,
         )
         return False
