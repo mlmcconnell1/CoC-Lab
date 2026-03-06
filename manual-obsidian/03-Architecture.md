@@ -1,134 +1,65 @@
 # Architecture
 
-## System Overview
+## System Layers
 
 ```mermaid
 flowchart TB
-    subgraph Sources["Data Sources"]
-        HUD_EX[HUD Exchange GIS Tools]
-        HUD_OD[HUD Open Data ArcGIS]
+    subgraph Sources[Source Systems]
+        HUD[HUD boundaries + PIT]
+        CENSUS[Census TIGER + ACS + PEP]
+        ZILLOW[Zillow ZORI]
     end
 
-    subgraph Ingest["Ingestion Layer"]
-        ING_EX[hud_exchange_gis.py]
-        ING_OD[hud_opendata_arcgis.py]
+    subgraph Ingest[Ingestion]
+        INGEST[coclab ingest ...]
+        RAW[data/raw]
+        CURATED[data/curated]
     end
 
-    subgraph Processing["Processing Layer"]
-        NORM[normalize.py]
-        VAL[validate.py]
+    subgraph BuildLayer[Build Layer]
+        BUILD[builds/<name>]
+        XWALK[coclab generate xwalks]
+        AGG[coclab aggregate {acs,zori,pep,pit}]
     end
 
-    subgraph Storage["Storage Layer"]
-        RAW[(data/raw/)]
-        CURATED[(data/curated/)]
-        REG[(boundary_registry.parquet)]
-        SRC[(source_registry.parquet)]
+    subgraph RecipeLayer[Recipe Layer]
+        RECIPE[coclab build recipe]
+        PLAN[planner + executor]
+        PANEL[data/curated/panel]
+        RMAN[.manifest.json sidecar]
     end
 
-    subgraph Output["Output Layer"]
-        VIZ[map_folium.py]
-        HTML[Interactive HTML Maps]
+    subgraph Export[Export]
+        BUNDLE[coclab build export]
+        MANIFEST[MANIFEST.json]
     end
 
-    HUD_EX --> ING_EX
-    HUD_OD --> ING_OD
-    ING_EX --> RAW
-    ING_OD --> RAW
-    RAW --> NORM
-    NORM --> VAL
-    VAL --> CURATED
-    CURATED --> REG
-    CURATED --> SRC
-    CURATED --> VIZ
-    VIZ --> HTML
+    Sources --> Ingest
+    CURATED --> BuildLayer
+    BuildLayer --> RecipeLayer
+    RecipeLayer --> Export
 ```
 
-## Module Structure
+## Major Subsystems
 
-```mermaid
-graph LR
-    subgraph coclab
-        CLI[cli/]
-        ING[ingest/]
-        GEO[geo/]
-        REG[registry/]
-        SOURCE[source_registry.py]
-        VIZ[viz/]
-        CENSUS[census/]
-        XWALK[xwalks/]
-        MEASURES[measures/]
-        RENTS[rents/]
-        PEP[pep/]
-        PIT[pit/]
-        PANEL[panel/]
-        EXPORT[export/]
-        BUILDS[builds.py]
-    end
+- `coclab/cli/`: Typer CLI command groups
+- `coclab/recipe/`: schema, adapters, planner, executor, recipe manifests
+- `coclab/builds.py`: build scaffolding, base-asset pinning, build manifests
+- `coclab/xwalks/`: tract/county crosswalk generation
+- `coclab/measures/`, `coclab/rents/`, `coclab/pep/`, `coclab/pit/`: dataset-specific ingestion and aggregation
+- `coclab/export/`: artifact selection, copying, bundle `MANIFEST.json`
 
-    CLI --> ING
-    CLI --> REG
-    CLI --> SOURCE
-    CLI --> VIZ
-    CLI --> XWALK
-    CLI --> MEASURES
-    CLI --> RENTS
-    CLI --> PEP
-    CLI --> PIT
-    CLI --> PANEL
-    CLI --> EXPORT
-    CLI --> BUILDS
-    ING --> GEO
-    VIZ --> REG
-    VIZ --> GEO
-    XWALK --> CENSUS
-    MEASURES --> XWALK
-    RENTS --> XWALK
-    PANEL --> MEASURES
-    PANEL --> PIT
-```
+## Storage Model
 
-## Directory Layout
+- Global curated assets live under `data/curated/`
+- Build-scoped artifacts live under `builds/<name>/data/curated/`
+- Recipe outputs currently persist to canonical panel path in `data/curated/panel/`
 
-```
-coclab/
-  cli/          # CLI commands (Typer)
-  geo/          # Geometry normalization and validation
-  ingest/       # Data source ingesters
-  registry/     # Vintage tracking and version selection
-  source_registry.py  # Source hash tracking and change detection
-  viz/          # Map rendering (Folium)
-  census/       # Census geometry ingestion (TIGER/Line)
-    ingest/     # Tract and county downloaders
-  xwalks/       # CoC-to-census crosswalk builders
-  measures/     # ACS measure aggregation and diagnostics
-  acs/          # ACS population ingest, rollup, and cross-check
-    ingest/     # Tract population fetcher
-  rents/        # ZORI rent data ingestion and aggregation
-  pep/          # PEP ingest and aggregation
-  pit/          # PIT count ingestion and QA (Phase 3)
-    ingest/     # HUD Exchange PIT downloaders and parsers
-  panel/        # CoC × year panel assembly (Phase 3)
-  export/       # Bundle export and MANIFEST generation
-  builds.py     # Named build scaffolds and manifests
-  naming.py     # Filename conventions and temporal shorthand
-  provenance.py # Parquet provenance helpers
-data/
-  raw/          # Downloaded source files
-  curated/      # Processed GeoParquet files
-    census/     # TIGER tract/county geometries
-    xwalks/     # CoC-tract and CoC-county crosswalks
-    measures/   # CoC-level demographic measures
-    acs/        # ACS tract population, rollups, and county weights
-    zori/       # ZORI rent data (county and CoC-level)
-    pep/        # PEP county and CoC-level data
-    pit/        # Canonical PIT count files
-    panel/      # CoC × year analysis panels
-    source_registry.parquet  # Source ingestion registry
-builds/         # Named build scaffolds (each with base/ and data/)
-exports/        # Export bundles (export-1, export-2, ...)
-tests/          # Test suite including smoke tests
-```
+## Architectural Intent
+
+- Keep raw source acquisition separate from analysis-ready artifacts
+- Keep alignment and weighting policy explicit in code paths and metadata
+- Prefer deterministic naming + manifests over implicit discovery
 
 ---
 

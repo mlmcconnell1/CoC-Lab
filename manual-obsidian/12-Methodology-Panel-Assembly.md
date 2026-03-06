@@ -1,92 +1,41 @@
-# Methodology: Panel Assembly (Phase 3)
+# Methodology: Panel Assembly
 
-This section documents how CoC × year analysis panels are constructed by joining PIT counts with ACS demographic measures.
+CoC Lab currently supports two panel assembly paths:
 
-## Panel Assembly Algorithm
+- **Imperative path:** `coclab build panel`
+- **Recipe path:** `coclab build recipe` (recommended)
 
-Panel assembly follows these steps for each year in the requested range:
+Both follow the same conceptual model: align heterogeneous inputs to a CoC-year frame, then join.
 
-1. **Load PIT counts** from canonical Parquet files
-2. **Apply alignment policy** to determine boundary and ACS vintages
-3. **Load ACS measures** for the aligned vintage
-4. **Join** PIT and ACS data by CoC ID
-5. **Detect boundary changes** from prior year
-6. **Compute coverage ratio** from crosswalk weights
+## Shared Assembly Pattern
 
-## Alignment Policies
+1. Resolve analysis year universe.
+2. Resolve dataset/year paths and effective geometries.
+3. Resample to target geometry (`identity`, `aggregate`, `allocate`).
+4. Join resampled datasets on common keys (typically `geo_id`, `year`).
+5. Persist panel and provenance metadata.
 
-Alignment policies are **pure functions** that map PIT years to data vintages. Using [[08-Temporal-Terminology|shorthand notation]]:
+## Imperative Panel Characteristics
 
-| Policy | Rule | Notation |
-|--------|------|----------|
-| Boundary vintage | `f(pit_year) = pit_year` | P{Y}@B{Y} — **period-faithful** alignment |
-| ACS vintage | `f(pit_year) = pit_year - 1` | A{Y-1} joined via **vintage gap** |
+- Inputs: PIT + ACS, optional yearly ZORI integration
+- Uses policy helpers for boundary and ACS vintage alignment
+- Writes panel under build-local `data/curated/panel/` when `--build` is used
 
-**Example:** PIT year 2024 (P2024) uses:
-- Boundary vintage B2024 — period-faithful
-- ACS vintage A2023 (covering 2019-2023) — 1-year vintage gap
+## Recipe Panel Characteristics
 
-Policies are recorded in panel provenance metadata for reproducibility.
+- Uses explicit YAML declarations for datasets/transforms/pipelines
+- Planner resolves dataset-year tasks deterministically
+- Executor runs `materialize -> resample -> join -> persist`
+- Current persist target is canonical `data/curated/panel/...`
+- Writes `*.manifest.json` sidecar listing consumed assets
 
-## Alignment Type Field
+## Quality Signals
 
-Panel outputs include `alignment_type` to make boundary alignment explicit:
+Across both paths, users should monitor:
 
-| Value | Meaning |
-|-------|---------|
-| `period_faithful` | Boundary vintage matches PIT year (P{Y}@B{Y}) |
-| `retrospective` | Boundary vintage is newer than PIT year (e.g., P2018@B2025) |
-| `custom` | Boundary vintage is older than PIT year or uses non-standard labels |
-
-Mixed policies can yield multiple `alignment_type` values within the same panel.
-
-## Boundary Change Detection
-
-The `boundary_changed` flag indicates a **boundary break**—whether a CoC's boundary differs from the prior year:
-
-```
-boundary_changed[coc, year] =
-    (boundary_vintage[year] ≠ boundary_vintage[year-1]) OR
-    (geom_hash[coc, year] ≠ geom_hash[coc, year-1])
-```
-
-First year in panel always has `boundary_changed = False`.
-
-Consecutive years where `boundary_changed = False` represent a **stable span** suitable for trend analysis without discontinuities.
-
-## Coverage Ratio Interpretation
-
-The `coverage_ratio` field reflects crosswalk completeness:
-
-| Value | Interpretation |
-|-------|----------------|
-| `1.0` | Perfect coverage—all CoC area mapped to tracts |
-| `0.95-0.99` | Minor boundary/tract misalignment |
-| `< 0.90` | Significant gaps—investigate crosswalk |
-| `> 1.0` | Overlapping tract assignments (rare) |
-
-## Panel Diagnostics
-
-The `diagnostics panel` command provides:
-
-1. **Coverage summary** - Min/max/mean coverage by year
-2. **Boundary change summary** - CoCs with changes and affected years
-3. **Missingness report** - Missing values per column per year
-4. **Weighting sensitivity** - Compare area vs population weighting effects
-
-## Known Limitations
-
-### 1. Vintage Gap
-
-The **vintage gap** (ACS vintage Y-1) means demographic data is 1-2 years old relative to PIT counts. Rapidly changing areas may show measurement lag.
-
-### 2. Boundary Change Granularity
-
-Boundary changes are detected at annual resolution. Mid-year changes are assigned to the later vintage.
-
-### 3. Missing Data Handling
-
-CoCs missing from PIT or ACS for a given year are excluded from the panel for that year. Use `missingness_report()` to identify gaps.
+- `coverage_ratio` and related diagnostics fields
+- boundary change indicators in panel outputs
+- missingness after joins
 
 ---
 

@@ -70,7 +70,7 @@ CoCs with few tracts or low populations have estimates more sensitive to individ
 
 ### 7. Housing-Market Representativeness
 
-Population-weighted tract coverage does not guarantee housing-market representativeness. Tracts with high population density may have systematically different rental markets, vacancy rates, or housing stock than lower-density tracts within the same CoC. This limitation will be addressed explicitly in **Phase 3 sensitivity analyses**, which will examine how weighting choices affect homelessness prediction models.
+Population-weighted tract coverage does not guarantee housing-market representativeness. Tracts with high population density may have systematically different rental markets, vacancy rates, or housing stock than lower-density tracts within the same CoC. Sensitivity analysis should explicitly test weighting choices (`area` vs `population`) and report effect size on downstream outcomes.
 
 ## References
 

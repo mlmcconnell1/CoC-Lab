@@ -4,6 +4,7 @@ Provides commands for ingesting CoC boundary data, building crosswalks,
 computing measures, and visualizing boundaries.
 """
 
+import os
 import sys
 import warnings
 from pathlib import Path
@@ -27,6 +28,7 @@ from coclab.cli.ingest_pit import ingest_pit
 from coclab.cli.ingest_pit_vintage import ingest_pit_vintage
 from coclab.cli.ingest_tract_relationship import ingest_tract_relationship
 from coclab.cli.list_census import list_census
+from coclab.cli.list_artifacts import list_artifacts
 from coclab.cli.list_measures import list_measures
 from coclab.cli.list_xwalks import list_xwalks
 from coclab.cli.migrate_curated import migrate_curated_cmd
@@ -55,7 +57,18 @@ warnings.filterwarnings(
 )
 
 
-def _check_working_directory() -> None:
+def _is_non_interactive(ctx: typer.Context | None = None) -> bool:
+    """Return True when CLI should avoid all interactive prompts."""
+    env = os.getenv("COCLAB_NON_INTERACTIVE", "").strip().lower()
+    env_true = env in {"1", "true", "yes", "on"}
+
+    if ctx is None:
+        return env_true
+    obj = ctx.obj if isinstance(ctx.obj, dict) else {}
+    return bool(obj.get("non_interactive", False) or env_true)
+
+
+def _check_working_directory(*, non_interactive: bool = False) -> None:
     """Warn if the current directory doesn't look like the CoC Lab project root."""
     cwd = Path.cwd()
     expected_markers = [
@@ -72,7 +85,7 @@ def _check_working_directory() -> None:
             f"Missing: {missing_names}",
             err=True,
         )
-        if sys.stdin.isatty():
+        if sys.stdin.isatty() and not non_interactive:
             if not typer.confirm("Do you still want to continue?", default=False):
                 raise typer.Exit(0)
 
@@ -161,9 +174,24 @@ of the crosswalk. The rules below govern which vintage to use for each source.
 
 
 @app.callback()
-def main_callback() -> None:
+def main_callback(
+    ctx: typer.Context,
+    non_interactive: Annotated[
+        bool,
+        typer.Option(
+            "--non-interactive",
+            help=(
+                "Disable interactive prompts. Can also be enabled with "
+                "COCLAB_NON_INTERACTIVE=1."
+            ),
+        ),
+    ] = False,
+) -> None:
     """Check working directory before running any command."""
-    _check_working_directory()
+    if not isinstance(ctx.obj, dict):
+        ctx.obj = {}
+    ctx.obj["non_interactive"] = bool(non_interactive)
+    _check_working_directory(non_interactive=_is_non_interactive(ctx))
 
 
 # -----------------------------------------------------------------------------
@@ -280,6 +308,7 @@ def ingest_boundaries(
 
 
 def delete_boundaries(
+    ctx: typer.Context,
     vintage: Annotated[
         str,
         typer.Argument(help="Boundary vintage year to delete (e.g., '2024')"),
@@ -323,6 +352,12 @@ def delete_boundaries(
     typer.echo(f"Found entry: vintage={vintage}, source={source}, features={entry.feature_count}")
 
     if not yes:
+        if _is_non_interactive(ctx):
+            typer.echo(
+                "Error: Non-interactive mode requires '--yes' for delete-entry.",
+                err=True,
+            )
+            raise typer.Exit(2)
         confirm = typer.confirm("Are you sure you want to delete this registry entry?")
         if not confirm:
             typer.echo("Aborted.")
@@ -525,6 +560,7 @@ ingest_app.command("tract-relationship")(ingest_tract_relationship)
 ingest_app.command("zori")(ingest_zori)
 ingest_app.command("pep")(ingest_pep)
 list_app.command("boundaries")(list_boundaries_cmd)
+list_app.command("artifacts")(list_artifacts)
 list_app.command("census")(list_census)
 list_app.command("measures")(list_measures)
 list_app.command("xwalks")(list_xwalks)

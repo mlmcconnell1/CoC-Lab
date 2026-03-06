@@ -146,7 +146,7 @@ erDiagram
 | `coverage_ratio` | float | Fraction of CoC area covered by tracts with data |
 | `source` | string | Always `acs_5yr` |
 
-## PIT Counts Schema (Phase 3)
+## PIT Counts Schema
 
 Canonical PIT (Point-in-Time) count data:
 
@@ -177,7 +177,7 @@ erDiagram
 | `ingested_at` | datetime | UTC timestamp of ingestion |
 | `notes` | string | Data quirks or caveats (nullable) |
 
-## Panel Schema (Phase 3)
+## Panel Schema
 
 Analysis-ready CoC × year panels combining PIT counts with ACS measures:
 
@@ -444,7 +444,7 @@ PIT count Parquet files include additional provenance fields tracking data linea
 ```python
 from coclab.provenance import read_provenance
 
-provenance = read_provenance("data/curated/pit/pit_counts__2024.parquet")
+provenance = read_provenance("data/curated/pit/pit__P2024.parquet")
 print(provenance.extra["pit_year"])           # 2024
 print(provenance.extra["source_ref"])         # HUD download URL
 print(provenance.extra["cross_state_mappings"])  # {"MO-604a": "MO-604"}

@@ -115,6 +115,10 @@ targets:
 
 Target ids must be unique within a recipe.
 
+> **Current runtime note:** target `outputs` is schema-valid and intent-capturing, but
+> persistence behavior is currently driven by executed pipeline steps. In particular,
+> recipe execution persists joined panel output when join tasks exist.
+
 ## Datasets
 
 Named dataset declarations keyed by a unique string id. The id is used to reference datasets in pipeline steps.
