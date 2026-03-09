@@ -1485,6 +1485,54 @@ class TestExecutor:
         results = execute_recipe(recipe, project_root=tmp_path)
         assert len(results[0].steps) == 8
 
+    def test_execute_recipe_rejects_implicit_static_broadcast(self, tmp_path: Path):
+        """A yearless dataset should not be silently reused across many years."""
+        _setup_pipeline_fixtures(tmp_path)
+        acs_path = tmp_path / "data" / "acs.parquet"
+        pd.DataFrame({
+            "GEOID": ["T1", "T2"],
+            "total_population": [100, 200],
+        }).to_parquet(acs_path)
+
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        recipe = load_recipe(data)
+
+        with pytest.raises(
+            ExecutorError,
+            match="broadcast a static snapshot across time",
+        ):
+            execute_recipe(recipe, project_root=tmp_path)
+
+    def test_execute_recipe_allows_explicit_static_broadcast(self, tmp_path: Path):
+        """Explicit broadcast opt-in should preserve current passthrough behavior."""
+        _setup_pipeline_fixtures(tmp_path)
+        acs_path = tmp_path / "data" / "acs.parquet"
+        pd.DataFrame({
+            "GEOID": ["T1", "T2"],
+            "total_population": [100, 200],
+        }).to_parquet(acs_path)
+
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        data["datasets"]["acs"]["params"] = {"broadcast_static": True}
+        recipe = load_recipe(data)
+
+        results = execute_recipe(recipe, project_root=tmp_path)
+        assert results[0].success
+
+        panel_path = (
+            tmp_path
+            / "data"
+            / "curated"
+            / "panel"
+            / "panel__Y2020-2021@B2025.parquet"
+        )
+        panel = pd.read_parquet(panel_path).sort_values(["geo_id", "year"])
+        assert list(panel["total_population"]) == [100.0, 100.0, 200.0, 200.0]
+
     def test_execute_recipe_no_pipelines(self, tmp_path: Path):
         data = _minimal_recipe()
         data["pipelines"] = []
@@ -1926,6 +1974,7 @@ class TestResampleAggregate:
         ds_path = tmp_path / "data" / "acs.parquet"
         df = pd.DataFrame({
             "GEOID": ["X", "Y"],
+            "year": [2020, 2020],
             "pop": [100, 200],
         })
         ds_path.parent.mkdir(parents=True)

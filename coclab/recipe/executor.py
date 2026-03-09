@@ -244,6 +244,40 @@ def _validate_columns(
         )
 
 
+def _reject_implicit_static_broadcast(
+    *,
+    ctx: ExecutionContext,
+    task: ResampleTask,
+    year_column: str | None,
+) -> str | None:
+    """Return an error when a multi-year build would silently broadcast data.
+
+    A dataset without a year column will be reused for every requested year.
+    That is sometimes intentional for static covariates, but it is unsafe as
+    the default because it can hide recipe mistakes. Callers may opt in with
+    ``params.broadcast_static: true`` on the dataset spec.
+    """
+    if year_column is not None:
+        return None
+
+    universe_years = expand_year_spec(ctx.recipe.universe)
+    if len(universe_years) <= 1:
+        return None
+
+    ds = ctx.recipe.datasets[task.dataset_id]
+    if bool(ds.params.get("broadcast_static", False)):
+        return None
+
+    return (
+        f"Dataset '{task.dataset_id}' year {task.year}: no year column found "
+        f"after preprocessing, but recipe universe spans {len(universe_years)} "
+        "years. Reusing the same dataset for every year would broadcast a "
+        "static snapshot across time. Add a year_column, switch to file_set "
+        "for year-specific files, or set params.broadcast_static=true if this "
+        "broadcast is intentional."
+    )
+
+
 def _apply_temporal_filter(
     df: pd.DataFrame,
     filt: TemporalFilter,
@@ -622,6 +656,18 @@ def _execute_resample(
 
     # Filter to the target year if the dataset has a year column
     year_col = _resolve_year_column(df, task.year_column)
+    static_broadcast_error = _reject_implicit_static_broadcast(
+        ctx=ctx,
+        task=task,
+        year_column=year_col,
+    )
+    if static_broadcast_error is not None:
+        return StepResult(
+            step_kind="resample",
+            detail=detail,
+            success=False,
+            error=static_broadcast_error,
+        )
     if year_col is not None:
         df = df[df[year_col] == task.year].copy()
         if df.empty:
