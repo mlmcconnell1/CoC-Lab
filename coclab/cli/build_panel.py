@@ -123,6 +123,20 @@ def build_panel_cmd(
             help="Minimum ZORI coverage ratio for eligibility (0.0-1.0).",
         ),
     ] = DEFAULT_ZORI_MIN_COVERAGE,
+    strict: Annotated[
+        bool,
+        typer.Option(
+            "--strict/--no-strict",
+            help="Treat conformance errors as build failures (exit non-zero).",
+        ),
+    ] = False,
+    skip_conformance: Annotated[
+        bool,
+        typer.Option(
+            "--skip-conformance/--no-skip-conformance",
+            help="Skip all post-build conformance checks.",
+        ),
+    ] = False,
 ) -> None:
     """Build a CoC x year analysis panel.
 
@@ -374,6 +388,26 @@ def build_panel_cmd(
                 rti_median = panel_df["rent_to_income"].median()
                 typer.echo(f"  Mean rent_to_income: {rti_mean:.3f}")
                 typer.echo(f"  Median rent_to_income: {rti_median:.3f}")
+
+    # ---- Post-build conformance checks ----
+    if not skip_conformance:
+        import sys
+
+        from coclab.panel.conformance import PanelRequest, run_conformance
+
+        panel_request = PanelRequest(
+            start_year=start,
+            end_year=end,
+            include_zori=include_zori,
+            weighting_method=weighting,
+            zori_min_coverage=zori_min_coverage,
+        )
+        conformance_report = run_conformance(panel_df, panel_request)
+        typer.echo("")
+        print(conformance_report.summary(), file=sys.stderr)
+
+        if conformance_report.errors and strict:
+            sys.exit(1)
 
     typer.echo("")
     typer.echo(f"Output: {output_path}")

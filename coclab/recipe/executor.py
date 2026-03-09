@@ -958,9 +958,23 @@ def _persist_outputs(
     output_dir.mkdir(parents=True, exist_ok=True)
     output_file = output_dir / panel_filename(start_year, end_year, boundary_vintage)
 
+    # Run conformance checks on the assembled panel
+    from coclab.panel.conformance import PanelRequest, run_conformance
+
+    panel_request = PanelRequest(
+        start_year=start_year,
+        end_year=end_year,
+    )
+    conformance_report = run_conformance(panel, panel_request)
+    if not ctx.quiet:
+        import sys
+
+        print(conformance_report.summary(), file=sys.stderr)
+
     # Build provenance and write with metadata
     output_rel = str(output_file.relative_to(ctx.project_root))
     provenance = _build_provenance(ctx.recipe, plan.pipeline_id, ctx)
+    provenance["conformance"] = conformance_report.to_dict()
     table = pa.Table.from_pandas(panel)
     metadata = table.schema.metadata or {}
     metadata[b"coclab_provenance"] = json.dumps(provenance).encode()

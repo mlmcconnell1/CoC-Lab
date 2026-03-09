@@ -36,6 +36,14 @@ from coclab.panel.policies import (
     default_acs_vintage,
     default_boundary_vintage,
 )
+from coclab.panel.conformance import (
+    ACS_MEASURE_COLUMNS,
+    ConformanceReport,
+    ConformanceResult,
+    PanelRequest,
+    register_check,
+    run_conformance,
+)
 from coclab.panel.zori_eligibility import (
     DEFAULT_ZORI_MIN_COVERAGE,
     EXCLUDED_LOW_COVERAGE,
@@ -69,6 +77,13 @@ __all__ = [
     "generate_diagnostics_report",
     "missingness_report",
     "weighting_sensitivity",
+    # Conformance
+    "ACS_MEASURE_COLUMNS",
+    "ConformanceReport",
+    "ConformanceResult",
+    "PanelRequest",
+    "register_check",
+    "run_conformance",
     # ZORI eligibility
     "DEFAULT_ZORI_MIN_COVERAGE",
     "EXCLUDED_LOW_COVERAGE",

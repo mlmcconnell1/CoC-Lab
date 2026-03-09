@@ -49,7 +49,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import pandas as pd
 
@@ -67,6 +67,9 @@ from coclab.pit.ingest import parse_pit_file
 from coclab.pit.ingest.hud_exchange import MIN_PIT_YEAR as MIN_PIT_VINTAGE_YEAR
 from coclab.pit.registry import get_pit_path
 from coclab.provenance import ProvenanceBlock, read_provenance, write_parquet_with_provenance
+
+if TYPE_CHECKING:
+    from coclab.panel.conformance import ConformanceReport
 
 logger = logging.getLogger(__name__)
 
@@ -1007,6 +1010,7 @@ def save_panel(
     output_dir: Path | None = None,
     policy: AlignmentPolicy | None = None,
     zori_provenance: ZoriProvenance | None = None,
+    conformance_report: ConformanceReport | None = None,
 ) -> Path:
     """Save panel DataFrame to Parquet with embedded provenance.
 
@@ -1087,6 +1091,10 @@ def save_panel(
         summary = summarize_zori_eligibility(df)
         if summary.get("zori_integrated"):
             extra["zori_summary"] = summary
+
+    # Add conformance report if provided
+    if conformance_report is not None:
+        extra["conformance"] = conformance_report.to_dict()
 
     # Extract remaining vintages from data
     if not df.empty:
