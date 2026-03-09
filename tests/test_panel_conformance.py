@@ -219,6 +219,24 @@ class TestConformanceReport:
         assert d["warning_count"] == 0
         assert d["results"] == []
 
+    def test_to_dict_normalizes_numpy_scalars(self) -> None:
+        report = ConformanceReport(results=[
+            ConformanceResult(
+                check_name="numpy_result",
+                severity="warning",
+                message="contains numpy scalars",
+                details={
+                    "expected_years": pd.Index([2015, 2016]).to_numpy().tolist(),
+                    "gap": pd.Series([2024], dtype="int64").iloc[0],
+                },
+            )
+        ])
+
+        details = report.to_dict()["results"][0]["details"]
+        assert details["expected_years"] == [2015, 2016]
+        assert details["gap"] == 2024
+        assert isinstance(details["gap"], int)
+
     # -- __len__ and __bool__ ------------------------------------------------
 
     def test_len_empty(self) -> None:

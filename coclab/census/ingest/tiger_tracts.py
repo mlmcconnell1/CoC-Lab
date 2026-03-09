@@ -82,6 +82,28 @@ STATE_FIPS_CODES = [
 ]
 
 
+def _tract_zip_name(year: int, state_fips: str) -> str:
+    """Return the Census ZIP filename for one state's tract shapefile."""
+    suffix = "tract10" if year == 2010 else "tract"
+    return f"tl_{year}_{state_fips}_{suffix}.zip"
+
+
+def _tract_url(year: int, state_fips: str) -> str:
+    """Return the Census download URL for one state's tract shapefile."""
+    zip_name = _tract_zip_name(year, state_fips)
+    if year == 2010:
+        return f"{TIGER_BASE.format(year=year, layer='TRACT')}2010/{zip_name}"
+    return f"{TIGER_BASE.format(year=year, layer='TRACT')}{zip_name}"
+
+
+def _resolve_geoid_column(gdf: gpd.GeoDataFrame) -> str:
+    """Return the tract GEOID column across modern and 2010 schema variants."""
+    for column in ["GEOID", "GEOID10", "GEOID20"]:
+        if column in gdf.columns:
+            return column
+    raise ValueError(f"Could not find GEOID column. Available: {list(gdf.columns)}")
+
+
 def _download_state_tracts(
     client: httpx.Client,
     year: int,
@@ -93,8 +115,9 @@ def _download_state_tracts(
     Returns tuple of (GeoDataFrame, raw_content) or (None, None) if the state
     file doesn't exist (some territories may not have data).
     """
-    url = f"{TIGER_BASE.format(year=year, layer='TRACT')}tl_{year}_{state_fips}_tract.zip"
-    zip_path = tmpdir / f"tl_{year}_{state_fips}_tract.zip"
+    zip_name = _tract_zip_name(year, state_fips)
+    url = _tract_url(year, state_fips)
+    zip_path = tmpdir / zip_name
 
     try:
         response = client.get(url, follow_redirects=True)
@@ -175,11 +198,10 @@ def download_tiger_tracts(
                         total_size += len(raw_content)
 
                         # Persist raw ZIP to data/raw/tiger/<year>/tracts/
-                        zip_name = f"tl_{year}_{state_fips}_tract.zip"
                         raw_path, _, _ = persist_file_snapshot(
                             raw_content,
                             "tiger",
-                            zip_name,
+                            _tract_zip_name(year, state_fips),
                             subdirs=(str(year), "tracts"),
                             raw_root=raw_root,
                         )
@@ -206,10 +228,11 @@ def download_tiger_tracts(
 
     # Standardize schema
     ingested_at = datetime.now(UTC)
+    geoid_column = _resolve_geoid_column(combined)
     result = gpd.GeoDataFrame(
         {
             "geo_vintage": str(year),
-            "geoid": combined["GEOID"],
+            "geoid": combined[geoid_column],
             "geometry": combined["geometry"],
             "source": "tiger_line",
             "ingested_at": ingested_at,

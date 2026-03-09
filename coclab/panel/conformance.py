@@ -79,6 +79,24 @@ ZORI_MIN_ELIGIBILITY_RATE: float = 0.20
 # ---------------------------------------------------------------------------
 
 
+def _json_safe(value: Any) -> Any:
+    """Recursively coerce values into JSON-serializable Python types."""
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, tuple):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, set):
+        return [_json_safe(v) for v in sorted(value)]
+    if hasattr(value, "item") and callable(value.item):
+        try:
+            return value.item()
+        except (TypeError, ValueError):
+            pass
+    return value
+
+
 @dataclass
 class PanelRequest:
     """Captures what was asked for in a panel build.
@@ -143,7 +161,7 @@ class ConformanceResult:
             "check_name": self.check_name,
             "severity": self.severity,
             "message": self.message,
-            "details": self.details,
+            "details": _json_safe(self.details),
         }
 
 
