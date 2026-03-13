@@ -1,0 +1,257 @@
+"""Authoritative Glynn/Fox metro definition data.
+
+This module encodes the 25 metropolitan analysis units from Table 1 of:
+
+    Glynn, C. and Fox, E.B. (2019). "Dynamics of Homelessness in Urban
+    America." *Annals of Applied Statistics*, 13(1), 573-605.
+
+The metro_id scheme uses zero-padded indices matching the paper's
+ordering (``GF01`` through ``GF25``).
+
+Definition version: ``glynn_fox_v1``
+
+Membership types
+----------------
+- ``single``: Metro corresponds to one CoC and one county (simple case).
+- ``multi_coc``: County contains multiple CoCs; PIT counts are summed
+  across the member CoCs.
+- ``multi_county``: CoC spans multiple counties; population and ZRI are
+  aggregated across member counties (population-weighted).
+- ``multi_coc_multi_county``: Multiple CoCs span multiple counties;
+  both aggregation rules apply.
+
+County FIPS codes follow the 5-digit Census standard (state + county).
+"""
+
+from __future__ import annotations
+
+import pandas as pd
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+#: Version identifier for this definition set.
+DEFINITION_VERSION: str = "glynn_fox_v1"
+
+#: Total number of metros in the definition.
+METRO_COUNT: int = 25
+
+#: Source reference for provenance.
+SOURCE_REF: str = "Glynn and Fox (2019), Table 1, p. 577"
+
+# ---------------------------------------------------------------------------
+# Metro definitions truth table
+# ---------------------------------------------------------------------------
+
+#: Each entry is (metro_id, metro_name, membership_type).
+METRO_DEFINITIONS: list[tuple[str, str, str]] = [
+    ("GF01", "New York, NY", "multi_county"),
+    ("GF02", "Los Angeles-Long Beach-Anaheim, CA", "multi_coc"),
+    ("GF03", "Chicago, IL", "multi_coc"),
+    ("GF04", "Dallas-Fort Worth, TX", "single"),
+    ("GF05", "Philadelphia, PA", "single"),
+    ("GF06", "Houston, TX", "multi_county"),
+    ("GF07", "Washington, DC", "single"),
+    ("GF08", "Miami-Fort Lauderdale, FL", "single"),
+    ("GF09", "Atlanta, GA", "multi_coc"),
+    ("GF10", "Boston, MA", "single"),
+    ("GF11", "San Francisco, CA", "single"),
+    ("GF12", "Detroit, MI", "multi_coc"),
+    ("GF13", "Riverside, CA", "single"),
+    ("GF14", "Phoenix, AZ", "single"),
+    ("GF15", "Seattle, WA", "single"),
+    ("GF16", "Minneapolis-St Paul, MN", "single"),
+    ("GF17", "San Diego, CA", "single"),
+    ("GF18", "St. Louis, MO", "multi_coc"),
+    ("GF19", "Tampa, FL", "single"),
+    ("GF20", "Baltimore, MD", "multi_coc"),
+    ("GF21", "Denver, CO", "multi_county"),
+    ("GF22", "Pittsburgh, PA", "single"),
+    ("GF23", "Portland, OR", "single"),
+    ("GF24", "Charlotte, NC", "single"),
+    ("GF25", "Sacramento, CA", "single"),
+]
+
+# ---------------------------------------------------------------------------
+# Metro-to-CoC membership truth table
+# ---------------------------------------------------------------------------
+
+#: Each entry is (metro_id, coc_id).
+#: Multiple entries per metro_id indicate PIT must be summed across CoCs.
+METRO_COC_MEMBERSHIP: list[tuple[str, str]] = [
+    ("GF01", "NY-600"),
+    ("GF02", "CA-600"),
+    ("GF02", "CA-606"),
+    ("GF02", "CA-607"),
+    ("GF02", "CA-612"),
+    ("GF03", "IL-510"),
+    ("GF03", "IL-511"),
+    ("GF04", "TX-600"),
+    ("GF05", "PA-500"),
+    ("GF06", "TX-700"),
+    ("GF07", "DC-500"),
+    ("GF08", "FL-600"),
+    ("GF09", "GA-500"),
+    ("GF09", "GA-502"),
+    ("GF10", "MA-500"),
+    ("GF11", "CA-501"),
+    ("GF12", "MI-501"),
+    ("GF12", "MI-502"),
+    ("GF13", "CA-608"),
+    ("GF14", "AZ-502"),
+    ("GF15", "WA-500"),
+    ("GF16", "MN-500"),
+    ("GF17", "CA-601"),
+    ("GF18", "MO-500"),
+    ("GF18", "MO-501"),
+    ("GF19", "FL-501"),
+    ("GF20", "MD-501"),
+    ("GF20", "MD-505"),
+    ("GF21", "CO-503"),
+    ("GF22", "PA-600"),
+    ("GF23", "OR-501"),
+    ("GF24", "NC-505"),
+    ("GF25", "CA-503"),
+]
+
+# ---------------------------------------------------------------------------
+# Metro-to-County membership truth table
+# ---------------------------------------------------------------------------
+
+#: Each entry is (metro_id, county_fips).
+#: Multiple entries per metro_id indicate population/ZRI must be aggregated
+#: across counties (population-weighted).
+METRO_COUNTY_MEMBERSHIP: list[tuple[str, str]] = [
+    # GF01: New York - 5 NYC boroughs
+    ("GF01", "36061"),  # New York (Manhattan)
+    ("GF01", "36005"),  # Bronx
+    ("GF01", "36081"),  # Queens
+    ("GF01", "36047"),  # Kings (Brooklyn)
+    ("GF01", "36085"),  # Richmond (Staten Island)
+    # GF02: Los Angeles
+    ("GF02", "06037"),  # Los Angeles
+    # GF03: Chicago
+    ("GF03", "17031"),  # Cook
+    # GF04: Dallas
+    ("GF04", "48113"),  # Dallas
+    # GF05: Philadelphia
+    ("GF05", "42101"),  # Philadelphia
+    # GF06: Houston
+    ("GF06", "48201"),  # Harris
+    ("GF06", "48157"),  # Fort Bend
+    # GF07: Washington DC
+    ("GF07", "11001"),  # District of Columbia
+    # GF08: Miami-Fort Lauderdale
+    ("GF08", "12086"),  # Miami-Dade
+    # GF09: Atlanta
+    ("GF09", "13121"),  # Fulton
+    # GF10: Boston
+    ("GF10", "25025"),  # Suffolk
+    # GF11: San Francisco
+    ("GF11", "06075"),  # San Francisco
+    # GF12: Detroit
+    ("GF12", "26163"),  # Wayne
+    # GF13: Riverside
+    ("GF13", "06065"),  # Riverside
+    # GF14: Phoenix
+    ("GF14", "04013"),  # Maricopa
+    # GF15: Seattle
+    ("GF15", "53033"),  # King
+    # GF16: Minneapolis-St Paul
+    ("GF16", "27053"),  # Hennepin
+    # GF17: San Diego
+    ("GF17", "06073"),  # San Diego
+    # GF18: St. Louis
+    ("GF18", "29189"),  # St. Louis County
+    ("GF18", "29510"),  # St. Louis City (independent city)
+    # GF19: Tampa
+    ("GF19", "12057"),  # Hillsborough
+    # GF20: Baltimore
+    ("GF20", "24005"),  # Baltimore County
+    ("GF20", "24510"),  # Baltimore City (independent city)
+    # GF21: Denver - 7 counties
+    ("GF21", "08001"),  # Adams
+    ("GF21", "08005"),  # Arapahoe
+    ("GF21", "08013"),  # Boulder
+    ("GF21", "08014"),  # Broomfield
+    ("GF21", "08031"),  # Denver
+    ("GF21", "08035"),  # Douglas
+    ("GF21", "08059"),  # Jefferson
+    # GF22: Pittsburgh
+    ("GF22", "42003"),  # Allegheny
+    # GF23: Portland
+    ("GF23", "41051"),  # Multnomah
+    # GF24: Charlotte
+    ("GF24", "37119"),  # Mecklenburg
+    # GF25: Sacramento
+    ("GF25", "06067"),  # Sacramento
+]
+
+
+# ---------------------------------------------------------------------------
+# DataFrame builders
+# ---------------------------------------------------------------------------
+
+
+def build_definitions_df() -> pd.DataFrame:
+    """Build the metro definitions DataFrame from constants.
+
+    Returns a DataFrame with columns:
+    ``metro_id``, ``metro_name``, ``membership_type``,
+    ``definition_version``, ``source``, ``source_ref``.
+    """
+    rows = [
+        {
+            "metro_id": mid,
+            "metro_name": name,
+            "membership_type": mtype,
+            "definition_version": DEFINITION_VERSION,
+            "source": "glynn_fox_2019",
+            "source_ref": SOURCE_REF,
+        }
+        for mid, name, mtype in METRO_DEFINITIONS
+    ]
+    df = pd.DataFrame(rows)
+    df["metro_id"] = df["metro_id"].astype(str)
+    return df
+
+
+def build_coc_membership_df() -> pd.DataFrame:
+    """Build the metro-to-CoC membership DataFrame from constants.
+
+    Returns a DataFrame with columns:
+    ``metro_id``, ``coc_id``, ``definition_version``.
+    """
+    rows = [
+        {
+            "metro_id": mid,
+            "coc_id": coc,
+            "definition_version": DEFINITION_VERSION,
+        }
+        for mid, coc in METRO_COC_MEMBERSHIP
+    ]
+    df = pd.DataFrame(rows)
+    df["metro_id"] = df["metro_id"].astype(str)
+    df["coc_id"] = df["coc_id"].astype(str)
+    return df
+
+
+def build_county_membership_df() -> pd.DataFrame:
+    """Build the metro-to-county membership DataFrame from constants.
+
+    Returns a DataFrame with columns:
+    ``metro_id``, ``county_fips``, ``definition_version``.
+    """
+    rows = [
+        {
+            "metro_id": mid,
+            "county_fips": fips,
+            "definition_version": DEFINITION_VERSION,
+        }
+        for mid, fips in METRO_COUNTY_MEMBERSHIP
+    ]
+    df = pd.DataFrame(rows)
+    df["metro_id"] = df["metro_id"].astype(str)
+    df["county_fips"] = df["county_fips"].astype(str)
+    return df

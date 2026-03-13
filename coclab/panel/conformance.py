@@ -13,6 +13,7 @@ Registered checks
 - ``check_column_null_rates`` (coclab-1gmj): Per-column null rates
 - ``check_per_year_completeness`` (coclab-1gmj): Per-year null rates
 - ``check_zori_eligibility_rate`` (coclab-1gmj): ZORI eligibility rate
+- ``check_pit_exceeds_population`` (coclab-2472): PIT count > total population
 - ``check_coc_count`` (coclab-2o8i): Expected CoC count
 - ``check_panel_balance`` (coclab-2o8i): Balanced panel (all CoCs in all years)
 - ``check_coc_year_gaps`` (coclab-2o8i): Non-contiguous year coverage
@@ -40,6 +41,7 @@ from typing import Any, Literal
 
 import pandas as pd
 
+from coclab.analysis_geo import resolve_geo_col as _resolve_geo_col
 from coclab.panel.assemble import (
     ZORI_COLUMNS,
     ZORI_PROVENANCE_COLUMNS,
@@ -125,6 +127,7 @@ class PanelRequest:
     weighting_method: Literal["area", "population"] = "population"
     zori_min_coverage: float = 0.90
     expected_coc_count: int | None = None
+    expected_geo_count: int | None = None
     null_rate_threshold: float = 0.50
 
 
@@ -460,8 +463,9 @@ def check_temporal_variation(
         return results
 
     # Determine the geo ID column (coc_id or geo_id depending on source).
-    geo_col = "coc_id" if "coc_id" in df.columns else "geo_id"
-    if geo_col not in df.columns:
+    try:
+        geo_col = _resolve_geo_col(df)
+    except KeyError:
         return results
 
     for measure in TEMPORAL_VARIATION_MEASURES:
@@ -669,6 +673,61 @@ def check_zori_eligibility_rate(
 
 
 # ---------------------------------------------------------------------------
+# PIT vs population plausibility check  (coclab-2472)
+# ---------------------------------------------------------------------------
+
+
+@register_check
+def check_pit_exceeds_population(
+    df: pd.DataFrame, request: PanelRequest
+) -> list[ConformanceResult]:
+    """Flag CoC-year rows where PIT count exceeds total population.
+
+    This is logically impossible and indicates a data join or aggregation
+    bug (e.g., population was not apportioned while PIT counts were summed
+    at the CoC level).
+    """
+    if "pit_total" not in df.columns or "total_population" not in df.columns:
+        return []
+
+    try:
+        geo_col = _resolve_geo_col(df)
+    except KeyError:
+        return []
+
+    comparable = df[df["pit_total"].notna() & df["total_population"].notna()]
+    if comparable.empty:
+        return []
+
+    bad = comparable[comparable["pit_total"] > comparable["total_population"]]
+    if bad.empty:
+        return []
+
+    bad_count = len(bad)
+    examples = (
+        bad[[geo_col, "year", "pit_total", "total_population"]]
+        .head(5)
+        .to_dict(orient="records")
+    )
+
+    return [
+        ConformanceResult(
+            check_name="pit_exceeds_population",
+            severity="error",
+            message=(
+                f"{bad_count} CoC-year row(s) have pit_total > "
+                f"total_population"
+            ),
+            details={
+                "bad_row_count": bad_count,
+                "total_comparable_rows": len(comparable),
+                "examples": examples,
+            },
+        )
+    ]
+
+
+# ---------------------------------------------------------------------------
 # CoC coverage checks  (coclab-2o8i)
 # ---------------------------------------------------------------------------
 
@@ -677,16 +736,17 @@ def check_zori_eligibility_rate(
 def check_coc_count(
     panel_df: pd.DataFrame, request: PanelRequest
 ) -> list[ConformanceResult]:
-    """Check whether the panel has the expected number of unique CoCs."""
-    if request.expected_coc_count is None:
+    """Check whether the panel has the expected number of unique geo units."""
+    expected = request.expected_geo_count or request.expected_coc_count
+    if expected is None:
         return []
 
-    geo_col = "coc_id" if "coc_id" in panel_df.columns else "geo_id"
-    if geo_col not in panel_df.columns:
+    try:
+        geo_col = _resolve_geo_col(panel_df)
+    except KeyError:
         return []
 
     actual = panel_df[geo_col].nunique()
-    expected = request.expected_coc_count
 
     if actual < expected:
         return [
@@ -709,8 +769,11 @@ def check_panel_balance(
     panel_df: pd.DataFrame, request: PanelRequest
 ) -> list[ConformanceResult]:
     """Check whether the panel is balanced (all CoCs in all years)."""
-    geo_col = "coc_id" if "coc_id" in panel_df.columns else "geo_id"
-    if geo_col not in panel_df.columns or "year" not in panel_df.columns:
+    try:
+        geo_col = _resolve_geo_col(panel_df)
+    except KeyError:
+        return []
+    if "year" not in panel_df.columns:
         return []
 
     all_years = set(panel_df["year"].unique())
@@ -759,8 +822,9 @@ def check_coc_year_gaps(
     A gap means a CoC is present in year Y, absent in Y+1, present again
     in Y+2 or later. Missing edge years are NOT gaps.
     """
-    geo_col = "coc_id" if "coc_id" in panel_df.columns else "geo_id"
-    if geo_col not in panel_df.columns:
+    try:
+        geo_col = _resolve_geo_col(panel_df)
+    except KeyError:
         return []
 
     gap_examples: list[dict[str, Any]] = []

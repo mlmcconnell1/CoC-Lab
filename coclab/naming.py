@@ -10,10 +10,16 @@ Temporal notation uses single-letter prefixes:
 - A{year}: ACS vintage end year (e.g., A2023)
 - P{year}: PIT count year (e.g., P2024)
 - Y{year}: Panel year (e.g., Y2023)
+- D{version}: Synthetic geography definition version (e.g., Dglynnfoxv1)
 
 Compound notation:
 - @ means "analyzed using" (e.g., A2023@B2025 = ACS 2023 on 2025 boundaries)
 - x means crosswalk join (e.g., B2025xT2023 = boundaries crossed with tracts)
+
+Geography-scoped naming:
+- Metro outputs include a ``metro`` geography segment to avoid collision
+  with CoC outputs. Example: ``measures__metro__A2023@Dglynnfoxv1xT2020.parquet``
+- CoC outputs retain their existing names for backward compatibility.
 
 See background/temporal-terminology.md for full specification.
 """
@@ -728,3 +734,224 @@ def coc_pep_filename(
         f"coc_pep__B{boundary_vintage}xC{county_vintage}"
         f"__w{weighting}__{start_year}_{end_year}.parquet"
     )
+
+
+# =============================================================================
+# Definition-version token helper
+# =============================================================================
+
+
+def _normalize_definition_version(definition_version: str) -> str:
+    """Normalize a definition version string for use in filenames.
+
+    Strips non-alphanumeric characters (except underscores) and
+    lowercases. Example: ``"glynn_fox_v1"`` -> ``"glynnfoxv1"``.
+    """
+    return "".join(
+        c for c in definition_version.lower() if c.isalnum()
+    )
+
+
+# =============================================================================
+# Metro (geography-scoped) filenames
+# =============================================================================
+
+
+def metro_measures_filename(
+    acs_vintage: str,
+    definition_version: str,
+    tract_vintage: str | int | None = None,
+) -> str:
+    """Generate filename for metro-scoped ACS measures.
+
+    Pattern: ``measures__metro__A{acs}@D{def}xT{tract}.parquet``
+
+    The ``metro`` segment prevents collision with CoC measures files.
+    """
+    acs_year = _normalize_acs_vintage(acs_vintage)
+    defn = _normalize_definition_version(definition_version)
+    if tract_vintage is not None:
+        return f"measures__metro__A{acs_year}@D{defn}xT{tract_vintage}.parquet"
+    return f"measures__metro__A{acs_year}@D{defn}.parquet"
+
+
+def metro_panel_filename(
+    start_year: int,
+    end_year: int,
+    definition_version: str,
+) -> str:
+    """Generate filename for metro-scoped panel.
+
+    Pattern: ``panel__metro__Y{start}-{end}@D{def}.parquet``
+    """
+    defn = _normalize_definition_version(definition_version)
+    return f"panel__metro__Y{start_year}-{end_year}@D{defn}.parquet"
+
+
+def metro_pit_filename(
+    pit_year: str | int,
+    definition_version: str,
+) -> str:
+    """Generate filename for metro-scoped PIT aggregate.
+
+    Pattern: ``pit__metro__P{year}@D{def}.parquet``
+    """
+    defn = _normalize_definition_version(definition_version)
+    return f"pit__metro__P{pit_year}@D{defn}.parquet"
+
+
+def metro_pep_filename(
+    definition_version: str,
+    county_vintage: int | str,
+    weighting: str,
+    start_year: int,
+    end_year: int,
+) -> str:
+    """Canonical filename for metro-level PEP aggregate output.
+
+    Pattern: ``pep__metro__D{def}xC{county}__w{weighting}__{start}_{end}.parquet``
+    """
+    defn = _normalize_definition_version(definition_version)
+    return (
+        f"pep__metro__D{defn}xC{county_vintage}"
+        f"__w{weighting}__{start_year}_{end_year}.parquet"
+    )
+
+
+def metro_zori_filename(
+    acs_vintage: str,
+    definition_version: str,
+    county_vintage: str | int,
+    weighting: str,
+) -> str:
+    """Generate filename for metro-scoped ZORI dataset.
+
+    Pattern: ``zori__metro__A{acs}@D{def}xC{county}__w{weight}.parquet``
+    """
+    acs_year = _normalize_acs_vintage(acs_vintage)
+    defn = _normalize_definition_version(definition_version)
+    weight_abbrev = _abbreviate_weighting(weighting)
+    return (
+        f"zori__metro__A{acs_year}@D{defn}xC{county_vintage}"
+        f"__w{weight_abbrev}.parquet"
+    )
+
+
+# =============================================================================
+# Metro definition artifact filenames
+# =============================================================================
+
+
+def metro_definitions_filename(definition_version: str) -> str:
+    """Filename for metro definitions table.
+
+    Pattern: ``metro_definitions__{version}.parquet``
+    """
+    return f"metro_definitions__{definition_version}.parquet"
+
+
+def metro_coc_membership_filename(definition_version: str) -> str:
+    """Filename for metro-to-CoC membership table.
+
+    Pattern: ``metro_coc_membership__{version}.parquet``
+    """
+    return f"metro_coc_membership__{definition_version}.parquet"
+
+
+def metro_county_membership_filename(definition_version: str) -> str:
+    """Filename for metro-to-county membership table.
+
+    Pattern: ``metro_county_membership__{version}.parquet``
+    """
+    return f"metro_county_membership__{definition_version}.parquet"
+
+
+# =============================================================================
+# Metro definition artifact paths
+# =============================================================================
+
+
+def metro_definitions_path(
+    definition_version: str,
+    base_dir: Path | str | None = None,
+) -> Path:
+    """Canonical path for metro definitions file.
+
+    Returns:
+        Path like data/curated/metro/metro_definitions__glynn_fox_v1.parquet
+    """
+    if base_dir is None:
+        base_dir = Path("data")
+    else:
+        base_dir = Path(base_dir)
+    return (
+        base_dir / "curated" / "metro"
+        / metro_definitions_filename(definition_version)
+    )
+
+
+def metro_coc_membership_path(
+    definition_version: str,
+    base_dir: Path | str | None = None,
+) -> Path:
+    """Canonical path for metro-to-CoC membership file.
+
+    Returns:
+        Path like data/curated/metro/metro_coc_membership__glynn_fox_v1.parquet
+    """
+    if base_dir is None:
+        base_dir = Path("data")
+    else:
+        base_dir = Path(base_dir)
+    return (
+        base_dir / "curated" / "metro"
+        / metro_coc_membership_filename(definition_version)
+    )
+
+
+def metro_county_membership_path(
+    definition_version: str,
+    base_dir: Path | str | None = None,
+) -> Path:
+    """Canonical path for metro-to-county membership file.
+
+    Returns:
+        Path like data/curated/metro/metro_county_membership__glynn_fox_v1.parquet
+    """
+    if base_dir is None:
+        base_dir = Path("data")
+    else:
+        base_dir = Path(base_dir)
+    return (
+        base_dir / "curated" / "metro"
+        / metro_county_membership_filename(definition_version)
+    )
+
+
+# =============================================================================
+# Geography-aware filename dispatcher
+# =============================================================================
+
+
+def geo_panel_filename(
+    start_year: int,
+    end_year: int,
+    *,
+    geo_type: str = "coc",
+    boundary_vintage: str | None = None,
+    definition_version: str | None = None,
+) -> str:
+    """Return the panel filename for any supported analysis geography.
+
+    For ``geo_type="coc"``, delegates to :func:`panel_filename`.
+    For ``geo_type="metro"``, delegates to :func:`metro_panel_filename`.
+    """
+    if geo_type == "coc":
+        if boundary_vintage is None:
+            raise ValueError("boundary_vintage is required for geo_type='coc'")
+        return panel_filename(start_year, end_year, boundary_vintage)
+    if geo_type == "metro":
+        if definition_version is None:
+            raise ValueError("definition_version is required for geo_type='metro'")
+        return metro_panel_filename(start_year, end_year, definition_version)
+    raise ValueError(f"Unsupported geo_type: {geo_type!r}")

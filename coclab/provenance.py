@@ -61,6 +61,11 @@ class ProvenanceBlock:
         Can be auto-generated via generate_notation().
     weighting : str, optional
         Weighting method ("area" or "population").
+    geo_type : str, optional
+        Analysis geography type (e.g., "coc", "metro").
+    definition_version : str, optional
+        Synthetic geography definition version (e.g., "glynn_fox_v1").
+        Used for metro and other non-polygonal geography families.
     created_at : str
         ISO 8601 timestamp of dataset creation (auto-generated).
     coclab_version : str
@@ -75,6 +80,8 @@ class ProvenanceBlock:
     acs_vintage: str | None = None
     notation: str | None = None
     weighting: str | None = None
+    geo_type: str | None = None
+    definition_version: str | None = None
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     coclab_version: str = "0.1.0"
     extra: dict[str, Any] = field(default_factory=dict)
@@ -136,6 +143,8 @@ class ProvenanceBlock:
             "acs_vintage",
             "notation",
             "weighting",
+            "geo_type",
+            "definition_version",
             "created_at",
             "coclab_version",
             "extra",

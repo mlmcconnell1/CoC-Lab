@@ -1006,6 +1006,72 @@ def _persist_outputs(
     return StepResult(step_kind="persist", detail=detail, success=True)
 
 
+def _persist_diagnostics(
+    plan: ExecutionPlan,
+    ctx: ExecutionContext,
+) -> StepResult:
+    """Generate and persist diagnostics for the assembled panel.
+
+    Runs the panel diagnostics report and writes a JSON sidecar file
+    alongside the panel output.  The diagnostics file uses the same
+    base name as the panel with a ``__diagnostics.json`` suffix.
+    """
+    from coclab.panel.diagnostics import generate_diagnostics_report
+
+    # Re-collect the panel from intermediates (same logic as _persist_outputs)
+    universe_years = expand_year_spec(ctx.recipe.universe)
+    frames: list[pd.DataFrame] = []
+    for year in universe_years:
+        key = ("__joined__", year)
+        if key in ctx.intermediates:
+            frames.append(ctx.intermediates[key])
+
+    if not frames:
+        return StepResult(
+            step_kind="persist_diagnostics",
+            detail="persist diagnostics",
+            success=False,
+            error="No joined outputs available for diagnostics.",
+        )
+
+    panel = pd.concat(frames, ignore_index=True)
+
+    # Resolve output path: same directory as panel, same stem + __diagnostics.json
+    pipeline = next(
+        (p for p in ctx.recipe.pipelines if p.id == plan.pipeline_id), None
+    )
+    target = None
+    if pipeline is not None:
+        target = next(
+            (t for t in ctx.recipe.targets if t.id == pipeline.target), None
+        )
+    boundary_vintage = str(
+        target.geometry.vintage if target is not None else "unknown"
+    )
+    start_year = min(universe_years)
+    end_year = max(universe_years)
+    output_dir = ctx.project_root / "data" / "curated" / "panel"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    panel_stem = panel_filename(start_year, end_year, boundary_vintage).replace(
+        ".parquet", ""
+    )
+    diagnostics_file = output_dir / f"{panel_stem}__diagnostics.json"
+
+    # Generate diagnostics
+    report = generate_diagnostics_report(panel)
+
+    # Write as JSON
+    diagnostics_dict = report.to_dict()
+    diagnostics_file.write_text(json.dumps(diagnostics_dict, indent=2, default=str) + "\n")
+
+    detail = (
+        f"persist diagnostics: "
+        f"{diagnostics_file.relative_to(ctx.project_root)}"
+    )
+    _echo(ctx, f"  [persist] {detail}")
+    return StepResult(step_kind="persist_diagnostics", detail=detail, success=True)
+
+
 # ---------------------------------------------------------------------------
 # Pipeline orchestrator
 # ---------------------------------------------------------------------------
@@ -1075,13 +1141,21 @@ def _execute_plan(
             if not step.success:
                 return result
 
-        unsupported = [o for o in declared_outputs if o not in ("panel",)]
+        if "diagnostics" in declared_outputs:
+            step = _persist_diagnostics(plan, ctx)
+            result.steps.append(step)
+            if not step.success:
+                return result
+
+        unsupported = [
+            o for o in declared_outputs if o not in ("panel", "diagnostics")
+        ]
         if unsupported:
             import warnings as _w
             _w.warn(
                 f"Pipeline '{plan.pipeline_id}': target outputs "
                 f"{unsupported} are declared but not yet implemented. "
-                f"Only 'panel' output is currently supported.",
+                f"Only 'panel' and 'diagnostics' outputs are currently supported.",
                 stacklevel=2,
             )
 

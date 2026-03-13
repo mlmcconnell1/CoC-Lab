@@ -1660,17 +1660,22 @@ class TestTargetOutputsEnforcement:
         assert "persist" not in kinds
 
     def test_diagnostics_only_skips_panel_persist(self, tmp_path: Path):
-        """targets with outputs=['diagnostics'] should not persist a panel."""
+        """targets with outputs=['diagnostics'] should persist diagnostics but not panel."""
         _setup_pipeline_fixtures(tmp_path)
         data = _recipe_with_pipeline()
         data["datasets"]["pit"]["path"] = "data/pit.parquet"
         data["datasets"]["acs"]["path"] = "data/acs.parquet"
         data["targets"][0]["outputs"] = ["diagnostics"]
         recipe = load_recipe(data)
-        with pytest.warns(UserWarning, match="not yet implemented"):
-            results = execute_recipe(recipe, project_root=tmp_path)
+        results = execute_recipe(recipe, project_root=tmp_path)
         kinds = [s.step_kind for s in results[0].steps]
+        # Panel persistence should be skipped
         assert "persist" not in kinds
+        # Diagnostics persistence should run
+        assert "persist_diagnostics" in kinds
+        # Verify the diagnostics JSON file was written
+        diag_files = list((tmp_path / "data" / "curated" / "panel").glob("*__diagnostics.json"))
+        assert len(diag_files) == 1
 
 
 class TestPipelineResult:

@@ -232,6 +232,9 @@ def write_build_manifest(
     name: str,
     years: list[int],
     base_assets: list[dict],
+    *,
+    geo_type: str | None = None,
+    definition_version: str | None = None,
 ) -> Path:
     """Write (or overwrite) the build manifest.
 
@@ -240,17 +243,27 @@ def write_build_manifest(
         name: Build name.
         years: Normalized/sorted year list.
         base_assets: Asset dicts returned by :func:`populate_base_assets`.
+        geo_type: Optional analysis geography type (``"coc"`` or ``"metro"``).
+            When provided, the manifest records the target geography.
+        definition_version: Optional synthetic geography definition version
+            (e.g., ``"glynn_fox_v1"``). Used for metro builds.
 
     Returns:
         Path to the written manifest.json.
     """
+    build_block: dict = {
+        "name": name,
+        "created_at": datetime.now(UTC).isoformat(),
+        "years": years,
+    }
+    if geo_type is not None:
+        build_block["geo_type"] = geo_type
+    if definition_version is not None:
+        build_block["definition_version"] = definition_version
+
     manifest = {
         "schema_version": 1,
-        "build": {
-            "name": name,
-            "created_at": datetime.now(UTC).isoformat(),
-            "years": years,
-        },
+        "build": build_block,
         "base_assets": base_assets,
         "aggregate_runs": [],
     }
