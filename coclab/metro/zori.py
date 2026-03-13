@@ -1,0 +1,136 @@
+"""Metro-level ZORI aggregation from county-native inputs.
+
+ZORI (Zillow Observed Rent Index) data is native at the county level.
+Metro ZORI values are derived by computing a population-weighted mean
+of county ZORI for all member counties defined in the metro-county
+membership table.
+
+For multi-county metros (e.g., NYC with 5 boroughs, Denver with 7 counties),
+this module computes a weighted mean using ACS-based county weights.
+For single-county metros, it is a 1:1 passthrough.
+
+Coverage tracking: when a member county lacks ZORI data for a given month,
+``coverage_ratio`` records the fraction of member-county weight mass
+with data available.
+"""
+
+from __future__ import annotations
+
+import logging
+
+import pandas as pd
+
+from coclab.metro.definitions import (
+    DEFINITION_VERSION,
+    build_county_membership_df,
+)
+from coclab.rents.aggregate import (
+    YearlyMethod,
+    aggregate_monthly,
+    collapse_to_yearly,
+    compute_geo_county_weights,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _build_metro_county_crosswalk() -> pd.DataFrame:
+    """Build a metro-county crosswalk suitable for ZORI aggregation.
+
+    Each metro-county pair gets ``area_share=1.0`` because metros fully
+    contain their member counties (no partial overlap).
+    """
+    membership = build_county_membership_df()
+    membership["area_share"] = 1.0
+    return membership
+
+
+def aggregate_zori_to_metro(
+    zori_df: pd.DataFrame,
+    weights_df: pd.DataFrame,
+    *,
+    definition_version: str = DEFINITION_VERSION,
+    min_coverage: float = 0.90,
+    county_membership_df: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """Aggregate county-level ZORI to Glynn/Fox metro areas (monthly).
+
+    Parameters
+    ----------
+    zori_df : pd.DataFrame
+        County-level ZORI data with columns:
+        - ``geo_id``: county FIPS code
+        - ``date``: month start date
+        - ``zori``: ZORI value
+    weights_df : pd.DataFrame
+        County ACS weights with columns:
+        - ``county_fips``: 5-digit FIPS code
+        - ``weight_value``: ACS-based weight (e.g., renter households)
+    definition_version : str
+        Metro definition version to use.
+    min_coverage : float
+        Minimum coverage ratio threshold.  Metro-months below this have
+        zori_coc set to null.  Default 0.90.
+    county_membership_df : pd.DataFrame, optional
+        Override metro-county membership table.  If None, uses the
+        built-in membership from ``coclab.metro.definitions``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Monthly metro-level ZORI with columns:
+        - ``metro_id``, ``date``, ``zori_coc``
+        - ``coverage_ratio``, ``max_geo_contribution``, ``geo_count``
+        - ``definition_version``
+    """
+    # Build crosswalk
+    if county_membership_df is not None:
+        xwalk = county_membership_df.copy()
+        if "area_share" not in xwalk.columns:
+            xwalk["area_share"] = 1.0
+    else:
+        xwalk = _build_metro_county_crosswalk()
+
+    # Delegate to the generalized monthly aggregation
+    result_df = aggregate_monthly(
+        zori_df,
+        xwalk,
+        weights_df,
+        min_coverage=min_coverage,
+        geo_id_col="metro_id",
+    )
+
+    # Add definition version
+    result_df["definition_version"] = definition_version
+
+    logger.info(
+        f"Metro ZORI aggregation: {result_df['metro_id'].nunique()} metros, "
+        f"{result_df['date'].nunique()} months"
+    )
+
+    return result_df
+
+
+def collapse_zori_to_yearly(
+    monthly_df: pd.DataFrame,
+    method: YearlyMethod = "pit_january",
+) -> pd.DataFrame:
+    """Collapse monthly metro ZORI to yearly values.
+
+    Thin wrapper around :func:`coclab.rents.aggregate.collapse_to_yearly`
+    with ``geo_id_col="metro_id"``.
+
+    Parameters
+    ----------
+    monthly_df : pd.DataFrame
+        Monthly metro ZORI from :func:`aggregate_zori_to_metro`.
+    method : str
+        Yearly collapse method: ``"pit_january"``, ``"calendar_mean"``,
+        or ``"calendar_median"``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Yearly metro ZORI with ``metro_id``, ``year``, ``zori_coc``, etc.
+    """
+    return collapse_to_yearly(monthly_df, method, geo_id_col="metro_id")

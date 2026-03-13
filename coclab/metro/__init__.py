@@ -10,8 +10,10 @@ from coclab.metro.definitions import (
     build_county_membership_df,
     build_definitions_df,
 )
+from coclab.metro.pep import aggregate_pep_to_metro
 from coclab.metro.pit import aggregate_pit_to_metro
 from coclab.metro.validate import validate_metro_artifacts
+from coclab.metro.zori import aggregate_zori_to_metro, collapse_zori_to_yearly
 
 __all__ = [
     "DEFINITION_VERSION",
@@ -22,6 +24,9 @@ __all__ = [
     "build_definitions_df",
     "build_coc_membership_df",
     "build_county_membership_df",
+    "aggregate_pep_to_metro",
     "aggregate_pit_to_metro",
+    "aggregate_zori_to_metro",
+    "collapse_zori_to_yearly",
     "validate_metro_artifacts",
 ]
