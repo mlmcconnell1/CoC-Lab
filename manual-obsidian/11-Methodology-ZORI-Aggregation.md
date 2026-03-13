@@ -1,6 +1,6 @@
-# Methodology: ZORI Aggregation to CoC Level
+# Methodology: ZORI Aggregation
 
-This section documents how ZORI (Zillow Observed Rent Index) data is aggregated from county geography to CoC boundaries.
+This section documents how ZORI (Zillow Observed Rent Index) data is aggregated from county geography to analysis geographies (CoC or metro).
 
 ## What is ZORI?
 
@@ -11,24 +11,33 @@ ZORI (Zillow Observed Rent Index) measures typical observed rent across a given 
 - **Covers ~40% of US counties** - Urban/suburban counties with sufficient listings
 - **Published by Zillow Economic Research** - Free for public use with attribution
 
+## Target Geographies
+
+The aggregation engine (`coclab.rents.aggregate.aggregate_monthly()`) is geography-neutral via `geo_id_col`:
+
+- **CoC**: counties are assigned to CoCs via area-weighted spatial crosswalk
+- **Metro**: counties are assigned to metros via county membership table (no spatial crosswalk needed)
+
+The same weighting formula, coverage tracking, and yearly collapse methods apply to both targets.
+
 ## Aggregation Pipeline
 
 ```mermaid
 flowchart TB
     subgraph Inputs
         ZORI[County ZORI\nZillow]
-        XWALK[County-CoC Crosswalk\nArea-weighted]
+        XWALK[County-Geography Crosswalk\nArea-weighted or membership]
         WEIGHTS[County Weights\nACS renter HH]
     end
 
     subgraph Compute
         MERGE[Merge crosswalk + weights]
-        NORM[Normalize weights per CoC]
-        AGG[Weighted average per CoC/month]
+        NORM[Normalize weights per geo unit]
+        AGG[Weighted average per geo/month]
     end
 
     subgraph Output
-        COC_ZORI[CoC ZORI\nMonthly time series]
+        GEO_ZORI[Geography ZORI\nMonthly time series]
         DIAG[Coverage diagnostics]
     end
 
@@ -37,7 +46,7 @@ flowchart TB
     WEIGHTS --> MERGE
     MERGE --> NORM
     NORM --> AGG
-    AGG --> COC_ZORI
+    AGG --> GEO_ZORI
     AGG --> DIAG
 ```
 

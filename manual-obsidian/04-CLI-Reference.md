@@ -85,6 +85,17 @@ Optional ZORI integration:
 coclab build panel --build demo --start 2018 --end 2024 --include-zori
 ```
 
+#### Metro Panel Build
+
+Use `--geo-type metro` with `--definition-version` to build a metro-targeted panel:
+
+```bash
+coclab build panel --build metro-gf --start 2011 --end 2016 \
+    --geo-type metro --definition-version glynn_fox_v1
+```
+
+Metro builds aggregate PIT counts from member CoCs and derive ACS/PEP/ZORI measures from county membership tables. The `--definition-version` flag is required when `--geo-type` is `metro`.
+
 ### Recipe Execution (Recommended)
 
 ```bash

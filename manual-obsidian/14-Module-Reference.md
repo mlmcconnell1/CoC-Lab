@@ -26,11 +26,15 @@ This chapter is an orientation map of active modules in the current codebase.
 - `coclab/recipe/executor.py`: runtime execution engine
 - `coclab/recipe/manifest.py`: consumed-asset manifests and recipe bundle export
 
+## Analysis Geography
+
+- `coclab/analysis_geo.py`: canonical `geo_type`/`geo_id` abstraction, `AnalysisGeometryRef` dataclass, DataFrame helpers (`resolve_geo_col`, `infer_geo_type`, `ensure_canonical_geo_columns`)
+
 ## Build and Provenance
 
 - `coclab/builds.py`: build directory and manifest helpers
 - `coclab/provenance.py`: Parquet metadata embedding/reading
-- `coclab/naming.py`: canonical filename/path conventions
+- `coclab/naming.py`: canonical filename/path conventions (including metro-specific naming functions)
 
 ## Data-Domain Modules
 
@@ -42,7 +46,15 @@ This chapter is an orientation map of active modules in the current codebase.
 - `coclab/pit/`: PIT ingest, registry, QA
 - `coclab/pep/`: PEP ingest and aggregation
 - `coclab/rents/`: ZORI ingest, weighting, aggregation, diagnostics
-- `coclab/panel/`: imperative panel builder + diagnostics
+- `coclab/panel/`: imperative panel builder + diagnostics (supports CoC and metro targets)
+- `coclab/metro/`: metro analysis geography module
+  - `coclab/metro/definitions.py`: Glynn/Fox metro definitions (25 metros, membership tables)
+  - `coclab/metro/pit.py`: PIT aggregation from CoC to metro via CoC membership
+  - `coclab/metro/acs.py`: ACS aggregation from tracts to metro via county membership
+  - `coclab/metro/pep.py`: PEP aggregation from counties to metro via county membership
+  - `coclab/metro/zori.py`: ZORI aggregation from counties to metro via county membership
+  - `coclab/metro/validate.py`: metro artifact validation (ID formats, referential integrity, counts)
+  - `coclab/metro/io.py`: read/write curated metro definition artifacts
 - `coclab/export/`: bundle selection/copy/manifest/readme generation
 
 ## Guidance

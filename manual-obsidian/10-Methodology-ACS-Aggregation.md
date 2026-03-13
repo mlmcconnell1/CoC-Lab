@@ -1,10 +1,19 @@
-# Methodology: ACS Aggregation to CoC Level
+# Methodology: ACS Aggregation
 
-This section documents how ACS demographic measures are aggregated from census tracts to CoC boundaries.
+This section documents how ACS demographic measures are aggregated from census tracts to analysis geographies (CoC or metro).
+
+## Target Geographies
+
+The aggregation engine is geography-neutral via the `geo_id_col` parameter in `coclab.measures.acs.aggregate_to_geo()`:
+
+- **CoC**: tracts are assigned to CoCs via area-weighted spatial crosswalk (`xwalk__B{boundary}xT{tract}.parquet`)
+- **Metro**: tracts are assigned to metros via county membership (tract's county FIPS → metro county membership table)
+
+The same weighting and coverage logic applies to both targets.
 
 ## Aggregation Algorithm
 
-CoC Lab uses **weighted tract-level aggregation** to produce CoC-level estimates. The algorithm differs by measure type:
+CoC Lab uses **weighted tract-level aggregation** to produce geography-level estimates. The algorithm differs by measure type:
 
 ### Count Variables (population, poverty counts)
 

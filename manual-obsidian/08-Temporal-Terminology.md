@@ -23,6 +23,7 @@ Single-letter prefixes identify dataset types:
 | PIT count year | **P**{year} | P2024 | The January count year |
 | ZORI yearly series | **Z**{year} | Z2024 | Yearly-collapsed ZORI (default: January alignment) |
 | Panel year | **Y**{year} | Y2023 | The "as-of" year for analysis |
+| Definition version | **D**{version} | Dglynnfoxv1 | Synthetic geography definition (see below) |
 
 ### ACS Collection Windows
 
@@ -42,6 +43,22 @@ ZORI is published as a **monthly** series. In CoC Lab notation:
 - The default collapse method is **January alignment** (`pit_january`) to match PIT timing.
 - If the collapse method matters, annotate it explicitly (e.g., `Z2024[pit_january]`, `Z2024[calendar_mean]`, `Z2024[calendar_median]`).
 
+### Definition Version Notation
+
+The `D{version}` prefix identifies synthetic analysis geographies that are defined by researcher membership rules rather than by a single boundary vintage. The version string is normalized for filenames by removing underscores (e.g., `glynn_fox_v1` → `glynnfoxv1`).
+
+| Notation | Definition Version | Source |
+|----------|--------------------|--------|
+| Dglynnfoxv1 | `glynn_fox_v1` | Glynn & Fox (2019), 25 metro analysis units |
+
+Metro-derived filenames embed `__metro__` as a geography segment and use `D` instead of `B`:
+
+| Shorthand | Filename |
+|-----------|----------|
+| metro PIT P2024 | `pit__metro__P2024@Dglynnfoxv1.parquet` |
+| metro panel Y2020-2024 | `panel__metro__Y2020-2024@Dglynnfoxv1.parquet` |
+| metro measures A2023 | `measures__metro__A2023@Dglynnfoxv1xT2023.parquet` |
+
 ## Compound Notation
 
 When describing which vintages were combined in a derived dataset, use `@` for "analyzed using" and `×` for crosswalk joins:
@@ -54,10 +71,20 @@ When describing which vintages were combined in a derived dataset, use `@` for "
 | **P2020@B2025×T2023** | 2020 PIT re-aligned to 2025 boundaries using 2023 tracts |
 | **Z2024@B2025×C2023** | 2024 ZORI aggregated to 2025 CoC boundaries via 2023 county crosswalk |
 
+### Metro Compound Notation
+
+When the target analysis geography is metro, `@D{version}` replaces `@B{year}`:
+
+| Notation | Meaning |
+|----------|---------|
+| **P2024@Dglynnfoxv1** | 2024 PIT counts aggregated to Glynn/Fox metro definitions |
+| **A2023@Dglynnfoxv1×T2023** | ACS 2023 aggregated to metros via 2023 tract crosswalk |
+| **Z2024@Dglynnfoxv1×C2023** | 2024 ZORI aggregated to metros via 2023 county membership |
+
 ### Reading Compound Notation
 
 - The first element is the **source data** being analyzed
-- `@B{year}` specifies the **target CoC boundaries**
+- `@B{year}` specifies the **target CoC boundaries**; `@D{version}` specifies a **target metro definition**
 - `×T{year}` or `×C{year}` specifies the **intermediary geometry** used for spatial joins
 - ZORI aggregation uses ACS-based weights; note the weight vintage in prose when needed (e.g., "weights A2023")
 

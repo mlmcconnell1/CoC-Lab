@@ -5,7 +5,7 @@ CoC Lab currently supports two panel assembly paths:
 - **Imperative path:** `coclab build panel`
 - **Recipe path:** `coclab build recipe` (recommended)
 
-Both follow the same conceptual model: align heterogeneous inputs to a CoC-year frame, then join.
+Both follow the same conceptual model: align heterogeneous inputs to a geography×year frame, then join. The target geography is CoC by default but can be metro when `--geo-type metro` is specified.
 
 ## Shared Assembly Pattern
 
@@ -30,6 +30,22 @@ Both follow the same conceptual model: align heterogeneous inputs to a CoC-year 
 - Current persisted panel target is canonical `data/curated/panel/...`
 - Non-panel outputs declared in `targets[].outputs` are currently intent-only and emit runtime warnings
 - Writes `*.manifest.json` sidecar listing consumed assets
+
+## Metro Panel Assembly
+
+When the target geography is metro (`--geo-type metro --definition-version glynn_fox_v1`), the panel builder adapts its behavior:
+
+| Step | CoC | Metro |
+|------|-----|-------|
+| PIT source | CoC-native PIT counts | Aggregated from member CoCs via metro-CoC membership table |
+| ACS measures | Tract→CoC crosswalk | Tract→county→metro via county membership |
+| PEP population | County→CoC crosswalk | County→metro via county membership |
+| ZORI rents | County→CoC crosswalk | County→metro via county membership |
+| Boundary alignment | `period_faithful` or `retrospective` | `definition_fixed` (metros are version-pinned, not vintaged) |
+| `boundary_changed` | Tracks year-over-year CoC boundary shifts | Always `False` (definition is fixed within a version) |
+| Schema | `PANEL_COLUMNS` with `coc_id` | `METRO_PANEL_COLUMNS` with `metro_id`, `geo_type`, `geo_id` |
+
+PIT coverage tracking for metro panels reports `coc_count`, `coc_expected`, `coc_coverage_ratio`, and `missing_cocs` per metro-year to surface incomplete aggregation.
 
 ## Quality Signals
 

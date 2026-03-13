@@ -43,10 +43,12 @@ flowchart TB
 ## Major Subsystems
 
 - `coclab/cli/`: Typer CLI command groups
+- `coclab/analysis_geo.py`: analysis geography abstraction (`AnalysisGeometryRef`, canonical `geo_type`/`geo_id` columns)
 - `coclab/recipe/`: schema, adapters, planner, executor, recipe manifests
 - `coclab/builds.py`: build scaffolding, base-asset pinning, build manifests
-- `coclab/xwalks/`: tract/county crosswalk generation
-- `coclab/measures/`, `coclab/rents/`, `coclab/pep/`, `coclab/pit/`: dataset-specific ingestion and aggregation
+- `coclab/xwalks/`: tract/county crosswalk generation (geography-neutral via `geo_id_col` parameter)
+- `coclab/measures/`, `coclab/rents/`, `coclab/pep/`, `coclab/pit/`: dataset-specific ingestion and aggregation (generalized to arbitrary target geographies)
+- `coclab/metro/`: metro definition data, PIT/ACS/PEP/ZORI aggregation to metro, validation, I/O
 - `coclab/export/`: artifact selection, copying, bundle `MANIFEST.json`
 
 ## Storage Model

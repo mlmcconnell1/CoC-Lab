@@ -1,19 +1,20 @@
 # Overview
 
-CoC Lab is a data engineering and reproducibility toolkit for building **CoC-centered analysis datasets** from heterogeneous public sources.
+CoC Lab is a data engineering and reproducibility toolkit for building **analysis-geography-centered datasets** from heterogeneous public sources.
 
 Its core design choice is deliberate:
 
-- **Hub geography:** CoC boundaries by vintage (`B{year}`)
-- **Spoke datasets:** tract- and county-native inputs (ACS, ZORI, PEP) mapped into the CoC hub via crosswalks
+- **Default hub geography:** CoC boundaries by vintage (`B{year}`)
+- **Alternate analysis geography:** Metro areas via researcher-defined membership rules (e.g., Glynn/Fox metros with `D{version}`)
+- **Spoke datasets:** tract- and county-native inputs (ACS, ZORI, PEP) mapped into the target analysis geography via crosswalks or membership tables
 - **Execution style:** explicit build scaffolds and declarative YAML recipes
 
 ## What CoC Lab Does
 
 - Ingests boundary, census geometry, PIT, ACS, PEP, and ZORI inputs
 - Builds tract↔CoC and county↔CoC crosswalks
-- Aggregates source datasets to CoC geography inside named builds
-- Assembles CoC-year panels (imperative and recipe-driven paths)
+- Aggregates source datasets to CoC or metro geography inside named builds
+- Assembles geography×year panels (imperative and recipe-driven paths) for CoC or metro targets
 - Writes provenance metadata and recipe manifests for reproducibility
 - Exports analysis bundles with a machine-readable `MANIFEST.json`
 
@@ -30,8 +31,8 @@ The recipe system separates:
 ### 3. Transparent temporal alignment
 Vintages are explicit in file names, metadata, and docs. The system avoids hiding lag or mismatch decisions.
 
-### 4. CoC-first analytical intent
-The project is optimized for CoC-level inference. County-native and tract-native inputs are transformed into that analysis frame, not vice versa.
+### 4. Analysis-geography-centered inference
+The project defaults to CoC-level inference but supports metro areas as an alternate analysis geography. County-native and tract-native inputs are transformed into the target analysis frame (CoC or metro), not vice versa. See [[07-Data-Model#analysis-geography-model]] for the abstraction.
 
 ## Key Surfaces
 

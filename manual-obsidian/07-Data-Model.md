@@ -1,5 +1,32 @@
 # Data Model
 
+## Analysis Geography Model
+
+CoC Lab supports multiple analysis geographies—the unit of observation in derived outputs. The abstraction separates *analysis geography* (what you want to measure) from *source geometry* (how input data is natively organized).
+
+| Property | CoC | Metro |
+|----------|-----|-------|
+| `geo_type` | `"coc"` | `"metro"` |
+| `geo_id` | CoC code (e.g., `CO-500`) | Metro ID (e.g., `GF01`) |
+| Version key | `boundary_vintage` (e.g., `"2025"`) | `definition_version` (e.g., `"glynn_fox_v1"`) |
+| Identity source | HUD boundary polygons | Researcher membership rules |
+| PIT aggregation | Native (identity) | Summed over member CoCs |
+| ACS aggregation | Tract crosswalk | County-membership tract crosswalk |
+| PEP aggregation | County crosswalk | County membership |
+| ZORI aggregation | County crosswalk | County membership |
+
+### Canonical Column Contract
+
+Derived datasets use these canonical columns:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `geo_type` | string | Geography family: `"coc"` or `"metro"` |
+| `geo_id` | string | Canonical identifier within the family |
+| `year` | int | Observation year |
+
+CoC outputs retain `coc_id` for backward compatibility. Metro outputs use `metro_id` as the native identifier alongside `geo_type` and `geo_id`. Metro outputs never invent a fake `coc_id`.
+
 ## Canonical Boundary Schema
 
 All boundary data is normalized to this schema before storage:
@@ -222,6 +249,104 @@ erDiagram
 | `boundary_changed` | bool | True if CoC boundary changed from prior year |
 | `source` | string | Data source identifier |
 
+## Metro Definition Schemas
+
+Metro areas are synthetic analysis units defined by researcher membership rules. The Glynn/Fox metros (25 units) are encoded as three curated tables stored under `data/curated/metro/`.
+
+### Metro Definitions
+
+```mermaid
+erDiagram
+    METRO_DEFINITIONS {
+        string metro_id PK "e.g., GF01"
+        string metro_name "e.g., New York, NY"
+        string membership_type "single, multi_coc, multi_county, multi_coc_multi_county"
+        string definition_version "e.g., glynn_fox_v1"
+        string source "Academic paper reference"
+        string source_ref "Full citation"
+    }
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `metro_id` | string | Zero-padded identifier (e.g., `GF01` through `GF25`) |
+| `metro_name` | string | Human-readable metro name |
+| `membership_type` | string | Aggregation rule: `single`, `multi_coc`, `multi_county`, or `multi_coc_multi_county` |
+| `definition_version` | string | Version identifier (e.g., `glynn_fox_v1`) |
+| `source` | string | Source attribution |
+| `source_ref` | string | Full citation or URL |
+
+### Metro CoC Membership
+
+Maps each metro to its constituent CoCs for PIT aggregation:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `metro_id` | string | Metro identifier |
+| `coc_id` | string | Member CoC code (e.g., `CA-600`) |
+| `definition_version` | string | Definition version |
+
+### Metro County Membership
+
+Maps each metro to its constituent counties for PEP, ZORI, and ACS aggregation:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `metro_id` | string | Metro identifier |
+| `county_fips` | string | 5-digit county FIPS code |
+| `definition_version` | string | Definition version |
+
+### Membership Types
+
+| Type | PIT Rule | Population/Rent Rule |
+|------|----------|---------------------|
+| `single` | One CoC, identity | One county, identity |
+| `multi_coc` | Sum PIT across member CoCs | One county, identity |
+| `multi_county` | One CoC, identity | Aggregate across member counties |
+| `multi_coc_multi_county` | Sum PIT across member CoCs | Aggregate across member counties |
+
+## Metro Panel Schema
+
+Analysis-ready metro×year panels combining PIT counts with ACS measures:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `metro_id` | string | Metro identifier (e.g., `GF01`) |
+| `geo_type` | string | Always `"metro"` |
+| `geo_id` | string | Same as `metro_id` |
+| `year` | int | Panel year |
+| `pit_total` | int | Total homeless count (summed over member CoCs) |
+| `pit_sheltered` | int | Sheltered count (nullable) |
+| `pit_unsheltered` | int | Unsheltered count (nullable) |
+| `definition_version_used` | string | Metro definition version applied |
+| `acs_vintage_used` | string | ACS estimate version applied |
+| `tract_vintage_used` | string | Tract vintage used for crosswalk |
+| `alignment_type` | string | `definition_fixed` (metro) or `retrospective`/`period_faithful` (CoC) |
+| `weighting_method` | string | `area` or `population` |
+| `total_population` | float | Aggregated from county PEP or ACS |
+| `adult_population` | float | Population 18 and older |
+| `population_below_poverty` | float | Below 100% federal poverty line |
+| `median_household_income` | float | Population-weighted median |
+| `median_gross_rent` | float | Population-weighted median |
+| `coverage_ratio` | float | Fraction of metro area with data |
+| `boundary_changed` | bool | Always `False` for metro (definitions are version-fixed) |
+| `source` | string | Data source identifier |
+
+When ZORI is enabled, the same ZORI columns as CoC panels are appended (`zori_coc`, `zori_coverage_ratio`, `zori_is_eligible`, `zori_excluded_reason`, `rent_to_income`).
+
+## Metro Derived Dataset Storage
+
+| File | Path Pattern | Description |
+|------|--------------|-------------|
+| Metro definitions | `data/curated/metro/metro_definitions__glynn_fox_v1.parquet` | Metro identity and membership type |
+| Metro CoC membership | `data/curated/metro/metro_coc_membership__glynn_fox_v1.parquet` | Metro→CoC mapping |
+| Metro county membership | `data/curated/metro/metro_county_membership__glynn_fox_v1.parquet` | Metro→county mapping |
+| Metro PIT | `data/curated/pit/pit__metro__P{year}@D{version}.parquet` | Metro-level PIT counts |
+| Metro measures | `data/curated/measures/measures__metro__A{acs}@D{version}xT{tract}.parquet` | Metro ACS measures |
+| Metro PEP | `data/curated/pep/pep__metro__D{version}xC{county}__w{weight}__{start}_{end}.parquet` | Metro population estimates |
+| Metro ZORI | `data/curated/zori/zori__metro__A{acs}@D{version}xC{county}__w{weight}.parquet` | Metro rent index |
+| Metro panels | `data/curated/panel/panel__metro__Y{start}-{end}@D{version}.parquet` | Metro analysis panels |
+
 ## Normalized ZORI Schema
 
 ZORI data from Zillow is normalized to this long-format schema:
@@ -352,6 +477,16 @@ Filenames use temporal shorthand notation (see [[08-Temporal-Terminology]]).
 | CoC ZORI | `data/curated/zori/zori__A{acs}@B{boundary}xC{county}__w{weight}.parquet` | Aggregated CoC ZORI |
 | CoC ZORI yearly | `data/curated/zori/zori_yearly__A{acs}@B{boundary}xC{county}__w{weight}__m{method}.parquet` | Yearly collapsed ZORI |
 | Source registry | `data/curated/source_registry.parquet` | External source tracking |
+| **Metro artifacts** | | |
+| Metro definitions | `data/curated/metro/metro_definitions__{version}.parquet` | Metro identity and membership type |
+| Metro CoC membership | `data/curated/metro/metro_coc_membership__{version}.parquet` | Metro→CoC mapping for PIT |
+| Metro county membership | `data/curated/metro/metro_county_membership__{version}.parquet` | Metro→county mapping |
+| Metro PIT | `data/curated/pit/pit__metro__P{year}@D{version}.parquet` | Metro-level PIT counts |
+| Metro measures | `data/curated/measures/measures__metro__A{acs}@D{version}xT{tract}.parquet` | Metro ACS measures |
+| Metro PEP | `data/curated/pep/pep__metro__D{version}xC{county}__w{weight}__{start}_{end}.parquet` | Metro population estimates |
+| Metro ZORI | `data/curated/zori/zori__metro__A{acs}@D{version}xC{county}__w{weight}.parquet` | Metro ZORI |
+| Metro ZORI yearly | `data/curated/zori/zori_yearly__metro__A{acs}@D{version}xC{county}__w{weight}__m{method}.parquet` | Metro yearly ZORI |
+| Metro panels | `data/curated/panel/panel__metro__Y{start}-{end}@D{version}.parquet` | Metro analysis panels |
 
 ## Dataset Provenance
 

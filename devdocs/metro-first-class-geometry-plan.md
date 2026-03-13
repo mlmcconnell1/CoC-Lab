@@ -1,7 +1,7 @@
 # Metro Areas as a First-Class Analysis Geography
 
-Status: Planning
-Version: 0.1
+Status: Implemented
+Version: 1.0
 Primary target: Glynn/Fox metro definitions
 Future target considered in design: county analysis geography
 
