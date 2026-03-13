@@ -52,6 +52,9 @@ VALID_GEO_TYPES: tuple[str, ...] = (GEO_TYPE_COC, GEO_TYPE_METRO)
 #: Legacy column name used in CoC-centered outputs.
 COC_ID_COL: str = "coc_id"
 
+#: Column name used in metro outputs.
+METRO_ID_COL: str = "metro_id"
+
 
 # ---------------------------------------------------------------------------
 # Analysis geometry reference
@@ -125,15 +128,19 @@ class AnalysisGeometryRef:
 def resolve_geo_col(df: pd.DataFrame) -> str:
     """Return the geo-ID column name present in *df*.
 
-    Checks for ``coc_id`` first (backward compatibility), then ``geo_id``.
-    Raises ``KeyError`` if neither is found.
+    Checks for ``coc_id`` first (backward compatibility), then
+    ``metro_id``, then ``geo_id``.
+    Raises ``KeyError`` if none is found.
     """
     if COC_ID_COL in df.columns:
         return COC_ID_COL
+    if METRO_ID_COL in df.columns:
+        return METRO_ID_COL
     if GEO_ID_COL in df.columns:
         return GEO_ID_COL
     raise KeyError(
-        f"DataFrame has neither '{COC_ID_COL}' nor '{GEO_ID_COL}' column. "
+        f"DataFrame has neither '{COC_ID_COL}', '{METRO_ID_COL}', "
+        f"nor '{GEO_ID_COL}' column. "
         f"Available columns: {list(df.columns)}"
     )
 

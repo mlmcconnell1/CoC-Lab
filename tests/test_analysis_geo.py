@@ -81,8 +81,12 @@ class TestResolveGeoCol:
         df = pd.DataFrame({"geo_id": ["GF01"]})
         assert resolve_geo_col(df) == "geo_id"
 
-    def test_missing_raises(self):
+    def test_metro_id_resolved(self):
         df = pd.DataFrame({"metro_id": ["GF01"]})
+        assert resolve_geo_col(df) == "metro_id"
+
+    def test_missing_raises(self):
+        df = pd.DataFrame({"other_col": ["GF01"]})
         with pytest.raises(KeyError, match="neither"):
             resolve_geo_col(df)
 

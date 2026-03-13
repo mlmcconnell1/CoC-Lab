@@ -188,11 +188,11 @@ class TestCheckPanelBalance:
             assert r.check_name == "unbalanced_panel"
             assert r.severity == "warning"
             assert r.details["incomplete_count"] == 1
-            assert r.details["total_cocs"] == len(COC_IDS)
+            assert r.details["total_geos"] == len(COC_IDS)
             assert r.details["most_common_gap"] == UNBALANCED_MISSING_YEAR
             assert sorted(r.details["expected_years"]) == sorted(YEARS)
-            # Message format: "{incomplete_count} CoCs have incomplete year coverage ..."
-            assert "1 CoCs have incomplete year coverage" in r.message
+            # Message format: "{incomplete_count} geo units have incomplete year coverage ..."
+            assert "1 geo units have incomplete year coverage" in r.message
             assert f"1/{len(COC_IDS)}" in r.message
 
 
@@ -227,7 +227,7 @@ class TestCheckCocYearGaps:
         examples = r.details["examples"]
         assert len(examples) == 1
         example = examples[0]
-        assert example["coc_id"] == GAP_COC
+        assert example["geo_id"] == GAP_COC
         assert GAP_MISSING_YEAR in example["missing_years"]
         assert GAP_MISSING_YEAR not in example["present_years"]
 

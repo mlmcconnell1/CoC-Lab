@@ -128,6 +128,7 @@ class PanelRequest:
     zori_min_coverage: float = 0.90
     expected_coc_count: int | None = None
     expected_geo_count: int | None = None
+    geo_type: str = "coc"
     null_rate_threshold: float = 0.50
 
 
@@ -715,7 +716,7 @@ def check_pit_exceeds_population(
             check_name="pit_exceeds_population",
             severity="error",
             message=(
-                f"{bad_count} CoC-year row(s) have pit_total > "
+                f"{bad_count} geo-year row(s) have pit_total > "
                 f"total_population"
             ),
             details={
@@ -753,7 +754,7 @@ def check_coc_count(
             ConformanceResult(
                 check_name="coc_count_mismatch",
                 severity="warning",
-                message=f"{actual}/{expected} expected CoCs present",
+                message=f"{actual}/{expected} expected geo units present",
                 details={
                     "actual_count": actual,
                     "expected_count": expected,
@@ -780,32 +781,32 @@ def check_panel_balance(
     if len(all_years) <= 1:
         return []
 
-    coc_years = panel_df.groupby(geo_col)["year"].apply(set)
-    incomplete_cocs = coc_years[coc_years.apply(len) < len(all_years)]
-    incomplete_count = len(incomplete_cocs)
+    geo_years = panel_df.groupby(geo_col)["year"].apply(set)
+    incomplete_geos = geo_years[geo_years.apply(len) < len(all_years)]
+    incomplete_count = len(incomplete_geos)
 
     if incomplete_count == 0:
         return []
 
     missing_years: list[int] = []
-    for _coc_id, years_present in incomplete_cocs.items():
+    for _geo_id, years_present in incomplete_geos.items():
         for y in all_years - years_present:
             missing_years.append(y)
 
     most_common_gap = Counter(missing_years).most_common(1)[0][0]
-    total_cocs = panel_df[geo_col].nunique()
+    total_geos = panel_df[geo_col].nunique()
 
     return [
         ConformanceResult(
             check_name="unbalanced_panel",
             severity="warning",
             message=(
-                f"{incomplete_count} CoCs have incomplete year coverage "
-                f"({incomplete_count}/{total_cocs} CoCs)"
+                f"{incomplete_count} geo units have incomplete year coverage "
+                f"({incomplete_count}/{total_geos})"
             ),
             details={
                 "incomplete_count": incomplete_count,
-                "total_cocs": total_cocs,
+                "total_geos": total_geos,
                 "expected_years": sorted(all_years),
                 "most_common_gap": int(most_common_gap),
             },
@@ -829,7 +830,7 @@ def check_coc_year_gaps(
 
     gap_examples: list[dict[str, Any]] = []
 
-    for coc_id, group in panel_df.groupby(geo_col):
+    for geo_id, group in panel_df.groupby(geo_col):
         present_years = sorted(group["year"].unique())
         if len(present_years) <= 1:
             continue
@@ -840,7 +841,7 @@ def check_coc_year_gaps(
 
         if internal_missing:
             gap_examples.append({
-                "coc_id": coc_id,
+                "geo_id": geo_id,
                 "present_years": present_years,
                 "missing_years": internal_missing,
             })
@@ -854,7 +855,7 @@ def check_coc_year_gaps(
             check_name="coc_year_gaps",
             severity="warning",
             message=(
-                f"{gap_count} CoCs have non-contiguous year coverage "
+                f"{gap_count} geo units have non-contiguous year coverage "
                 f"(gaps in their time series)"
             ),
             details={
