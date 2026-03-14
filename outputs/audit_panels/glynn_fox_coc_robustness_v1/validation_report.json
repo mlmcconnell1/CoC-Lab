@@ -1,0 +1,275 @@
+{
+  "panel_name": "glynn_fox_coc_robustness_v1",
+  "workload_id": "C",
+  "raw_validation": {
+    "panel_name": "glynn_fox_coc_robustness_v1",
+    "workload_id": "C",
+    "structurally_valid": true,
+    "required_checks_passed": true,
+    "checks_passed": [
+      "required_columns",
+      "unique_geo_year",
+      "sorted",
+      "contiguity",
+      "nonnegative",
+      "pit_identity",
+      "population_bound",
+      "missing_policy"
+    ],
+    "issues": [],
+    "dropped_units": [
+      "AL-502",
+      "AL-505",
+      "AL-508",
+      "AR-508",
+      "CA-522",
+      "CA-531",
+      "CO-505",
+      "CT-503",
+      "CT-505",
+      "GU-500",
+      "HI-500",
+      "IA-500",
+      "IL-507",
+      "IL-513",
+      "IL-516",
+      "IL-519",
+      "LA-500",
+      "LA-505",
+      "LA-507",
+      "MI-512",
+      "MN-504",
+      "MN-506",
+      "MN-508",
+      "MN-509",
+      "MN-511",
+      "MO-602",
+      "MO-603",
+      "MP-500",
+      "MS-500",
+      "ND-500",
+      "NE-502",
+      "NJ-512",
+      "NY-504",
+      "NY-505",
+      "NY-510",
+      "NY-511",
+      "NY-516",
+      "NY-518",
+      "NY-520",
+      "NY-522",
+      "NY-525",
+      "NY-607",
+      "OR-504",
+      "PA-605",
+      "PR-502",
+      "PR-503",
+      "SD-500",
+      "TN-509",
+      "TX-611",
+      "VA-502",
+      "VI-500",
+      "VT-500",
+      "VT-501",
+      "WV-500",
+      "WV-501",
+      "WV-503"
+    ],
+    "drop_reasons": {
+      "AL-502": [
+        "missing_required_values"
+      ],
+      "AL-505": [
+        "missing_required_values"
+      ],
+      "AL-508": [
+        "missing_required_values"
+      ],
+      "AR-508": [
+        "missing_required_values"
+      ],
+      "CA-522": [
+        "missing_required_values"
+      ],
+      "CA-531": [
+        "missing_required_values"
+      ],
+      "CO-505": [
+        "missing_required_values"
+      ],
+      "GU-500": [
+        "missing_required_values"
+      ],
+      "HI-500": [
+        "missing_required_values"
+      ],
+      "IA-500": [
+        "missing_required_values"
+      ],
+      "IL-507": [
+        "missing_required_values"
+      ],
+      "IL-513": [
+        "missing_required_values"
+      ],
+      "IL-516": [
+        "missing_required_values"
+      ],
+      "IL-519": [
+        "missing_required_values"
+      ],
+      "LA-500": [
+        "missing_required_values"
+      ],
+      "LA-505": [
+        "missing_required_values"
+      ],
+      "LA-507": [
+        "missing_required_values"
+      ],
+      "MI-512": [
+        "missing_required_values"
+      ],
+      "MN-504": [
+        "missing_required_values"
+      ],
+      "MN-506": [
+        "missing_required_values"
+      ],
+      "MN-508": [
+        "missing_required_values"
+      ],
+      "MN-509": [
+        "missing_required_values"
+      ],
+      "MN-511": [
+        "missing_required_values"
+      ],
+      "MO-602": [
+        "missing_required_values"
+      ],
+      "MO-603": [
+        "missing_required_values"
+      ],
+      "MP-500": [
+        "missing_required_values"
+      ],
+      "MS-500": [
+        "missing_required_values"
+      ],
+      "ND-500": [
+        "missing_required_values"
+      ],
+      "NE-502": [
+        "missing_required_values"
+      ],
+      "NJ-512": [
+        "missing_required_values"
+      ],
+      "NY-504": [
+        "missing_required_values"
+      ],
+      "NY-505": [
+        "missing_required_values"
+      ],
+      "NY-510": [
+        "missing_required_values"
+      ],
+      "NY-511": [
+        "missing_required_values"
+      ],
+      "NY-516": [
+        "missing_required_values"
+      ],
+      "NY-518": [
+        "missing_required_values"
+      ],
+      "NY-520": [
+        "missing_required_values"
+      ],
+      "NY-522": [
+        "missing_required_values"
+      ],
+      "NY-525": [
+        "missing_required_values"
+      ],
+      "NY-607": [
+        "missing_required_values"
+      ],
+      "OR-504": [
+        "missing_required_values"
+      ],
+      "PA-605": [
+        "missing_required_values"
+      ],
+      "PR-502": [
+        "missing_required_values"
+      ],
+      "PR-503": [
+        "missing_required_values"
+      ],
+      "SD-500": [
+        "missing_required_values"
+      ],
+      "TN-509": [
+        "missing_required_values"
+      ],
+      "TX-611": [
+        "missing_required_values"
+      ],
+      "VA-502": [
+        "missing_required_values"
+      ],
+      "VI-500": [
+        "missing_required_values"
+      ],
+      "VT-500": [
+        "missing_required_values"
+      ],
+      "VT-501": [
+        "missing_required_values"
+      ],
+      "WV-500": [
+        "missing_required_values"
+      ],
+      "WV-501": [
+        "missing_required_values"
+      ],
+      "WV-503": [
+        "missing_required_values"
+      ],
+      "CT-503": [
+        "pit_exceeds_population"
+      ],
+      "CT-505": [
+        "pit_exceeds_population"
+      ]
+    }
+  },
+  "modeling_validation": {
+    "structurally_valid": true,
+    "checks_passed": [
+      "required_columns",
+      "unique_geo_year",
+      "sorted",
+      "contiguity",
+      "nonnegative",
+      "pit_identity",
+      "population_bound",
+      "missing_policy",
+      "modeling_columns",
+      "modeling_missing",
+      "balanced_modeling_panel",
+      "d_zori_first_year"
+    ],
+    "issues": [],
+    "n_rows_model_ready": 3330,
+    "n_units_model_ready": 333
+  },
+  "artifacts_present": {
+    "raw_panel": true,
+    "modeling_input": true,
+    "validation_report": true,
+    "panel_manifest": true
+  }
+}

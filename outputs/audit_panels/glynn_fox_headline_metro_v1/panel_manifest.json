@@ -1,0 +1,31 @@
+{
+  "panel_name": "glynn_fox_headline_metro_v1",
+  "workload_id": "B",
+  "unit_type": "metro",
+  "panel_version": "v1",
+  "selection_rule": "Subset of the broad metro audit panel restricted to the headline metros emphasized in the paper narrative: New York, Los Angeles, Washington, DC, Seattle, San Francisco, and Boston.",
+  "source_panel_path": "outputs/audit_panels/_sources/glynn_fox_metro_audit_source_2015_2024.parquet",
+  "derived_panel_path": "outputs/audit_panels/glynn_fox_headline_metro_v1/modeling_input.parquet",
+  "start_year": 2015,
+  "end_year": 2024,
+  "missing_policy": "drop",
+  "balanced_required": true,
+  "rent_proxy": "zori_january",
+  "build_timestamp": "2026-03-14T14:30:50.034108+00:00",
+  "git_commit": "62ad24bb7c710483e6783aa059138a00094a0387",
+  "n_rows_raw": 60,
+  "n_rows_model_ready": 60,
+  "n_units_raw": 6,
+  "n_units_model_ready": 6,
+  "dropped_units": [],
+  "drop_reasons": {},
+  "aggregation_logic_ref": "background/audit_panel_specs.md",
+  "validation_report_path": "outputs/audit_panels/glynn_fox_headline_metro_v1/validation_report.json",
+  "notes": "Headline metro subset aligned to Workload A.",
+  "count_accuracy": {
+    "trajectory": "constant",
+    "expected_pi": 0.6,
+    "beta_variance": 0.01
+  },
+  "n_units_pre_filter": 6
+}

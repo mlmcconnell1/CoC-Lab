@@ -1,0 +1,31 @@
+{
+  "panel_name": "glynn_fox_broad_metro_v1",
+  "workload_id": "A",
+  "unit_type": "metro",
+  "panel_version": "v1",
+  "selection_rule": "All Glynn/Fox metros from definition glynn_fox_v1 with complete 2015-2024 coverage and valid audit-required fields.",
+  "source_panel_path": "outputs/audit_panels/_sources/glynn_fox_metro_audit_source_2015_2024.parquet",
+  "derived_panel_path": "outputs/audit_panels/glynn_fox_broad_metro_v1/modeling_input.parquet",
+  "start_year": 2015,
+  "end_year": 2024,
+  "missing_policy": "drop",
+  "balanced_required": true,
+  "rent_proxy": "zori_january",
+  "build_timestamp": "2026-03-14T14:30:50.014656+00:00",
+  "git_commit": "62ad24bb7c710483e6783aa059138a00094a0387",
+  "n_rows_raw": 250,
+  "n_rows_model_ready": 250,
+  "n_units_raw": 25,
+  "n_units_model_ready": 25,
+  "dropped_units": [],
+  "drop_reasons": {},
+  "aggregation_logic_ref": "background/audit_panel_specs.md",
+  "validation_report_path": "outputs/audit_panels/glynn_fox_broad_metro_v1/validation_report.json",
+  "notes": "Primary metro claims-audit panel built from PIT + ACS + ZORI. Window starts in 2015 because the current curated ZORI artifact begins in January 2015.",
+  "count_accuracy": {
+    "trajectory": "constant",
+    "expected_pi": 0.6,
+    "beta_variance": 0.01
+  },
+  "n_units_pre_filter": 25
+}

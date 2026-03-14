@@ -1,0 +1,49 @@
+{
+  "panel_name": "glynn_fox_broad_metro_v1",
+  "workload_id": "A",
+  "raw_validation": {
+    "panel_name": "glynn_fox_broad_metro_v1",
+    "workload_id": "A",
+    "structurally_valid": true,
+    "required_checks_passed": true,
+    "checks_passed": [
+      "required_columns",
+      "unique_geo_year",
+      "sorted",
+      "contiguity",
+      "nonnegative",
+      "pit_identity",
+      "population_bound",
+      "missing_policy"
+    ],
+    "issues": [],
+    "dropped_units": [],
+    "drop_reasons": {}
+  },
+  "modeling_validation": {
+    "structurally_valid": true,
+    "checks_passed": [
+      "required_columns",
+      "unique_geo_year",
+      "sorted",
+      "contiguity",
+      "nonnegative",
+      "pit_identity",
+      "population_bound",
+      "missing_policy",
+      "modeling_columns",
+      "modeling_missing",
+      "balanced_modeling_panel",
+      "d_zori_first_year"
+    ],
+    "issues": [],
+    "n_rows_model_ready": 250,
+    "n_units_model_ready": 25
+  },
+  "artifacts_present": {
+    "raw_panel": true,
+    "modeling_input": true,
+    "validation_report": true,
+    "panel_manifest": true
+  }
+}
