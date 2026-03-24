@@ -500,13 +500,26 @@ def _apply_temporal_filter(
             f"Available: {sorted(df.columns)}"
         )
     if filt.method == "point_in_time":
-        filtered = df[df[col] == filt.month]
-        if filtered.empty:
-            raise ExecutorError(
-                f"Temporal filter for '{dataset_id}' year {year}: "
-                f"no rows where {col}=={filt.month}."
-            )
-        return filtered.drop(columns=[col])
+        series = df[col]
+        if hasattr(series, "dt") and hasattr(series.dt, "month"):
+            # Datetime column: filter by month and derive year column
+            filtered = df[series.dt.month == filt.month].copy()
+            if filtered.empty:
+                raise ExecutorError(
+                    f"Temporal filter for '{dataset_id}' year {year}: "
+                    f"no rows where {col}.month=={filt.month}."
+                )
+            if "year" not in filtered.columns:
+                filtered["year"] = filtered[col].dt.year
+            return filtered.drop(columns=[col])
+        else:
+            filtered = df[series == filt.month]
+            if filtered.empty:
+                raise ExecutorError(
+                    f"Temporal filter for '{dataset_id}' year {year}: "
+                    f"no rows where {col}=={filt.month}."
+                )
+            return filtered.drop(columns=[col])
     elif filt.method in ("calendar_mean", "calendar_median"):
         # Group by identifier columns and preserve year keys when present.
         numeric = set(df.select_dtypes("number").columns)

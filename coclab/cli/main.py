@@ -16,6 +16,7 @@ from coclab.cli.aggregate import aggregate_app
 from coclab.cli.build_panel import build_panel_cmd
 from coclab.cli.build_xwalks import build_xwalks
 from coclab.cli.builds import catalog_cmd, create_build, list_builds_cmd
+from coclab.cli.generate_metro import generate_metro
 from coclab.cli.compare_vintages import compare_vintages
 from coclab.cli.crosscheck_pit_vintages import crosscheck_pit_vintages, validate_pit_vintages
 from coclab.cli.crosscheck_population import crosscheck_population, validate_population
@@ -124,7 +125,7 @@ migrate_app = typer.Typer(
 )
 generate_app = typer.Typer(
     name="generate",
-    help="Generate crosswalks and catalogs",
+    help="Generate crosswalks, metro definitions, and catalogs",
     no_args_is_help=True,
 )
 build_app = typer.Typer(
@@ -592,6 +593,7 @@ diagnostics_app.command("panel")(panel_diagnostics)
 diagnostics_app.command("xwalk")(diagnostics)
 diagnostics_app.command("zori")(zori_diagnostics)
 generate_app.command("xwalks")(build_xwalks)
+generate_app.command("metro")(generate_metro)
 generate_app.command("catalog")(catalog_cmd)
 build_app.command("panel")(build_panel_cmd)
 build_app.command("export")(export_bundle)
