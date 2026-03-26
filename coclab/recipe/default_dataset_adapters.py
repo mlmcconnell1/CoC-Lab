@@ -99,6 +99,36 @@ def _validate_census_acs(spec: DatasetSpec) -> list[ValidationDiagnostic]:
     return diags
 
 
+def _validate_census_acs1(spec: DatasetSpec) -> list[ValidationDiagnostic]:
+    """Validate Census ACS 1-year dataset specification."""
+    diags: list[ValidationDiagnostic] = []
+    if spec.version != 1:
+        diags.append(
+            ValidationDiagnostic(
+                "error",
+                f"census/acs1: unsupported version {spec.version}; expected 1.",
+            )
+        )
+    if spec.native_geometry.type == "metro" and not spec.native_geometry.source:
+        diags.append(
+            ValidationDiagnostic(
+                "warning",
+                "census/acs1: metro-native geometry has no source set; "
+                "consider setting source for provenance tracking.",
+            )
+        )
+    known_params = {"vintage", "align"}
+    unknown = set(spec.params.keys()) - known_params
+    if unknown:
+        diags.append(
+            ValidationDiagnostic(
+                "warning",
+                f"census/acs1: unrecognized params {sorted(unknown)}.",
+            )
+        )
+    return diags
+
+
 def _validate_census_pep(spec: DatasetSpec) -> list[ValidationDiagnostic]:
     """Validate Census PEP dataset specification."""
     diags: list[ValidationDiagnostic] = []
@@ -166,5 +196,6 @@ def register_dataset_defaults(registry: DatasetAdapterRegistry) -> None:
     registry.register("hud", "pit", _validate_hud_pit)
     registry.register("census", "acs5", _validate_census_acs5)
     registry.register("census", "acs", _validate_census_acs)
+    registry.register("census", "acs1", _validate_census_acs1)
     registry.register("census", "pep", _validate_census_pep)
     registry.register("zillow", "zori", _validate_zillow_zori)

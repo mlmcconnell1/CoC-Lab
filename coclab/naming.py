@@ -818,6 +818,88 @@ def metro_pep_filename(
     )
 
 
+def acs1_metro_filename(acs1_vintage: int, definition_version: str) -> str:
+    """Generate filename for curated ACS 1-year metro-level ingest artifact.
+
+    Args:
+        acs1_vintage: ACS 1-year vintage end year (e.g., 2023)
+        definition_version: Synthetic geography definition version (e.g., "glynn_fox_v1")
+
+    Returns:
+        Filename like 'acs1_metro__A2023@Dglynnfoxv1.parquet'
+    """
+    defn = _normalize_definition_version(definition_version)
+    return f"acs1_metro__A{acs1_vintage}@D{defn}.parquet"
+
+
+def acs1_metro_path(
+    acs1_vintage: int,
+    definition_version: str,
+    base_dir: Path | str | None = None,
+) -> Path:
+    """Get canonical path for ACS 1-year metro ingest artifact.
+
+    Args:
+        acs1_vintage: ACS 1-year vintage end year (e.g., 2023)
+        definition_version: Synthetic geography definition version (e.g., "glynn_fox_v1")
+        base_dir: Base data directory (defaults to "data")
+
+    Returns:
+        Path like data/curated/acs/acs1_metro__A2023@Dglynnfoxv1.parquet
+    """
+    if base_dir is None:
+        base_dir = Path("data")
+    else:
+        base_dir = Path(base_dir)
+    return base_dir / "curated" / "acs" / acs1_metro_filename(acs1_vintage, definition_version)
+
+
+def metro_measures_acs1_filename(
+    acs1_vintage: int,
+    definition_version: str,
+) -> str:
+    """Generate filename for metro ACS1 measures artifact (post-aggregation).
+
+    The ``__acs1__`` segment prevents collision with ACS5 metro measures files.
+
+    Args:
+        acs1_vintage: ACS 1-year vintage end year (e.g., 2023)
+        definition_version: Synthetic geography definition version (e.g., "glynn_fox_v1")
+
+    Returns:
+        Filename like 'measures__metro__acs1__A2023@Dglynnfoxv1.parquet'
+    """
+    defn = _normalize_definition_version(definition_version)
+    return f"measures__metro__acs1__A{acs1_vintage}@D{defn}.parquet"
+
+
+def metro_measures_acs1_path(
+    acs1_vintage: int,
+    definition_version: str,
+    base_dir: Path | str | None = None,
+) -> Path:
+    """Get canonical path for metro ACS1 measures artifact.
+
+    Args:
+        acs1_vintage: ACS 1-year vintage end year (e.g., 2023)
+        definition_version: Synthetic geography definition version (e.g., "glynn_fox_v1")
+        base_dir: Base data directory (defaults to "data")
+
+    Returns:
+        Path like data/curated/measures/measures__metro__acs1__A2023@Dglynnfoxv1.parquet
+    """
+    if base_dir is None:
+        base_dir = Path("data")
+    else:
+        base_dir = Path(base_dir)
+    return (
+        base_dir
+        / "curated"
+        / "measures"
+        / metro_measures_acs1_filename(acs1_vintage, definition_version)
+    )
+
+
 def metro_zori_filename(
     acs_vintage: str,
     definition_version: str,

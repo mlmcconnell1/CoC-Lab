@@ -129,8 +129,11 @@ METRO_PANEL_COLUMNS = [
     "population_below_poverty",
     "median_household_income",
     "median_gross_rent",
+    "unemployment_rate_acs1",  # ACS 1-year metro-native unemployment
     "coverage_ratio",
     "boundary_changed",
+    "acs1_vintage_used",   # Which ACS1 vintage contributed (nullable)
+    "acs_products_used",   # Comma-separated: "acs5" or "acs5,acs1"
     "source",
 ]
 

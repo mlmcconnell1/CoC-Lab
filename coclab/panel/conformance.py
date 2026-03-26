@@ -51,13 +51,18 @@ from coclab.panel.assemble import (
 # Column and threshold constants
 # ---------------------------------------------------------------------------
 
-#: ACS measure columns checked for schema presence and data completeness.
+#: ACS 5-year measure columns checked for schema presence and data completeness.
 ACS_MEASURE_COLUMNS: list[str] = [
     "total_population",
     "adult_population",
     "population_below_poverty",
     "median_household_income",
     "median_gross_rent",
+]
+
+#: ACS 1-year measure columns (metro-native measures from ACS 1-year estimates).
+ACS1_MEASURE_COLUMNS: list[str] = [
+    "unemployment_rate_acs1",
 ]
 
 #: Measures that should normally vary across years. If too many CoC-year
@@ -123,6 +128,10 @@ class PanelRequest:
         Demographic measure columns expected in the panel.  When ``None``
         (default), falls back to ``ACS_MEASURE_COLUMNS``.  Set explicitly
         for non-ACS schemas (e.g., PEP-based panels with ``["population"]``).
+    acs_products : list[str]
+        Which ACS products are expected in the panel.  Default ``["acs5"]``
+        validates only ACS 5-year columns.  Include ``"acs1"`` to also
+        validate ACS 1-year columns (e.g., ``["acs5", "acs1"]``).
     """
 
     start_year: int
@@ -135,6 +144,7 @@ class PanelRequest:
     geo_type: str = "coc"
     null_rate_threshold: float = 0.50
     measure_columns: list[str] | None = None
+    acs_products: list[str] = field(default_factory=lambda: ["acs5"])
 
 
 @dataclass
@@ -323,11 +333,18 @@ def _effective_measure_columns(request: PanelRequest) -> list[str]:
     """Return the measure columns to validate for *request*.
 
     When ``request.measure_columns`` is set, those columns are used.
-    Otherwise falls back to the ACS default for backward compatibility.
+    Otherwise builds the expected set from the union of requested ACS
+    products: ACS5 columns when ``"acs5"`` is requested, ACS1 columns
+    when ``"acs1"`` is requested.
     """
     if request.measure_columns is not None:
         return request.measure_columns
-    return list(ACS_MEASURE_COLUMNS)
+    columns: list[str] = []
+    if "acs5" in request.acs_products:
+        columns.extend(ACS_MEASURE_COLUMNS)
+    if "acs1" in request.acs_products:
+        columns.extend(ACS1_MEASURE_COLUMNS)
+    return columns or list(ACS_MEASURE_COLUMNS)
 
 
 # ---------------------------------------------------------------------------

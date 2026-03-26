@@ -188,6 +188,73 @@ METRO_COUNTY_MEMBERSHIP: list[tuple[str, str]] = [
     ("GF25", "06067"),  # Sacramento
 ]
 
+# ---------------------------------------------------------------------------
+# Metro-to-CBSA (Core Based Statistical Area) mapping
+# ---------------------------------------------------------------------------
+
+#: Maps metro_id to Census CBSA code for ACS 1-year metro-level fetches.
+#: CBSA codes are 5-digit strings matching the Census Bureau's metropolitan
+#: statistical area identifiers.
+METRO_CBSA_MAPPING: dict[str, str] = {
+    "GF01": "35620",  # New York
+    "GF02": "31080",  # Los Angeles
+    "GF03": "42660",  # Seattle
+    "GF04": "41940",  # San Jose
+    "GF05": "41740",  # San Diego
+    "GF06": "41860",  # San Francisco
+    "GF07": "47900",  # Washington DC
+    "GF08": "14460",  # Boston
+    "GF09": "38060",  # Phoenix
+    "GF10": "29820",  # Las Vegas
+    "GF11": "19100",  # Dallas
+    "GF12": "26420",  # Houston
+    "GF13": "12060",  # Atlanta
+    "GF14": "37980",  # Philadelphia
+    "GF15": "19740",  # Denver
+    "GF16": "33460",  # Minneapolis
+    "GF17": "45300",  # Tampa
+    "GF18": "36740",  # Orlando
+    "GF19": "19820",  # Detroit
+    "GF20": "16980",  # Chicago
+    "GF21": "38900",  # Portland
+    "GF22": "18140",  # Columbus
+    "GF23": "40900",  # Sacramento
+    "GF24": "12420",  # Austin
+    "GF25": "16740",  # Charlotte
+}
+
+#: Short metro names used in CBSA mapping (for display/DataFrame building).
+_CBSA_METRO_NAMES: dict[str, str] = {
+    "GF01": "New York",
+    "GF02": "Los Angeles",
+    "GF03": "Seattle",
+    "GF04": "San Jose",
+    "GF05": "San Diego",
+    "GF06": "San Francisco",
+    "GF07": "Washington DC",
+    "GF08": "Boston",
+    "GF09": "Phoenix",
+    "GF10": "Las Vegas",
+    "GF11": "Dallas",
+    "GF12": "Houston",
+    "GF13": "Atlanta",
+    "GF14": "Philadelphia",
+    "GF15": "Denver",
+    "GF16": "Minneapolis",
+    "GF17": "Tampa",
+    "GF18": "Orlando",
+    "GF19": "Detroit",
+    "GF20": "Chicago",
+    "GF21": "Portland",
+    "GF22": "Columbus",
+    "GF23": "Sacramento",
+    "GF24": "Austin",
+    "GF25": "Charlotte",
+}
+
+#: Reverse lookup: CBSA code → metro_id.
+_CBSA_TO_METRO: dict[str, str] = {v: k for k, v in METRO_CBSA_MAPPING.items()}
+
 
 # ---------------------------------------------------------------------------
 # DataFrame builders
@@ -255,3 +322,39 @@ def build_county_membership_df() -> pd.DataFrame:
     df["metro_id"] = df["metro_id"].astype(str)
     df["county_fips"] = df["county_fips"].astype(str)
     return df
+
+
+def build_cbsa_mapping_df() -> pd.DataFrame:
+    """Build the metro-to-CBSA mapping DataFrame from constants.
+
+    Returns a DataFrame with columns:
+    ``metro_id``, ``metro_name``, ``cbsa_code``.
+    """
+    rows = [
+        {
+            "metro_id": mid,
+            "metro_name": _CBSA_METRO_NAMES[mid],
+            "cbsa_code": cbsa,
+        }
+        for mid, cbsa in METRO_CBSA_MAPPING.items()
+    ]
+    df = pd.DataFrame(rows)
+    df["metro_id"] = df["metro_id"].astype(str)
+    df["cbsa_code"] = df["cbsa_code"].astype(str)
+    return df
+
+
+def cbsa_to_metro_id(cbsa_code: str) -> str | None:
+    """Look up the metro_id for a given CBSA code.
+
+    Parameters
+    ----------
+    cbsa_code : str
+        5-digit Census CBSA code (e.g., "35620" for New York).
+
+    Returns
+    -------
+    str or None
+        The metro_id (e.g., "GF01") if found, otherwise None.
+    """
+    return _CBSA_TO_METRO.get(cbsa_code)
