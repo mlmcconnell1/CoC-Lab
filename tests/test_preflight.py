@@ -685,3 +685,903 @@ class TestBuildRecipeWithPreflight:
         ])
         assert result.exit_code == 0
         assert "all clear" in result.output
+
+    def test_missing_dataset_routes_through_preflight_json(
+        self, tmp_path: Path, monkeypatch,
+    ):
+        """Missing dataset paths should produce status=blocked with preflight
+        payload, not status=error with validation.errors (coclab-pu6j.3)."""
+        _make_project_root(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        data = _preflight_recipe(with_path=True, identity_only=True)
+        # Don't create pit file — missing dataset
+        rf = _write_recipe(tmp_path, data)
+        result = runner.invoke(app, [
+            "build", "recipe",
+            "--recipe", str(rf),
+            "--json",
+        ])
+        assert result.exit_code == 1
+        out = json.loads(result.output)
+        assert out["status"] == "blocked"
+        assert "preflight" in out
+
+
+# ---------------------------------------------------------------------------
+# Recipe-scoped path checking tests (coclab-pu6j.1)
+# ---------------------------------------------------------------------------
+
+
+class TestRecipeScopedPathChecks:
+    """Verify that preflight only checks dataset-years required by the
+    execution plan, not every year in every file_set segment."""
+
+    def test_file_set_years_scoped_to_universe(self, tmp_path: Path):
+        """A file_set segment covering 2020-2022 with universe=2020-2020
+        should only report missing files for 2020, not 2021/2022."""
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(parents=True)
+        # Create ONLY the 2020 file
+        pd.DataFrame({
+            "coc_id": ["COC1"], "year": [2020], "pit_total": [10],
+        }).to_parquet(data_dir / "pit_2020.parquet")
+
+        recipe_data = {
+            "version": 1,
+            "name": "scoped-test",
+            "universe": {"range": "2020-2020"},
+            "targets": [
+                {"id": "coc_panel", "geometry": {"type": "coc", "vintage": 2025}},
+            ],
+            "datasets": {
+                "pit": {
+                    "provider": "hud",
+                    "product": "pit",
+                    "version": 1,
+                    "native_geometry": {"type": "coc"},
+                    "file_set": {
+                        "path_template": "data/pit_{year}.parquet",
+                        "segments": [
+                            {"years": "2020-2022", "geometry": {"type": "coc"}},
+                        ],
+                    },
+                },
+            },
+            "transforms": [],
+            "pipelines": [
+                {
+                    "id": "main",
+                    "target": "coc_panel",
+                    "steps": [
+                        {
+                            "resample": {
+                                "dataset": "pit",
+                                "to_geometry": {"type": "coc", "vintage": 2025},
+                                "method": "identity",
+                                "measures": ["pit_total"],
+                            },
+                        },
+                        {
+                            "join": {
+                                "datasets": ["pit"],
+                                "join_on": ["geo_id", "year"],
+                            },
+                        },
+                    ],
+                },
+            ],
+        }
+
+        recipe = load_recipe(recipe_data)
+        report = run_preflight(recipe, project_root=tmp_path)
+        # Should be ready — only 2020 is needed and 2020 file exists
+        ds_findings = [
+            f for f in report.findings
+            if f.kind == FindingKind.MISSING_DATASET
+        ]
+        assert len(ds_findings) == 0, (
+            f"Expected no missing-dataset findings but got: "
+            f"{[f.message for f in ds_findings]}"
+        )
+        assert report.is_ready
+
+    def test_unused_dataset_not_checked(self, tmp_path: Path):
+        """A dataset declared in the recipe but not used by any pipeline
+        should not generate missing-file findings."""
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(parents=True)
+        pd.DataFrame({
+            "coc_id": ["COC1"], "year": [2020], "pit_total": [10],
+        }).to_parquet(data_dir / "pit.parquet")
+
+        recipe_data = {
+            "version": 1,
+            "name": "unused-ds-test",
+            "universe": {"range": "2020-2020"},
+            "targets": [
+                {"id": "coc_panel", "geometry": {"type": "coc", "vintage": 2025}},
+            ],
+            "datasets": {
+                "pit": {
+                    "provider": "hud",
+                    "product": "pit",
+                    "version": 1,
+                    "native_geometry": {"type": "coc"},
+                    "path": "data/pit.parquet",
+                    "years": "2020-2020",
+                },
+                "unused": {
+                    "provider": "hud",
+                    "product": "pit",
+                    "version": 1,
+                    "native_geometry": {"type": "coc"},
+                    "path": "data/nonexistent.parquet",
+                    "optional": True,
+                },
+            },
+            "transforms": [],
+            "pipelines": [
+                {
+                    "id": "main",
+                    "target": "coc_panel",
+                    "steps": [
+                        {
+                            "resample": {
+                                "dataset": "pit",
+                                "to_geometry": {"type": "coc", "vintage": 2025},
+                                "method": "identity",
+                                "measures": ["pit_total"],
+                            },
+                        },
+                        {
+                            "join": {
+                                "datasets": ["pit"],
+                                "join_on": ["geo_id", "year"],
+                            },
+                        },
+                    ],
+                },
+            ],
+        }
+
+        recipe = load_recipe(recipe_data)
+        report = run_preflight(recipe, project_root=tmp_path)
+        ds_findings = [
+            f for f in report.findings
+            if f.kind == FindingKind.MISSING_DATASET
+        ]
+        assert len(ds_findings) == 0
+        assert report.is_ready
+
+    def test_multi_pipeline_deduplicates_dataset_year_checks(
+        self, tmp_path: Path,
+    ):
+        """Two pipelines referencing the same dataset-year should not
+        produce duplicate missing-file findings."""
+        recipe_data = {
+            "version": 1,
+            "name": "dedup-test",
+            "universe": {"range": "2020-2020"},
+            "targets": [
+                {"id": "t1", "geometry": {"type": "coc", "vintage": 2025}},
+            ],
+            "datasets": {
+                "pit": {
+                    "provider": "hud",
+                    "product": "pit",
+                    "version": 1,
+                    "native_geometry": {"type": "coc"},
+                    "path": "data/pit.parquet",
+                    "years": "2020-2020",
+                },
+            },
+            "transforms": [],
+            "pipelines": [
+                {
+                    "id": "p1",
+                    "target": "t1",
+                    "steps": [{
+                        "resample": {
+                            "dataset": "pit",
+                            "to_geometry": {"type": "coc", "vintage": 2025},
+                            "method": "identity",
+                            "measures": ["pit_total"],
+                        },
+                    }],
+                },
+                {
+                    "id": "p2",
+                    "target": "t1",
+                    "steps": [{
+                        "resample": {
+                            "dataset": "pit",
+                            "to_geometry": {"type": "coc", "vintage": 2025},
+                            "method": "identity",
+                            "measures": ["pit_total"],
+                        },
+                    }],
+                },
+            ],
+        }
+
+        recipe = load_recipe(recipe_data)
+        report = run_preflight(recipe, project_root=tmp_path)
+        ds_findings = [
+            f for f in report.findings
+            if f.kind == FindingKind.MISSING_DATASET
+        ]
+        # Should be exactly 1 finding (deduplicated), not 2
+        assert len(ds_findings) == 1
+
+    def test_planner_error_surfaces_as_uncovered_years_gap(
+        self, tmp_path: Path,
+    ):
+        """When a planner error indicates uncovered years, the gaps
+        manifest should include an uncovered_years entry (coclab-hh6d)."""
+        recipe_data = {
+            "version": 1,
+            "name": "uncovered-test",
+            "universe": {"range": "2020-2021"},
+            "targets": [
+                {"id": "t1", "geometry": {"type": "coc", "vintage": 2025}},
+            ],
+            "datasets": {
+                "pit": {
+                    "provider": "hud",
+                    "product": "pit",
+                    "version": 1,
+                    "native_geometry": {"type": "coc"},
+                    "years": "2020-2020",
+                },
+            },
+            "transforms": [],
+            "pipelines": [
+                {
+                    "id": "main",
+                    "target": "t1",
+                    "steps": [{
+                        "resample": {
+                            "dataset": "pit",
+                            "to_geometry": {"type": "coc", "vintage": 2025},
+                            "method": "identity",
+                            "measures": ["pit_total"],
+                        },
+                    }],
+                },
+            ],
+        }
+
+        recipe = load_recipe(recipe_data)
+        report = run_preflight(recipe, project_root=tmp_path)
+        manifest = report.gaps_manifest()
+        assert manifest["blocking_gaps"] > 0
+        assert "uncovered_years" in manifest["gaps_by_kind"]
+        # Verify gap metadata includes remediation and affected info
+        gap = manifest["gaps_by_kind"]["uncovered_years"][0]
+        assert gap["severity"] == "error"
+        assert "years" in gap
+        assert "remediation" in gap
+
+
+# ---------------------------------------------------------------------------
+# Gaps manifest tests (coclab-hh6d)
+# ---------------------------------------------------------------------------
+
+
+class TestGapsManifest:
+    """Verify the machine-readable gaps manifest includes per-gap metadata
+    for all gap types, with severity classification and remediation hints."""
+
+    def test_gaps_manifest_missing_dataset(self, tmp_path: Path):
+        """Missing dataset gaps should include dataset_id and remediation."""
+        recipe_data = {
+            "version": 1,
+            "name": "gaps-ds-test",
+            "universe": {"range": "2020-2020"},
+            "targets": [
+                {"id": "t1", "geometry": {"type": "coc", "vintage": 2025}},
+            ],
+            "datasets": {
+                "pit": {
+                    "provider": "hud",
+                    "product": "pit",
+                    "version": 1,
+                    "native_geometry": {"type": "coc"},
+                    "path": "data/pit.parquet",
+                    "years": "2020-2020",
+                },
+            },
+            "transforms": [],
+            "pipelines": [{
+                "id": "main",
+                "target": "t1",
+                "steps": [{
+                    "resample": {
+                        "dataset": "pit",
+                        "to_geometry": {"type": "coc", "vintage": 2025},
+                        "method": "identity",
+                        "measures": ["pit_total"],
+                    },
+                }],
+            }],
+        }
+
+        recipe = load_recipe(recipe_data)
+        report = run_preflight(recipe, project_root=tmp_path)
+        manifest = report.gaps_manifest()
+        assert manifest["total_gaps"] > 0
+        assert manifest["blocking_gaps"] > 0
+        ds_gaps = manifest["gaps_by_kind"].get("missing_dataset", [])
+        assert len(ds_gaps) >= 1
+        assert ds_gaps[0]["dataset_id"] == "pit"
+        assert "remediation" in ds_gaps[0]
+        assert "command" in ds_gaps[0]["remediation"]
+
+    def test_gaps_manifest_missing_transform(self, tmp_path: Path):
+        """Missing transform gaps should include transform_id and remediation."""
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(parents=True)
+        pd.DataFrame({
+            "coc_id": ["COC1"], "year": [2020], "pop": [100],
+        }).to_parquet(data_dir / "acs.parquet")
+
+        recipe_data = {
+            "version": 1,
+            "name": "gaps-xform-test",
+            "universe": {"range": "2020-2020"},
+            "targets": [
+                {"id": "t1", "geometry": {"type": "coc", "vintage": 2025}},
+            ],
+            "datasets": {
+                "acs": {
+                    "provider": "census",
+                    "product": "acs5",
+                    "version": 1,
+                    "native_geometry": {"type": "tract", "vintage": 2020},
+                    "path": "data/acs.parquet",
+                    "years": "2020-2020",
+                },
+            },
+            "transforms": [{
+                "id": "tract_to_coc",
+                "type": "crosswalk",
+                "from": {"type": "tract", "vintage": 2020},
+                "to": {"type": "coc", "vintage": 2025},
+                "spec": {"weighting": {"scheme": "area"}},
+            }],
+            "pipelines": [{
+                "id": "main",
+                "target": "t1",
+                "steps": [
+                    {"materialize": {"transforms": ["tract_to_coc"]}},
+                    {
+                        "resample": {
+                            "dataset": "acs",
+                            "to_geometry": {"type": "coc", "vintage": 2025},
+                            "method": "aggregate",
+                            "via": "tract_to_coc",
+                            "measures": ["pop"],
+                        },
+                    },
+                ],
+            }],
+        }
+
+        recipe = load_recipe(recipe_data)
+        report = run_preflight(recipe, project_root=tmp_path)
+        manifest = report.gaps_manifest()
+        xform_gaps = manifest["gaps_by_kind"].get("missing_transform", [])
+        assert len(xform_gaps) >= 1
+        assert xform_gaps[0]["transform_id"] == "tract_to_coc"
+        assert "remediation" in xform_gaps[0]
+
+    def test_gaps_manifest_missing_column(self, tmp_path: Path):
+        """Missing measure column gaps should appear in the manifest."""
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(parents=True)
+        pd.DataFrame({
+            "coc_id": ["COC1"], "year": [2020], "wrong_col": [10],
+        }).to_parquet(data_dir / "pit.parquet")
+
+        recipe_data = {
+            "version": 1,
+            "name": "gaps-col-test",
+            "universe": {"range": "2020-2020"},
+            "targets": [
+                {"id": "t1", "geometry": {"type": "coc", "vintage": 2025}},
+            ],
+            "datasets": {
+                "pit": {
+                    "provider": "hud",
+                    "product": "pit",
+                    "version": 1,
+                    "native_geometry": {"type": "coc"},
+                    "path": "data/pit.parquet",
+                    "years": "2020-2020",
+                },
+            },
+            "transforms": [],
+            "pipelines": [{
+                "id": "main",
+                "target": "t1",
+                "steps": [{
+                    "resample": {
+                        "dataset": "pit",
+                        "to_geometry": {"type": "coc", "vintage": 2025},
+                        "method": "identity",
+                        "measures": ["pit_total"],
+                    },
+                }],
+            }],
+        }
+
+        recipe = load_recipe(recipe_data)
+        report = run_preflight(recipe, project_root=tmp_path)
+        manifest = report.gaps_manifest()
+        measure_gaps = manifest["gaps_by_kind"].get("missing_measure", [])
+        assert len(measure_gaps) >= 1
+        assert "pit_total" in measure_gaps[0]["message"]
+
+    def test_gaps_manifest_uncovered_years_with_remediation(
+        self, tmp_path: Path,
+    ):
+        """Uncovered-year gaps from planner errors should include
+        actionable remediation metadata (coclab-hh6d regression)."""
+        recipe_data = {
+            "version": 1,
+            "name": "gaps-uncovered-test",
+            "universe": {"range": "2020-2021"},
+            "targets": [
+                {"id": "t1", "geometry": {"type": "coc", "vintage": 2025}},
+            ],
+            "datasets": {
+                "pit": {
+                    "provider": "hud",
+                    "product": "pit",
+                    "version": 1,
+                    "native_geometry": {"type": "coc"},
+                    "years": "2020-2020",
+                },
+            },
+            "transforms": [],
+            "pipelines": [{
+                "id": "main",
+                "target": "t1",
+                "steps": [{
+                    "resample": {
+                        "dataset": "pit",
+                        "to_geometry": {"type": "coc", "vintage": 2025},
+                        "method": "identity",
+                        "measures": ["pit_total"],
+                    },
+                }],
+            }],
+        }
+
+        recipe = load_recipe(recipe_data)
+        report = run_preflight(recipe, project_root=tmp_path)
+
+        # Verify --json output: should be blocked, not ready
+        report_dict = report.to_dict()
+        assert not report_dict["ready"]
+        assert report_dict["blocking_count"] > 0
+
+        # Verify --gaps output: must include uncovered_years with metadata
+        manifest = report.gaps_manifest()
+        assert manifest["total_gaps"] > 0
+        assert manifest["blocking_gaps"] > 0
+        assert "uncovered_years" in manifest["gaps_by_kind"]
+        gap = manifest["gaps_by_kind"]["uncovered_years"][0]
+        assert gap["severity"] == "error"
+        assert gap["years"] == [2020, 2021]
+        assert gap["dataset_id"] == "pit"
+        assert "remediation" in gap
+        assert "hint" in gap["remediation"]
+        assert "universe" in gap["remediation"]["hint"].lower()
+
+    def test_gaps_cli_uncovered_years_not_empty(
+        self, tmp_path: Path, monkeypatch,
+    ):
+        """CLI --gaps should report blocking gaps for uncovered-year
+        planner errors, not status=ok with total_gaps=0."""
+        _make_project_root(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        recipe_data = {
+            "version": 1,
+            "name": "gaps-cli-test",
+            "universe": {"range": "2020-2021"},
+            "targets": [
+                {"id": "t1", "geometry": {"type": "coc", "vintage": 2025}},
+            ],
+            "datasets": {
+                "pit": {
+                    "provider": "hud",
+                    "product": "pit",
+                    "version": 1,
+                    "native_geometry": {"type": "coc"},
+                    "years": "2020-2020",
+                },
+            },
+            "transforms": [],
+            "pipelines": [{
+                "id": "main",
+                "target": "t1",
+                "steps": [{
+                    "resample": {
+                        "dataset": "pit",
+                        "to_geometry": {"type": "coc", "vintage": 2025},
+                        "method": "identity",
+                        "measures": ["pit_total"],
+                    },
+                }],
+            }],
+        }
+        rf = _write_recipe(tmp_path, recipe_data)
+        result = runner.invoke(app, [
+            "build", "recipe-preflight",
+            "--recipe", str(rf),
+            "--gaps",
+        ])
+        out = json.loads(result.output)
+        assert out["total_gaps"] > 0
+        assert out["blocking_gaps"] > 0
+        assert "uncovered_years" in out["gaps_by_kind"]
+
+
+# ---------------------------------------------------------------------------
+# Support-dataset probe tests (coclab-pu6j.2)
+# ---------------------------------------------------------------------------
+
+
+class TestSupportDatasetProbe:
+    """Verify that weighted transforms' support-dataset requirements
+    are detected by preflight before execution."""
+
+    def test_missing_population_field_detected(self, tmp_path: Path):
+        """A transform with scheme=population should block preflight
+        when population_field is missing from the support dataset."""
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(parents=True)
+
+        # Create pit dataset
+        pd.DataFrame({
+            "coc_id": ["COC1"], "year": [2020], "pit_total": [10],
+        }).to_parquet(data_dir / "pit.parquet")
+
+        # Create weights dataset WITHOUT the required population field
+        pd.DataFrame({
+            "GEOID": ["T1", "T2"],
+            "year": [2020, 2020],
+            "wrong_field": [100, 200],
+        }).to_parquet(data_dir / "weights.parquet")
+
+        # Create crosswalk
+        xwalk_dir = data_dir / "curated" / "xwalks"
+        xwalk_dir.mkdir(parents=True)
+        pd.DataFrame({
+            "coc_id": ["COC1", "COC2"],
+            "tract_geoid": ["T1", "T2"],
+            "area_share": [1.0, 1.0],
+        }).to_parquet(xwalk_dir / "xwalk__B2025xT2020.parquet")
+
+        recipe_data = {
+            "version": 1,
+            "name": "pop-weight-test",
+            "universe": {"range": "2020-2020"},
+            "targets": [
+                {"id": "coc_panel", "geometry": {"type": "coc", "vintage": 2025}},
+            ],
+            "datasets": {
+                "pit": {
+                    "provider": "hud",
+                    "product": "pit",
+                    "version": 1,
+                    "native_geometry": {"type": "coc"},
+                    "path": "data/pit.parquet",
+                    "years": "2020-2020",
+                },
+                "weights": {
+                    "provider": "census",
+                    "product": "acs5",
+                    "version": 1,
+                    "native_geometry": {"type": "tract", "vintage": 2020},
+                    "path": "data/weights.parquet",
+                    "years": "2020-2020",
+                },
+            },
+            "transforms": [
+                {
+                    "id": "tract_to_coc",
+                    "type": "crosswalk",
+                    "from": {"type": "tract", "vintage": 2020},
+                    "to": {"type": "coc", "vintage": 2025},
+                    "spec": {
+                        "weighting": {
+                            "scheme": "population",
+                            "population_source": "weights",
+                            "population_field": "total_population",
+                        },
+                    },
+                },
+            ],
+            "pipelines": [
+                {
+                    "id": "main",
+                    "target": "coc_panel",
+                    "steps": [
+                        {"materialize": {"transforms": ["tract_to_coc"]}},
+                        {
+                            "resample": {
+                                "dataset": "pit",
+                                "to_geometry": {"type": "coc", "vintage": 2025},
+                                "method": "identity",
+                                "measures": ["pit_total"],
+                            },
+                        },
+                        {
+                            "join": {
+                                "datasets": ["pit"],
+                                "join_on": ["geo_id", "year"],
+                            },
+                        },
+                    ],
+                },
+            ],
+        }
+
+        recipe = load_recipe(recipe_data)
+        report = run_preflight(recipe, project_root=tmp_path)
+        support_findings = [
+            f for f in report.findings
+            if f.kind == FindingKind.MISSING_SUPPORT_DATASET
+        ]
+        assert len(support_findings) >= 1
+        assert "total_population" in support_findings[0].message
+        assert not report.is_ready
+
+    def test_valid_population_source_passes(self, tmp_path: Path):
+        """When the support dataset has the required field, no
+        support-dataset findings should be reported."""
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(parents=True)
+
+        pd.DataFrame({
+            "coc_id": ["COC1"], "year": [2020], "pit_total": [10],
+        }).to_parquet(data_dir / "pit.parquet")
+
+        # Create weights dataset WITH the required population field
+        pd.DataFrame({
+            "GEOID": ["T1", "T2"],
+            "year": [2020, 2020],
+            "total_population": [100, 200],
+        }).to_parquet(data_dir / "weights.parquet")
+
+        xwalk_dir = data_dir / "curated" / "xwalks"
+        xwalk_dir.mkdir(parents=True)
+        pd.DataFrame({
+            "coc_id": ["COC1", "COC2"],
+            "tract_geoid": ["T1", "T2"],
+            "area_share": [1.0, 1.0],
+        }).to_parquet(xwalk_dir / "xwalk__B2025xT2020.parquet")
+
+        recipe_data = {
+            "version": 1,
+            "name": "pop-weight-ok",
+            "universe": {"range": "2020-2020"},
+            "targets": [
+                {"id": "coc_panel", "geometry": {"type": "coc", "vintage": 2025}},
+            ],
+            "datasets": {
+                "pit": {
+                    "provider": "hud",
+                    "product": "pit",
+                    "version": 1,
+                    "native_geometry": {"type": "coc"},
+                    "path": "data/pit.parquet",
+                    "years": "2020-2020",
+                },
+                "weights": {
+                    "provider": "census",
+                    "product": "acs5",
+                    "version": 1,
+                    "native_geometry": {"type": "tract", "vintage": 2020},
+                    "path": "data/weights.parquet",
+                    "years": "2020-2020",
+                },
+            },
+            "transforms": [
+                {
+                    "id": "tract_to_coc",
+                    "type": "crosswalk",
+                    "from": {"type": "tract", "vintage": 2020},
+                    "to": {"type": "coc", "vintage": 2025},
+                    "spec": {
+                        "weighting": {
+                            "scheme": "population",
+                            "population_source": "weights",
+                            "population_field": "total_population",
+                        },
+                    },
+                },
+            ],
+            "pipelines": [
+                {
+                    "id": "main",
+                    "target": "coc_panel",
+                    "steps": [
+                        {"materialize": {"transforms": ["tract_to_coc"]}},
+                        {
+                            "resample": {
+                                "dataset": "pit",
+                                "to_geometry": {"type": "coc", "vintage": 2025},
+                                "method": "identity",
+                                "measures": ["pit_total"],
+                            },
+                        },
+                        {
+                            "join": {
+                                "datasets": ["pit"],
+                                "join_on": ["geo_id", "year"],
+                            },
+                        },
+                    ],
+                },
+            ],
+        }
+
+        recipe = load_recipe(recipe_data)
+        report = run_preflight(recipe, project_root=tmp_path)
+        support_findings = [
+            f for f in report.findings
+            if f.kind == FindingKind.MISSING_SUPPORT_DATASET
+        ]
+        assert len(support_findings) == 0
+
+    def test_area_weighting_skips_support_check(self, tmp_path: Path):
+        """Transforms with scheme=area should not trigger support-dataset
+        probes."""
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(parents=True)
+
+        pd.DataFrame({
+            "coc_id": ["COC1"], "year": [2020], "pit_total": [10],
+        }).to_parquet(data_dir / "pit.parquet")
+
+        xwalk_dir = data_dir / "curated" / "xwalks"
+        xwalk_dir.mkdir(parents=True)
+        pd.DataFrame({
+            "coc_id": ["COC1", "COC2"],
+            "tract_geoid": ["T1", "T2"],
+            "area_share": [1.0, 1.0],
+        }).to_parquet(xwalk_dir / "xwalk__B2025xT2020.parquet")
+
+        recipe_data = {
+            "version": 1,
+            "name": "area-weight-test",
+            "universe": {"range": "2020-2020"},
+            "targets": [
+                {"id": "coc_panel", "geometry": {"type": "coc", "vintage": 2025}},
+            ],
+            "datasets": {
+                "pit": {
+                    "provider": "hud",
+                    "product": "pit",
+                    "version": 1,
+                    "native_geometry": {"type": "coc"},
+                    "path": "data/pit.parquet",
+                    "years": "2020-2020",
+                },
+            },
+            "transforms": [
+                {
+                    "id": "tract_to_coc",
+                    "type": "crosswalk",
+                    "from": {"type": "tract", "vintage": 2020},
+                    "to": {"type": "coc", "vintage": 2025},
+                    "spec": {"weighting": {"scheme": "area"}},
+                },
+            ],
+            "pipelines": [
+                {
+                    "id": "main",
+                    "target": "coc_panel",
+                    "steps": [
+                        {"materialize": {"transforms": ["tract_to_coc"]}},
+                        {
+                            "resample": {
+                                "dataset": "pit",
+                                "to_geometry": {"type": "coc", "vintage": 2025},
+                                "method": "identity",
+                                "measures": ["pit_total"],
+                            },
+                        },
+                        {
+                            "join": {
+                                "datasets": ["pit"],
+                                "join_on": ["geo_id", "year"],
+                            },
+                        },
+                    ],
+                },
+            ],
+        }
+
+        recipe = load_recipe(recipe_data)
+        report = run_preflight(recipe, project_root=tmp_path)
+        support_findings = [
+            f for f in report.findings
+            if f.kind == FindingKind.MISSING_SUPPORT_DATASET
+        ]
+        assert len(support_findings) == 0
+
+
+# ---------------------------------------------------------------------------
+# Probe unit tests for new probes (coclab-pu6j.2)
+# ---------------------------------------------------------------------------
+
+
+class TestGetWeightedTransformRequirements:
+
+    def test_population_weighted(self):
+        from coclab.recipe.probes import get_weighted_transform_requirements
+        from coclab.recipe.recipe_schema import (
+            CrosswalkSpec,
+            CrosswalkTransform,
+            CrosswalkWeighting,
+            GeometryRef,
+        )
+
+        t = CrosswalkTransform(
+            id="t1",
+            **{"from": GeometryRef(type="tract", vintage=2020)},
+            to=GeometryRef(type="coc", vintage=2025),
+            spec=CrosswalkSpec(
+                weighting=CrosswalkWeighting(
+                    scheme="population",
+                    population_source="weights",
+                    population_field="total_pop",
+                ),
+            ),
+        )
+        result = get_weighted_transform_requirements(t)
+        assert result == ("weights", "total_pop")
+
+    def test_area_weighted_returns_none(self):
+        from coclab.recipe.probes import get_weighted_transform_requirements
+        from coclab.recipe.recipe_schema import (
+            CrosswalkSpec,
+            CrosswalkTransform,
+            CrosswalkWeighting,
+            GeometryRef,
+        )
+
+        t = CrosswalkTransform(
+            id="t1",
+            **{"from": GeometryRef(type="tract", vintage=2020)},
+            to=GeometryRef(type="coc", vintage=2025),
+            spec=CrosswalkSpec(
+                weighting=CrosswalkWeighting(scheme="area"),
+            ),
+        )
+        result = get_weighted_transform_requirements(t)
+        assert result is None
+
+    def test_rollup_transform_returns_none(self):
+        from coclab.recipe.probes import get_weighted_transform_requirements
+        from coclab.recipe.recipe_schema import (
+            GeometryRef,
+            RollupKeys,
+            RollupSpec,
+            RollupTransform,
+        )
+
+        t = RollupTransform(
+            id="r1",
+            **{"from": GeometryRef(type="county")},
+            to=GeometryRef(type="state"),
+            spec=RollupSpec(
+                keys=RollupKeys(from_key="county_fips", to_key="state_fips"),
+            ),
+        )
+        result = get_weighted_transform_requirements(t)
+        assert result is None

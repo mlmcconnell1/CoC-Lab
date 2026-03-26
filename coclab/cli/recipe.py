@@ -156,23 +156,17 @@ def _validate_recipe(
     *,
     use_json: bool = False,
 ) -> tuple[list[str], list[str]]:
-    """Run all validation and return (warnings, errors) as string lists.
+    """Run structural validation and return (warnings, errors) as string lists.
 
-    Handles both path checks and adapter validation.  When *use_json*
-    is True, validation output is suppressed (caller will include it
-    in the JSON response).
+    Runs adapter validation only.  Dataset path checks are deferred to
+    the plan-scoped preflight analyzer so that missing-dataset failures
+    are reported consistently through the shared preflight output
+    (``status=blocked``) rather than the legacy ``validation.errors``
+    path.
+
+    When *use_json* is True, validation output is suppressed (caller
+    will include it in the JSON response).
     """
-    # Pre-flight: check that referenced data files exist
-    path_diagnostics = _check_dataset_paths(parsed)
-    path_warnings = [d for d in path_diagnostics if d.level == "warning"]
-    path_errors = [d for d in path_diagnostics if d.level == "error"]
-
-    if not use_json:
-        for d in path_warnings:
-            typer.echo(f"  Warning: {d.message}", err=True)
-        for d in path_errors:
-            typer.echo(f"  Missing file: {d.message}", err=True)
-
     # Run adapter registry validation
     diagnostics = validate_recipe_adapters(
         parsed, geometry_registry, dataset_registry,
@@ -184,8 +178,8 @@ def _validate_recipe(
         for w in adapter_warnings:
             typer.echo(f"  Warning: {w.message}", err=True)
 
-    all_warnings = [d.message for d in path_warnings + adapter_warnings]
-    all_errors = [d.message for d in path_errors + adapter_errors]
+    all_warnings = [d.message for d in adapter_warnings]
+    all_errors = [d.message for d in adapter_errors]
     return all_warnings, all_errors
 
 
@@ -224,20 +218,29 @@ def recipe_cmd(
 ) -> None:
     """Load, validate, preflight, and execute a build recipe.
 
-    Runs a preflight readiness check before execution to catch all
-    missing prerequisites in one pass.  Use --skip-preflight to
-    bypass the check, or run ``coclab build recipe-preflight`` for
-    a standalone analysis.
+    Preflight is the recommended first step: it resolves execution
+    plans, checks all dataset paths, transform artifacts, schemas,
+    and support-dataset requirements in one pass before execution.
+    All readiness failures are reported through the preflight output
+    with actionable remediation hints.
+
+    Use ``coclab build recipe-preflight`` for a standalone analysis
+    or ``--gaps`` for a focused data-gaps manifest.
+
+    Use ``--skip-preflight`` only when you need to bypass the check
+    for debugging purposes.
 
     Examples:
 
+        # Recommended: preflight first, then build
+        coclab build recipe-preflight --recipe my_build.yaml
         coclab build recipe --recipe my_build.yaml
 
+        # Dry run with preflight
         coclab build recipe --recipe my_build.yaml --dry-run
 
+        # JSON output for automation
         coclab build recipe --recipe my_build.yaml --json
-
-        coclab build recipe --recipe my_build.yaml --skip-preflight
     """
     # 0. Ensure built-in adapters are registered
     register_defaults()
@@ -307,6 +310,12 @@ def recipe_cmd(
                     f"Preflight: {len(pf_report.findings)} finding(s), "
                     "all clear."
                 )
+                # Show warnings so users know about non-blocking issues
+                for f in pf_report.findings:
+                    if f.severity == Severity.WARNING:
+                        typer.echo(
+                            f"  Warning: {f.message}", err=True,
+                        )
             else:
                 typer.echo(
                     f"\nPreflight found {pf_report.blocking_count} "
@@ -712,15 +721,18 @@ def recipe_preflight_cmd(
         ),
     ] = False,
 ) -> None:
-    """Check all recipe prerequisites in one pass.
+    """Check all recipe prerequisites in one pass (recommended first step).
 
     Resolves execution plans, inspects dataset paths, transform
-    artifacts, and dataset schemas.  Reports all issues at once
-    with actionable fix suggestions rather than failing on the
-    first missing prerequisite.
+    artifacts, dataset schemas, and support-dataset requirements for
+    weighted transforms.  Only checks dataset-years required by the
+    resolved plan (recipe-scoped).  Reports all issues at once with
+    actionable fix suggestions rather than failing on the first
+    missing prerequisite.
 
     Use --json for machine-readable output suitable for automation.
-    Use --gaps for a focused data-gaps manifest.
+    Use --gaps for a focused data-gaps manifest with per-gap metadata,
+    severity classification, and remediation hints.
 
     Examples:
 

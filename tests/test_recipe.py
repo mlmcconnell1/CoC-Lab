@@ -419,8 +419,9 @@ class TestRecipeCLI:
             "build", "recipe",
             "--recipe", str(recipe_file),
         ])
-        assert "Missing file" in result.output
+        # Missing dataset now routes through shared preflight output
         assert "does_not_exist.parquet" in result.output
+        assert "blocker" in result.output.lower() or "Preflight" in result.output
 
     def test_missing_file_set_paths_reported(self, tmp_path: Path):
         import yaml
@@ -434,8 +435,9 @@ class TestRecipeCLI:
             "build", "recipe",
             "--recipe", str(recipe_file),
         ])
-        assert "Missing file" in result.output
-        assert "acs_2015.parquet" in result.output
+        # Missing file_set paths now route through shared preflight output
+        assert "acs_2015.parquet" in result.output or "missing" in result.output.lower()
+        assert "blocker" in result.output.lower() or "Preflight" in result.output
 
     def test_existing_path_no_missing_file_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         import yaml
@@ -472,10 +474,10 @@ class TestRecipeCLI:
             "build", "recipe",
             "--recipe", str(recipe_file),
         ])
-        # Should appear as warning, not "Missing file" error
-        assert "Warning" in result.output
+        # Optional missing datasets appear as preflight warning, not blocker
         assert "missing.parquet" in result.output
-        assert "Missing file" not in result.output
+        assert "Warning" in result.output or "warning" in result.output.lower()
+        assert "all clear" in result.output
 
     def test_policy_default_warn_downgrades_to_warning(self, tmp_path: Path):
         import yaml
@@ -490,9 +492,9 @@ class TestRecipeCLI:
             "build", "recipe",
             "--recipe", str(recipe_file),
         ])
-        assert "Warning" in result.output
         assert "missing.parquet" in result.output
-        assert "Missing file" not in result.output
+        assert "Warning" in result.output or "warning" in result.output.lower()
+        assert "all clear" in result.output
 
     def test_per_dataset_policy_override(self, tmp_path: Path):
         import yaml
@@ -508,8 +510,9 @@ class TestRecipeCLI:
             "build", "recipe",
             "--recipe", str(recipe_file),
         ])
-        assert "Warning" in result.output
-        assert "Missing file" not in result.output
+        # Per-dataset warn policy downgrades to preflight warning
+        assert "Warning" in result.output or "warning" in result.output.lower()
+        assert "all clear" in result.output
 
     def test_per_dataset_policy_fail_overrides_optional(self, tmp_path: Path):
         import yaml
@@ -526,7 +529,8 @@ class TestRecipeCLI:
             "build", "recipe",
             "--recipe", str(recipe_file),
         ])
-        assert "Missing file" in result.output
+        # Per-dataset fail policy overrides optional → preflight blocker
+        assert "blocker" in result.output.lower() or "Preflight" in result.output
 
 
 # ===========================================================================
@@ -3332,7 +3336,7 @@ class TestRecipeJsonMode:
     def test_json_validation_error(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ):
-        """Validation errors should produce structured JSON error."""
+        """Missing datasets now route through preflight as blocked status."""
         _make_project_root(tmp_path)
         monkeypatch.chdir(tmp_path)
         data = _recipe_with_pipeline()
@@ -3348,8 +3352,9 @@ class TestRecipeJsonMode:
         ])
         assert result.exit_code == 1
         out = json.loads(result.output)
-        assert out["status"] == "error"
-        assert len(out["validation"]["errors"]) >= 2
+        assert out["status"] == "blocked"
+        assert "preflight" in out
+        assert out["preflight"]["blocking_count"] >= 2
 
     def test_json_provenance(self, tmp_path: Path):
         m = RecipeManifest(

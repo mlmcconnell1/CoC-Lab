@@ -27,10 +27,12 @@ from coclab.recipe.planner import (
     resolve_plan,
 )
 from coclab.recipe.probes import (
+    get_weighted_transform_requirements,
     probe_dataset_schema,
     probe_geo_column,
     probe_measures,
     probe_static_broadcast,
+    probe_support_dataset,
     probe_temporal_filter,
     probe_transform_path,
     probe_year_column,
@@ -66,6 +68,7 @@ class FindingKind(str, enum.Enum):
     SCHEMA_UNREADABLE = "schema_unreadable"
     MISSING_MEASURE = "missing_measure"
     TEMPORAL_FILTER = "temporal_filter"
+    MISSING_SUPPORT_DATASET = "missing_support_dataset"
 
 
 @dataclass
@@ -183,6 +186,7 @@ class PreflightReport:
             FindingKind.STATIC_BROADCAST,
             FindingKind.MISSING_MEASURE,
             FindingKind.TEMPORAL_FILTER,
+            FindingKind.MISSING_SUPPORT_DATASET,
         }
         gaps = [f for f in self.findings if f.kind in gap_kinds]
         by_kind: dict[str, list[dict]] = {}
@@ -215,64 +219,87 @@ class PreflightReport:
 def _check_dataset_paths(
     recipe: RecipeV1,
     project_root: Path,
+    resample_tasks: list[ResampleTask],
 ) -> list[PreflightFinding]:
-    """Check that all referenced dataset files exist on disk."""
+    """Check that plan-required dataset files exist on disk.
+
+    Only checks paths for (dataset_id, year) pairs that appear in the
+    resolved execution plan, so years outside the recipe universe or
+    datasets not referenced by any pipeline are ignored.
+    """
     findings: list[PreflightFinding] = []
     policy = recipe.validation.missing_dataset
     policy_extra: dict[str, str] = policy.model_extra or {}
 
-    for ds_id, ds in recipe.datasets.items():
+    # Group tasks by dataset to aggregate missing years
+    by_dataset: dict[str, list[ResampleTask]] = {}
+    for task in resample_tasks:
+        by_dataset.setdefault(task.dataset_id, []).append(task)
+
+    for ds_id, tasks in by_dataset.items():
+        ds = recipe.datasets.get(ds_id)
+        if ds is None:
+            continue
+
         is_optional = ds.optional
         per_ds_policy = policy_extra.get(ds_id)
         severity = Severity.WARNING if (
             per_ds_policy == "warn" or (per_ds_policy is None and is_optional)
-            or (per_ds_policy is None and not is_optional and policy.default == "warn")
+            or (per_ds_policy is None and not is_optional
+                and policy.default == "warn")
         ) else Severity.ERROR
 
-        if ds.path is not None:
-            resolved = project_root / ds.path
-            if not resolved.exists():
-                findings.append(PreflightFinding(
-                    severity=severity,
-                    kind=FindingKind.MISSING_DATASET,
-                    message=f"Dataset '{ds_id}' path not found: {ds.path}",
-                    dataset_id=ds_id,
-                    remediation=_dataset_remediation(ds_id, ds),
-                ))
+        # Deduplicate: check each resolved path once
+        checked_paths: set[str] = set()
+        missing_years: list[int] = []
+        missing_paths: set[str] = set()
 
-        if ds.file_set is not None:
-            for seg in ds.file_set.segments:
-                seg_years = expand_year_spec(seg.years)
-                missing_years: list[int] = []
-                for year in seg_years:
-                    if year in seg.overrides:
-                        p = seg.overrides[year]
-                    else:
-                        render_ctx: dict[str, object] = {"year": year}
-                        render_ctx.update(seg.constants)
-                        render_ctx.update(
-                            {k: year + offset
-                             for k, offset in seg.year_offsets.items()}
-                        )
-                        try:
-                            p = ds.file_set.path_template.format(**render_ctx)
-                        except KeyError:
-                            continue  # planner will catch template errors
-                    if not (project_root / p).exists():
-                        missing_years.append(year)
+        for task in tasks:
+            path = task.input_path
+            if path is None:
+                # Static dataset with no file_set — use ds.path
+                if ds.path is not None and ds.path not in checked_paths:
+                    checked_paths.add(ds.path)
+                    if not (project_root / ds.path).exists():
+                        findings.append(PreflightFinding(
+                            severity=severity,
+                            kind=FindingKind.MISSING_DATASET,
+                            message=(
+                                f"Dataset '{ds_id}' path not found: "
+                                f"{ds.path}"
+                            ),
+                            dataset_id=ds_id,
+                            remediation=_dataset_remediation(ds_id, ds),
+                        ))
+                continue
 
-                if missing_years:
-                    findings.append(PreflightFinding(
-                        severity=severity,
-                        kind=FindingKind.MISSING_DATASET,
-                        message=(
-                            f"Dataset '{ds_id}': {len(missing_years)} "
-                            f"file(s) missing for years {missing_years}"
-                        ),
-                        dataset_id=ds_id,
-                        years=missing_years,
-                        remediation=_dataset_remediation(ds_id, ds),
-                    ))
+            if path in checked_paths:
+                continue
+            checked_paths.add(path)
+
+            if not (project_root / path).exists():
+                missing_years.append(task.year)
+                missing_paths.add(path)
+
+        if missing_years:
+            if len(missing_paths) == 1:
+                msg = (
+                    f"Dataset '{ds_id}' path not found: "
+                    f"{next(iter(missing_paths))}"
+                )
+            else:
+                msg = (
+                    f"Dataset '{ds_id}': {len(missing_years)} "
+                    f"file(s) missing for years {missing_years}"
+                )
+            findings.append(PreflightFinding(
+                severity=severity,
+                kind=FindingKind.MISSING_DATASET,
+                message=msg,
+                dataset_id=ds_id,
+                years=missing_years,
+                remediation=_dataset_remediation(ds_id, ds),
+            ))
 
     return findings
 
@@ -485,6 +512,72 @@ def _check_dataset_schemas(
     return findings
 
 
+def _check_support_datasets(
+    recipe: RecipeV1,
+    project_root: Path,
+    needed_transforms: set[str],
+    universe_years: list[int],
+) -> list[PreflightFinding]:
+    """Check support-dataset prerequisites for weighted transforms.
+
+    When a transform uses population weighting, the referenced
+    population_source dataset must exist and contain the declared
+    population_field.  These checks run without loading data.
+    """
+    findings: list[PreflightFinding] = []
+
+    for tid in sorted(needed_transforms):
+        transform = None
+        for t in recipe.transforms:
+            if t.id == tid:
+                transform = t
+                break
+        if transform is None:
+            continue
+
+        reqs = get_weighted_transform_requirements(transform)
+        if reqs is None:
+            continue
+
+        population_source, population_field = reqs
+        probe_results = probe_support_dataset(
+            population_source=population_source,
+            population_field=population_field,
+            transform_id=tid,
+            recipe=recipe,
+            project_root=project_root,
+            years=universe_years,
+        )
+        for r in probe_results:
+            findings.append(PreflightFinding(
+                severity=Severity.ERROR,
+                kind=FindingKind.MISSING_SUPPORT_DATASET,
+                message=r.message,
+                transform_id=tid,
+                dataset_id=population_source,
+                years=(
+                    r.detail.get("missing_years")
+                    if r.detail else None
+                ),
+                remediation=Remediation(
+                    hint=(
+                        f"Ensure dataset '{population_source}' is "
+                        f"available with field '{population_field}' "
+                        f"for the required years."
+                    ),
+                    command=(
+                        f"coclab ingest "
+                        f"{recipe.datasets[population_source].product}"
+                        if population_source in recipe.datasets
+                        and recipe.datasets[population_source].product
+                        else None
+                    ),
+                ),
+            ))
+
+    return findings
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -526,10 +619,8 @@ def run_preflight(
     # 1. Adapter validation
     report.findings.extend(_check_adapter_validation(recipe))
 
-    # 2. Dataset path checks
-    report.findings.extend(_check_dataset_paths(recipe, project_root))
-
-    # 3. Resolve plans and collect tasks
+    # 2. Resolve plans and collect tasks (before path checks so we
+    #    can scope path checking to plan-required dataset-years only)
     all_resample_tasks: list[ResampleTask] = []
     needed_transforms: set[str] = set()
 
@@ -556,17 +647,52 @@ def run_preflight(
             all_resample_tasks.extend(plan.resample_tasks)
 
         except PlannerError as exc:
+            err_str = str(exc)
             summary = PipelineSummary(
                 pipeline_id=pipeline.id,
-                plan_error=str(exc),
+                plan_error=err_str,
             )
             report.pipelines.append(summary)
+
+            # Surface planner errors as both PLANNER_ERROR and
+            # UNCOVERED_YEARS when they indicate year-coverage gaps,
+            # so the gaps manifest includes them.
             report.findings.append(PreflightFinding(
                 severity=Severity.ERROR,
                 kind=FindingKind.PLANNER_ERROR,
                 message=f"Pipeline '{pipeline.id}': {exc}",
                 pipeline_id=pipeline.id,
             ))
+            if "not covered" in err_str or "no file_set segment" in err_str:
+                # Extract dataset_id from common planner error patterns
+                ds_id_from_err: str | None = None
+                if "Dataset '" in err_str:
+                    start = err_str.index("Dataset '") + 9
+                    end = err_str.index("'", start)
+                    ds_id_from_err = err_str[start:end]
+
+                report.findings.append(PreflightFinding(
+                    severity=Severity.ERROR,
+                    kind=FindingKind.UNCOVERED_YEARS,
+                    message=f"Pipeline '{pipeline.id}': {exc}",
+                    pipeline_id=pipeline.id,
+                    dataset_id=ds_id_from_err,
+                    years=universe_years,
+                    remediation=Remediation(
+                        hint=(
+                            f"Extend dataset year coverage to match "
+                            f"recipe universe "
+                            f"{min(universe_years)}-{max(universe_years)}, "
+                            f"or narrow the recipe universe."
+                        ),
+                    ),
+                ))
+
+    # 3. Dataset path checks (plan-scoped: only checks paths required
+    #    by the resolved execution plan)
+    report.findings.extend(
+        _check_dataset_paths(recipe, project_root, all_resample_tasks),
+    )
 
     # 4. Transform artifact checks
     report.findings.extend(
@@ -576,6 +702,13 @@ def run_preflight(
     # 5. Dataset schema probes
     report.findings.extend(
         _check_dataset_schemas(recipe, project_root, all_resample_tasks),
+    )
+
+    # 6. Support-dataset probes for weighted transforms
+    report.findings.extend(
+        _check_support_datasets(
+            recipe, project_root, needed_transforms, universe_years,
+        ),
     )
 
     return report

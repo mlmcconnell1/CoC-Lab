@@ -1,10 +1,10 @@
 """Non-executing dataset and transform probes for recipe preflight.
 
 Shared inspection helpers that validate dataset schemas, column
-presence, temporal filters, static broadcast safety, and transform
-prerequisites without running a build.  Both the executor and the
-preflight analyzer consume these primitives so validation logic stays
-in one place.
+presence, temporal filters, static broadcast safety, transform
+prerequisites, and support-dataset requirements without running a
+build.  Both the executor and the preflight analyzer consume these
+primitives so validation logic stays in one place.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from typing import Optional
 import pyarrow.parquet as pq
 
 from coclab.recipe.recipe_schema import (
+    CrosswalkTransform,
     DatasetSpec,
     GeometryRef,
     RecipeV1,
@@ -334,3 +335,124 @@ def probe_dataset_schema(
             ok=False,
             message=f"Cannot read parquet schema: {exc}",
         )
+
+
+# ---------------------------------------------------------------------------
+# Weighted-transform support-dataset probes
+# ---------------------------------------------------------------------------
+
+def get_weighted_transform_requirements(
+    transform,
+) -> tuple[str, str] | None:
+    """Extract (population_source, population_field) if a transform needs them.
+
+    Returns None if the transform does not use population weighting or
+    if the required fields are not configured.
+
+    Both the executor and preflight call this to decide whether
+    support-dataset validation is needed.
+    """
+    if not isinstance(transform, CrosswalkTransform):
+        return None
+    weighting = transform.spec.weighting
+    if weighting.scheme != "population":
+        return None
+    if not weighting.population_source or not weighting.population_field:
+        return None
+    return (weighting.population_source, weighting.population_field)
+
+
+def probe_support_dataset(
+    *,
+    population_source: str,
+    population_field: str,
+    transform_id: str,
+    recipe: RecipeV1,
+    project_root: Path,
+    years: list[int],
+) -> list[ProbeResult]:
+    """Check that a weighted transform's support dataset exists and has the required field.
+
+    Validates:
+    1. The population_source dataset is declared in the recipe.
+    2. For each year, the resolved support-dataset file exists on disk.
+    3. The population_field column exists in the support-dataset schema.
+
+    Returns a list of ProbeResults (one per issue found, empty if all ok).
+    """
+    results: list[ProbeResult] = []
+
+    ds = recipe.datasets.get(population_source)
+    if ds is None:
+        results.append(ProbeResult(
+            ok=False,
+            message=(
+                f"Transform '{transform_id}' requires population_source "
+                f"'{population_source}' but it is not declared in the recipe."
+            ),
+        ))
+        return results
+
+    # Resolve paths for each year and check existence + schema
+    from coclab.recipe.planner import _resolve_dataset_year, PlannerError
+
+    checked_paths: set[str] = set()
+    missing_years: list[int] = []
+
+    for year in years:
+        try:
+            resolved = _resolve_dataset_year(population_source, year, recipe)
+        except PlannerError:
+            missing_years.append(year)
+            continue
+        path = resolved.path
+        if path is None:
+            path = ds.path
+        if path is None:
+            continue
+        if path in checked_paths:
+            continue
+        checked_paths.add(path)
+
+        full_path = project_root / path
+        if not full_path.exists():
+            missing_years.append(year)
+            continue
+
+        # Check schema for population_field
+        schema_result = probe_dataset_schema(full_path)
+        if schema_result.ok:
+            columns = schema_result.detail["columns"]
+            if population_field not in columns:
+                results.append(ProbeResult(
+                    ok=False,
+                    message=(
+                        f"Transform '{transform_id}' requires field "
+                        f"'{population_field}' in dataset "
+                        f"'{population_source}' ({path}), but it is "
+                        f"not present. Available: {sorted(columns)}"
+                    ),
+                    detail={
+                        "transform_id": transform_id,
+                        "population_source": population_source,
+                        "population_field": population_field,
+                        "path": path,
+                    },
+                ))
+
+    if missing_years:
+        results.append(ProbeResult(
+            ok=False,
+            message=(
+                f"Transform '{transform_id}' requires dataset "
+                f"'{population_source}' for years {missing_years}, "
+                f"but file(s) are missing."
+            ),
+            detail={
+                "transform_id": transform_id,
+                "population_source": population_source,
+                "missing_years": missing_years,
+            },
+        ))
+
+    return results

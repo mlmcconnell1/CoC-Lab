@@ -39,6 +39,7 @@ from coclab.recipe.planner import (
 from coclab.recipe.probes import (
     GEO_CANDIDATES,
     YEAR_CANDIDATES,
+    get_weighted_transform_requirements,
     probe_geo_column,
     probe_measures,
     probe_static_broadcast,
@@ -600,14 +601,10 @@ def _attach_dynamic_pop_share(
         return xwalk
 
     transform = _get_transform(ctx.recipe, task.transform_id)
-    weighting = getattr(transform.spec, "weighting", None)
-    if weighting is None or weighting.scheme != "population":
+    reqs = get_weighted_transform_requirements(transform)
+    if reqs is None:
         return xwalk
-    if not weighting.population_source or not weighting.population_field:
-        raise ExecutorError(
-            f"Transform '{task.transform_id}' requires population_source and "
-            "population_field when scheme='population'."
-        )
+    population_source, population_field = reqs
 
     source_key = _XWALK_JOIN_KEYS.get(task.effective_geometry.type)
     if source_key is None or source_key not in xwalk.columns:
@@ -618,36 +615,36 @@ def _attach_dynamic_pop_share(
 
     weights_df = _load_support_dataset_for_year(
         ctx=ctx,
-        dataset_id=weighting.population_source,
+        dataset_id=population_source,
         year=task.year,
     )
     weights_geo_col = _resolve_geo_column(
         weights_df,
-        ctx.recipe.datasets[weighting.population_source].geo_column,
+        ctx.recipe.datasets[population_source].geo_column,
     )
-    if weighting.population_field not in weights_df.columns:
+    if population_field not in weights_df.columns:
         raise ExecutorError(
-            f"Dataset '{weighting.population_source}' year {task.year}: missing "
-            f"population field '{weighting.population_field}'. "
+            f"Dataset '{population_source}' year {task.year}: missing "
+            f"population field '{population_field}'. "
             f"Available: {sorted(weights_df.columns)}"
         )
 
     target_col = _detect_xwalk_target_col(xwalk, source_key)
-    weights = weights_df[[weights_geo_col, weighting.population_field]].copy()
+    weights = weights_df[[weights_geo_col, population_field]].copy()
     weights = weights.rename(columns={weights_geo_col: source_key})
-    weights[weighting.population_field] = pd.to_numeric(
-        weights[weighting.population_field],
+    weights[population_field] = pd.to_numeric(
+        weights[population_field],
         errors="coerce",
     )
 
     enriched = xwalk.merge(weights, on=source_key, how="left")
-    group_sum = enriched.groupby(target_col)[weighting.population_field].transform("sum")
+    group_sum = enriched.groupby(target_col)[population_field].transform("sum")
     enriched["pop_share"] = np.where(
         group_sum > 0,
-        enriched[weighting.population_field] / group_sum,
+        enriched[population_field] / group_sum,
         np.nan,
     )
-    return enriched.drop(columns=[weighting.population_field])
+    return enriched.drop(columns=[population_field])
 
 
 def _resample_identity(
