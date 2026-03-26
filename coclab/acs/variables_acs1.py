@@ -1,4 +1,13 @@
-"""ACS 1-year variable definitions for metro-native unemployment data."""
+"""ACS 1-year variable definitions for metro-native unemployment data.
+
+Single source of truth for ACS 1-year variables fetched at CBSA geography.
+These are separate from the ACS 5-year tract-level variables in ``variables.py``
+because ACS 1-year is a different Census product with different geographic
+availability and temporal resolution.
+
+Initial implementation covers Table B23025 (Employment Status for the
+Population 16 Years and Over) for unemployment rate derivation.
+"""
 
 from __future__ import annotations
 
@@ -8,13 +17,22 @@ from __future__ import annotations
 
 ACS1_UNEMPLOYMENT_TABLE: str = "B23025"
 
-ACS1_UNEMPLOYMENT_VARIABLES: dict[str, str] = {
-    "B23025_001E": "pop_16_plus",           # Total population 16+
-    "B23025_002E": "in_labor_force",         # In labor force
-    "B23025_003E": "civilian_labor_force",   # Civilian labor force
-    "B23025_005E": "unemployed",             # Unemployed (civilian)
-    "B23025_007E": "not_in_labor_force",     # Not in labor force
+#: ACS 1-year variable codes to fetch from the Census API.
+ACS1_UNEMPLOYMENT_VARIABLES: list[str] = [
+    "B23025_001E",  # Total population 16 years and over
+    "B23025_003E",  # Civilian labor force
+    "B23025_005E",  # Unemployed (civilian)
+]
+
+#: Human-readable names for the raw Census variables.
+ACS1_VARIABLE_NAMES: dict[str, str] = {
+    "B23025_001E": "pop_16_plus",
+    "B23025_003E": "civilian_labor_force",
+    "B23025_005E": "unemployed_count",
 }
+
+#: Tables included (for provenance tracking).
+ACS1_TABLES: list[str] = ["B23025"]
 
 # ---------------------------------------------------------------------------
 # Derived measures
@@ -31,15 +49,17 @@ DERIVED_ACS1_MEASURES: dict[str, str] = {
 # Output schema for metro-level ACS1 unemployment data
 # ---------------------------------------------------------------------------
 
+#: Canonical column order for metro ACS 1-year output files.
 ACS1_METRO_OUTPUT_COLUMNS: list[str] = [
     "metro_id",
-    "cbsa_code",
-    "year",
+    "metro_name",
+    "definition_version",
     "acs1_vintage",
-    "unemployment_rate_acs1",
+    "cbsa_code",
+    "pop_16_plus",
     "civilian_labor_force",
     "unemployed_count",
-    "pop_16_plus",
+    "unemployment_rate_acs1",
     "data_source",
     "source_ref",
     "ingested_at",

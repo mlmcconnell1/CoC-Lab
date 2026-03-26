@@ -6,6 +6,7 @@ from typing import Final
 
 # Census Bureau
 CENSUS_API_ACS5: Final = "https://api.census.gov/data/{year}/acs/acs5"
+CENSUS_API_ACS1: Final = "https://api.census.gov/data/{year}/acs/acs1"
 CENSUS_TIGER_BASE: Final = "https://www2.census.gov/geo/tiger/TIGER{year}/{layer}/"
 CENSUS_TRACT_RELATIONSHIP_URL: Final = (
     "https://www2.census.gov/geo/docs/maps-data/data/rel2020/tract/tab20_tract20_tract10_natl.txt"

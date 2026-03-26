@@ -198,58 +198,34 @@ METRO_COUNTY_MEMBERSHIP: list[tuple[str, str]] = [
 METRO_CBSA_MAPPING: dict[str, str] = {
     "GF01": "35620",  # New York
     "GF02": "31080",  # Los Angeles
-    "GF03": "42660",  # Seattle
-    "GF04": "41940",  # San Jose
-    "GF05": "41740",  # San Diego
-    "GF06": "41860",  # San Francisco
+    "GF03": "16980",  # Chicago
+    "GF04": "19100",  # Dallas-Fort Worth
+    "GF05": "37980",  # Philadelphia
+    "GF06": "26420",  # Houston
     "GF07": "47900",  # Washington DC
-    "GF08": "14460",  # Boston
-    "GF09": "38060",  # Phoenix
-    "GF10": "29820",  # Las Vegas
-    "GF11": "19100",  # Dallas
-    "GF12": "26420",  # Houston
-    "GF13": "12060",  # Atlanta
-    "GF14": "37980",  # Philadelphia
-    "GF15": "19740",  # Denver
-    "GF16": "33460",  # Minneapolis
-    "GF17": "45300",  # Tampa
-    "GF18": "36740",  # Orlando
-    "GF19": "19820",  # Detroit
-    "GF20": "16980",  # Chicago
-    "GF21": "38900",  # Portland
-    "GF22": "18140",  # Columbus
-    "GF23": "40900",  # Sacramento
-    "GF24": "12420",  # Austin
-    "GF25": "16740",  # Charlotte
+    "GF08": "33100",  # Miami-Fort Lauderdale
+    "GF09": "12060",  # Atlanta
+    "GF10": "14460",  # Boston
+    "GF11": "41860",  # San Francisco
+    "GF12": "19820",  # Detroit
+    "GF13": "40140",  # Riverside
+    "GF14": "38060",  # Phoenix
+    "GF15": "42660",  # Seattle
+    "GF16": "33460",  # Minneapolis-St Paul
+    "GF17": "41740",  # San Diego
+    "GF18": "41180",  # St. Louis
+    "GF19": "45300",  # Tampa
+    "GF20": "12580",  # Baltimore
+    "GF21": "19740",  # Denver
+    "GF22": "38300",  # Pittsburgh
+    "GF23": "38900",  # Portland
+    "GF24": "16740",  # Charlotte
+    "GF25": "40900",  # Sacramento
 }
 
-#: Short metro names used in CBSA mapping (for display/DataFrame building).
+#: Short metro names derived from METRO_DEFINITIONS (for display/DataFrame building).
 _CBSA_METRO_NAMES: dict[str, str] = {
-    "GF01": "New York",
-    "GF02": "Los Angeles",
-    "GF03": "Seattle",
-    "GF04": "San Jose",
-    "GF05": "San Diego",
-    "GF06": "San Francisco",
-    "GF07": "Washington DC",
-    "GF08": "Boston",
-    "GF09": "Phoenix",
-    "GF10": "Las Vegas",
-    "GF11": "Dallas",
-    "GF12": "Houston",
-    "GF13": "Atlanta",
-    "GF14": "Philadelphia",
-    "GF15": "Denver",
-    "GF16": "Minneapolis",
-    "GF17": "Tampa",
-    "GF18": "Orlando",
-    "GF19": "Detroit",
-    "GF20": "Chicago",
-    "GF21": "Portland",
-    "GF22": "Columbus",
-    "GF23": "Sacramento",
-    "GF24": "Austin",
-    "GF25": "Charlotte",
+    mid: name.split(",")[0] for mid, name, _mtype in METRO_DEFINITIONS
 }
 
 #: Reverse lookup: CBSA code → metro_id.
@@ -358,3 +334,19 @@ def cbsa_to_metro_id(cbsa_code: str) -> str | None:
         The metro_id (e.g., "GF01") if found, otherwise None.
     """
     return _CBSA_TO_METRO.get(cbsa_code)
+
+
+def metro_name_for_id(metro_id: str) -> str | None:
+    """Look up the short metro name for a Glynn/Fox metro_id.
+
+    Parameters
+    ----------
+    metro_id : str
+        Metro identifier (e.g., "GF01").
+
+    Returns
+    -------
+    str or None
+        The metro name (e.g., "New York") if found, otherwise None.
+    """
+    return _CBSA_METRO_NAMES.get(metro_id)

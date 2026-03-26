@@ -20,6 +20,7 @@ from coclab.acs.variables_acs1 import (
     ACS1_METRO_OUTPUT_COLUMNS,
     ACS1_UNEMPLOYMENT_TABLE,
     ACS1_UNEMPLOYMENT_VARIABLES,
+    ACS1_VARIABLE_NAMES,
     DERIVED_ACS1_MEASURES,
 )
 
@@ -85,7 +86,7 @@ class TestCBSAToMetroId:
     def test_specific_lookups(self):
         assert cbsa_to_metro_id("35620") == "GF01"  # New York
         assert cbsa_to_metro_id("31080") == "GF02"  # Los Angeles
-        assert cbsa_to_metro_id("16740") == "GF25"  # Charlotte
+        assert cbsa_to_metro_id("16740") == "GF24"  # Charlotte
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +131,7 @@ class TestACS1VariableDefinitions:
         assert ACS1_UNEMPLOYMENT_TABLE == "B23025"
 
     def test_unemployment_variables_count(self):
-        assert len(ACS1_UNEMPLOYMENT_VARIABLES) == 5
+        assert len(ACS1_UNEMPLOYMENT_VARIABLES) == 3
 
     def test_variable_codes_match_table(self):
         for var_code in ACS1_UNEMPLOYMENT_VARIABLES:
@@ -145,20 +146,20 @@ class TestACS1VariableDefinitions:
             )
 
     def test_friendly_names_are_unique(self):
-        names = list(ACS1_UNEMPLOYMENT_VARIABLES.values())
+        names = list(ACS1_VARIABLE_NAMES.values())
         assert len(names) == len(set(names))
 
     def test_key_variables_present(self):
-        friendly = set(ACS1_UNEMPLOYMENT_VARIABLES.values())
+        friendly = set(ACS1_VARIABLE_NAMES.values())
         assert "pop_16_plus" in friendly
         assert "civilian_labor_force" in friendly
-        assert "unemployed" in friendly
+        assert "unemployed_count" in friendly
 
     def test_derived_measures_defined(self):
         assert "unemployment_rate_acs1" in DERIVED_ACS1_MEASURES
 
     def test_output_columns_complete(self):
-        required = {"metro_id", "cbsa_code", "year", "unemployment_rate_acs1"}
+        required = {"metro_id", "cbsa_code", "unemployment_rate_acs1"}
         assert required.issubset(set(ACS1_METRO_OUTPUT_COLUMNS))
 
     def test_first_reliable_year(self):
