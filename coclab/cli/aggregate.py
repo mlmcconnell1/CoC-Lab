@@ -1,13 +1,12 @@
-"""CLI command group for aggregating build-scoped source datasets.
+"""CLI command group for aggregating source datasets into CoC artifacts.
 
 Provides commands for ACS, ZORI, PEP, and PIT aggregation. These
-commands validate inputs, resolve build-scoped parameters, and delegate
-to the corresponding pipeline module.
+commands validate inputs, resolve parameters, and delegate to the
+corresponding pipeline module.
 
-These commands currently materialize CoC-scoped aggregate artifacts. Those
-outputs remain a core input to downstream analysis, including metro-aware
-panel and recipe workflows that resample or join from CoC, county, and tract
-sources.
+Outputs go to ``data/curated/<dataset>/`` by default.  When ``--build``
+is provided, outputs go to ``builds/<name>/data/curated/<dataset>/``
+and runs are recorded in the build manifest.
 """
 
 from __future__ import annotations
@@ -30,9 +29,12 @@ from coclab.year_spec import parse_year_spec
 
 aggregate_app = typer.Typer(
     name="aggregate",
-    help="Aggregate source datasets into build-scoped analysis inputs.",
+    help="Aggregate source datasets into CoC-scoped analysis inputs.",
     no_args_is_help=True,
 )
+
+# Default output root when no --build is provided
+DEFAULT_CURATED_DIR = Path("data/curated")
 
 # ---------------------------------------------------------------------------
 # Valid alignment modes per dataset
@@ -60,8 +62,17 @@ def _validate_build(build: str) -> Path:
     except FileNotFoundError:
         build_path = resolve_build_dir(build)
         typer.echo(f"Error: Build '{build}' not found at {build_path}", err=True)
-        typer.echo("Run: coclab build create --name <build>", err=True)
+        typer.echo(
+            "Create the directory manually or omit --build to write to data/curated/.",
+            err=True,
+        )
         raise typer.Exit(2) from None
+
+
+def _maybe_record_run(build_dir: Path | None, **kwargs: object) -> None:
+    """Record an aggregate run to manifest if a build directory is in use."""
+    if build_dir is not None:
+        record_aggregate_run(build_dir, **kwargs)
 
 
 def _validate_align(align: str, valid_modes: tuple[str, ...], dataset: str) -> None:
@@ -75,7 +86,7 @@ def _validate_align(align: str, valid_modes: tuple[str, ...], dataset: str) -> N
         raise typer.Exit(2)
 
 
-def _resolve_years(years: str | None, build_dir: Path) -> list[int]:
+def _resolve_years(years: str | None, build_dir: Path | None) -> list[int]:
     """Parse ``--years`` if provided, otherwise use build years from manifest."""
     if years is not None:
         try:
@@ -83,6 +94,10 @@ def _resolve_years(years: str | None, build_dir: Path) -> list[int]:
         except ValueError as exc:
             typer.echo(f"Error: {exc}", err=True)
             raise typer.Exit(2) from exc
+
+    if build_dir is None:
+        typer.echo("Error: --years is required when --build is not specified.", err=True)
+        raise typer.Exit(2)
 
     build_years = get_build_years(build_dir)
     if not build_years:
@@ -166,13 +181,13 @@ def _build_lagged_pep_series(pep_df: pd.DataFrame, target_year: int, lag_months:
 @aggregate_app.command("pep")
 def aggregate_pep(
     build: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--build",
             "-b",
-            help="Named build to aggregate against.",
+            help="Named build directory. Omit to write to data/curated/.",
         ),
-    ],
+    ] = None,
     align: Annotated[
         str,
         typer.Option(
@@ -187,7 +202,7 @@ def aggregate_pep(
         str | None,
         typer.Option(
             "--years",
-            help="Year spec override (e.g. '2018-2024'). Defaults to build years.",
+            help="Year spec (e.g. '2018-2024'). Required when --build is omitted.",
         ),
     ] = None,
     lag_months: Annotated[
@@ -222,7 +237,7 @@ def aggregate_pep(
     boundary year by default. These CoC outputs can then feed CoC panels
     directly or metro workflows that resample county-native sources.
     """
-    build_dir = _validate_build(build)
+    build_dir: Path | None = _validate_build(build) if build else None
     _validate_align(align, PEP_ALIGN_MODES, "pep")
     parsed_years = _resolve_years(years, build_dir)
 
@@ -239,12 +254,15 @@ def aggregate_pep(
         )
         raise typer.Exit(2)
 
-    _require_boundary_years(build_dir)
-
-    curated_dir = build_curated_dir(build_dir)
+    if build_dir is not None:
+        _require_boundary_years(build_dir)
+        curated_dir = build_curated_dir(build_dir)
+    else:
+        curated_dir = DEFAULT_CURATED_DIR
     output_dir = curated_dir / "pep"
 
-    typer.echo(f"Aggregating PEP to CoC (build '{build}', align '{align}')...")
+    label = f"build '{build}'" if build else "global curated"
+    typer.echo(f"Aggregating PEP to CoC ({label}, align '{align}')...")
 
     from coclab.pep.aggregate import aggregate_pep_to_coc, load_pep_county
 
@@ -254,7 +272,7 @@ def aggregate_pep(
         try:
             pep_source_df = load_pep_county()
         except FileNotFoundError as exc:
-            record_aggregate_run(
+            _maybe_record_run(
                 build_dir, dataset="pep", alignment=align,
                 years_requested=parsed_years, status="failed",
                 error=str(exc), alignment_params=align_params,
@@ -307,7 +325,7 @@ def aggregate_pep(
                 force=True,
             )
 
-            if result_path.is_relative_to(build_dir):
+            if build_dir and result_path.is_relative_to(build_dir):
                 rel = result_path.relative_to(build_dir).as_posix()
             else:
                 rel = str(result_path)
@@ -316,7 +334,7 @@ def aggregate_pep(
             typer.echo(f"    Wrote: {result_path.name}")
 
         except FileNotFoundError as exc:
-            record_aggregate_run(
+            _maybe_record_run(
                 build_dir, dataset="pep", alignment=align,
                 years_requested=parsed_years, status="failed",
                 error=str(exc), alignment_params=align_params,
@@ -325,7 +343,7 @@ def aggregate_pep(
             typer.echo("Ensure PEP data and crosswalks are available.", err=True)
             raise typer.Exit(1) from exc
         except Exception as exc:
-            record_aggregate_run(
+            _maybe_record_run(
                 build_dir, dataset="pep", alignment=align,
                 years_requested=parsed_years, status="failed", error=str(exc),
                 alignment_params=align_params,
@@ -336,7 +354,7 @@ def aggregate_pep(
             if pep_path is not None and pep_path.exists():
                 pep_path.unlink()
 
-    record_aggregate_run(
+    _maybe_record_run(
         build_dir,
         dataset="pep",
         alignment=align,
@@ -356,13 +374,13 @@ def aggregate_pep(
 @aggregate_app.command("pit")
 def aggregate_pit(
     build: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--build",
             "-b",
-            help="Named build to aggregate against.",
+            help="Named build directory. Omit to write to data/curated/.",
         ),
-    ],
+    ] = None,
     align: Annotated[
         str,
         typer.Option(
@@ -377,7 +395,7 @@ def aggregate_pit(
         str | None,
         typer.Option(
             "--years",
-            help="Year spec override (e.g. '2018-2024'). Defaults to build years.",
+            help="Year spec (e.g. '2018-2024'). Required when --build is omitted.",
         ),
     ] = None,
 ) -> None:
@@ -387,15 +405,16 @@ def aggregate_pit(
     aligns PIT count data to the build's year scope.  Produces one
     output file per boundary year for downstream panel assembly.
     """
-    build_dir = _validate_build(build)
+    build_dir: Path | None = _validate_build(build) if build else None
     _validate_align(align, PIT_ALIGN_MODES, "pit")
     parsed_years = _resolve_years(years, build_dir)
 
-    curated_dir = build_curated_dir(build_dir)
+    curated_dir = build_curated_dir(build_dir) if build_dir else DEFAULT_CURATED_DIR
     output_dir = curated_dir / "pit"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    typer.echo(f"Aggregating PIT to CoC (build '{build}', align '{align}')...")
+    label = f"build '{build}'" if build else "global curated"
+    typer.echo(f"Aggregating PIT to CoC ({label}, align '{align}')...")
     typer.echo(f"  Years: {parsed_years}")
 
     import pandas as pd
@@ -475,7 +494,7 @@ def aggregate_pit(
         df.to_parquet(out_path, index=False)
         all_outputs.append(
             out_path.relative_to(build_dir).as_posix()
-            if out_path.is_relative_to(build_dir) else str(out_path)
+            if build_dir and out_path.is_relative_to(build_dir) else str(out_path)
         )
 
     materialized = sorted(int(k) for k in collected.keys())
@@ -485,7 +504,7 @@ def aggregate_pit(
     typer.echo(f"Wrote PIT aggregate: {len(materialized)} files to {output_dir}")
     typer.echo(f"  CoCs: {coc_count}, Records: {total_records:,}")
 
-    record_aggregate_run(
+    _maybe_record_run(
         build_dir,
         dataset="pit",
         alignment=align,
@@ -503,13 +522,13 @@ def aggregate_pit(
 @aggregate_app.command("acs")
 def aggregate_acs(
     build: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--build",
             "-b",
-            help="Named build to aggregate against.",
+            help="Named build directory. Omit to write to data/curated/.",
         ),
-    ],
+    ] = None,
     align: Annotated[
         str,
         typer.Option(
@@ -524,7 +543,7 @@ def aggregate_acs(
         str | None,
         typer.Option(
             "--years",
-            help="Year spec override (e.g. '2018-2024'). Defaults to build years.",
+            help="Year spec (e.g. '2018-2024'). Required when --build is omitted.",
         ),
     ] = None,
     weighting: Annotated[
@@ -547,18 +566,18 @@ def aggregate_acs(
         ),
     ] = None,
 ) -> None:
-    """Aggregate cached ACS tract data into build-scoped CoC artifacts.
+    """Aggregate cached ACS tract data into CoC artifacts.
 
     Reads pre-ingested ACS tract files from disk and aggregates to CoC
     level using crosswalks.  No Census API calls are made.  If cached
     ingest files are missing, the command fails with instructions to
     run ``coclab ingest acs`` first.
 
-    Iterates over build years using each as the boundary vintage (hub).
+    Iterates over years using each as the boundary vintage (hub).
     For each boundary year, the ACS vintage is derived from the alignment
-    mode and a crosswalk is resolved from the build-scoped xwalks directory.
+    mode and a crosswalk is resolved from the xwalks directory.
     """
-    build_dir = _validate_build(build)
+    build_dir: Path | None = _validate_build(build) if build else None
     _validate_align(align, ACS_ALIGN_MODES, "acs")
     parsed_years = _resolve_years(years, build_dir)
 
@@ -569,12 +588,15 @@ def aggregate_acs(
         )
         raise typer.Exit(2)
 
-    _require_boundary_years(build_dir)
-
-    curated_dir = build_curated_dir(build_dir)
+    if build_dir is not None:
+        _require_boundary_years(build_dir)
+        curated_dir = build_curated_dir(build_dir)
+    else:
+        curated_dir = DEFAULT_CURATED_DIR
     output_dir = curated_dir / "measures"
 
-    typer.echo(f"Aggregating ACS to CoC (build '{build}', align '{align}')...")
+    label = f"build '{build}'" if build else "global curated"
+    typer.echo(f"Aggregating ACS to CoC ({label}, align '{align}')...")
 
     import pandas as pd
 
@@ -610,7 +632,7 @@ def aggregate_acs(
         # --- Resolve cached ACS tract data file (NO API) ---
         acs_cache_path = get_output_path(acs_vintage, str(tract_vintage))
         if not acs_cache_path.exists():
-            record_aggregate_run(
+            _maybe_record_run(
                 build_dir, dataset="acs", alignment=align,
                 years_requested=parsed_years, status="failed",
                 error=f"ACS cache not found: {acs_cache_path}",
@@ -631,7 +653,7 @@ def aggregate_acs(
         )
 
         if not xwalk_path.exists():
-            record_aggregate_run(
+            _maybe_record_run(
                 build_dir, dataset="acs", alignment=align,
                 years_requested=parsed_years, status="failed",
                 error=f"Crosswalk not found: {xwalk_path}",
@@ -721,14 +743,14 @@ def aggregate_acs(
             typer.echo(f"    Wrote: {out_path.name}")
 
         except Exception as exc:
-            record_aggregate_run(
+            _maybe_record_run(
                 build_dir, dataset="acs", alignment=align,
                 years_requested=parsed_years, status="failed", error=str(exc),
             )
             typer.echo(f"Error aggregating ACS {acs_vintage}: {exc}", err=True)
             raise typer.Exit(1) from exc
 
-    record_aggregate_run(
+    _maybe_record_run(
         build_dir,
         dataset="acs",
         alignment=align,
@@ -750,13 +772,13 @@ def aggregate_acs(
 @aggregate_app.command("zori")
 def aggregate_zori(
     build: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--build",
             "-b",
-            help="Named build to aggregate against.",
+            help="Named build directory. Omit to write to data/curated/.",
         ),
-    ],
+    ] = None,
     align: Annotated[
         str,
         typer.Option(
@@ -771,7 +793,7 @@ def aggregate_zori(
         str | None,
         typer.Option(
             "--years",
-            help="Year spec override (e.g. '2018-2024'). Defaults to build years.",
+            help="Year spec (e.g. '2018-2024'). Required when --build is omitted.",
         ),
     ] = None,
     weighting: Annotated[
@@ -783,18 +805,19 @@ def aggregate_zori(
         ),
     ] = "renter_households",
 ) -> None:
-    """Aggregate ZORI rent indices into build-scoped CoC artifacts.
+    """Aggregate ZORI rent indices into CoC artifacts.
 
-    Iterates over build years using each as the boundary vintage (hub).
+    Iterates over years using each as the boundary vintage (hub).
     County vintage and ACS vintage for weights are derived from the
     boundary year. Resulting yearly or monthly CoC artifacts can be used
     directly in CoC panels or as curated inputs to metro workflows.
     """
-    build_dir = _validate_build(build)
+    build_dir: Path | None = _validate_build(build) if build else None
     _validate_align(align, ZORI_ALIGN_MODES, "zori")
     parsed_years = _resolve_years(years, build_dir)
 
-    _require_boundary_years(build_dir)
+    if build_dir is not None:
+        _require_boundary_years(build_dir)
 
     # Map alignment mode to pipeline parameters
     to_yearly = align != "monthly_native"
@@ -804,10 +827,11 @@ def aggregate_zori(
     }
     yearly_method = yearly_method_map.get(align, "pit_january")
 
-    curated_dir = build_curated_dir(build_dir)
+    curated_dir = build_curated_dir(build_dir) if build_dir else DEFAULT_CURATED_DIR
     output_dir = curated_dir / "zori"
 
-    typer.echo(f"Aggregating ZORI to CoC (build '{build}', align '{align}')...")
+    label = f"build '{build}'" if build else "global curated"
+    typer.echo(f"Aggregating ZORI to CoC ({label}, align '{align}')...")
 
     from coclab.rents.aggregate import aggregate_zori_to_coc
 
@@ -838,7 +862,7 @@ def aggregate_zori(
                 force=True,
             )
 
-            if result_path.is_relative_to(build_dir):
+            if build_dir and result_path.is_relative_to(build_dir):
                 rel = result_path.relative_to(build_dir).as_posix()
             else:
                 rel = str(result_path)
@@ -847,7 +871,7 @@ def aggregate_zori(
             typer.echo(f"    Wrote: {result_path.name}")
 
         except FileNotFoundError as exc:
-            record_aggregate_run(
+            _maybe_record_run(
                 build_dir, dataset="zori", alignment=align,
                 years_requested=parsed_years, status="failed", error=str(exc),
             )
@@ -855,14 +879,14 @@ def aggregate_zori(
             typer.echo("Ensure ZORI data, crosswalks, and ACS weights are available.", err=True)
             raise typer.Exit(1) from exc
         except Exception as exc:
-            record_aggregate_run(
+            _maybe_record_run(
                 build_dir, dataset="zori", alignment=align,
                 years_requested=parsed_years, status="failed", error=str(exc),
             )
             typer.echo(f"Error: {exc}", err=True)
             raise typer.Exit(1) from exc
 
-    record_aggregate_run(
+    _maybe_record_run(
         build_dir,
         dataset="zori",
         alignment=align,

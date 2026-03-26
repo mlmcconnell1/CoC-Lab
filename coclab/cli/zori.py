@@ -289,7 +289,10 @@ def aggregate_zori(
         except FileNotFoundError as exc:
             build_path = resolve_build_dir(build)
             typer.echo(f"Error: Build '{build}' not found at {build_path}", err=True)
-            typer.echo("Run: coclab build create --name <build>", err=True)
+            typer.echo(
+                "Create the directory manually or omit --build to write to data/curated/zori/.",
+                err=True,
+            )
             raise typer.Exit(2) from exc
 
         build_curated = build_curated_dir(build_dir)

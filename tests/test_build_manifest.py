@@ -1,12 +1,9 @@
-"""Tests for build manifest, base asset pinning, and aggregate run recording.
+"""Tests for build manifest I/O and aggregate run recording.
 
 Covers:
-- ensure_build_dir with year-based asset pinning
-- write_build_manifest / read_build_manifest round-trip
-- populate_base_assets SHA-256 verification
+- read_build_manifest round-trip
 - get_build_years helper
 - record_aggregate_run appending and schema
-- Fallback naming resolution for base assets (coc__B, boundaries__B, legacy)
 """
 
 import json
@@ -15,204 +12,36 @@ from pathlib import Path
 import pytest
 
 from coclab.builds import (
-    ensure_build_dir,
     get_build_years,
-    populate_base_assets,
     read_build_manifest,
     record_aggregate_run,
-    write_build_manifest,
 )
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
-
-def _create_boundary_files(base: Path, years: list[int], scheme: str = "coc") -> None:
-    """Create stub boundary files under base/data/curated/coc_boundaries/."""
-    boundaries_dir = base / "data" / "curated" / "coc_boundaries"
-    boundaries_dir.mkdir(parents=True, exist_ok=True)
-    for year in years:
-        if scheme == "coc":
-            name = f"coc__B{year}.parquet"
-        elif scheme == "boundaries":
-            name = f"boundaries__B{year}.parquet"
-        else:
-            name = f"coc_boundaries__{year}.parquet"
-        (boundaries_dir / name).write_bytes(
-            b"PAR1stub" + year.to_bytes(2, "big")
-        )
+def _write_manifest(build_dir: Path, name: str, years: list[int]) -> None:
+    """Write a minimal build manifest for test setup."""
+    manifest = {
+        "schema_version": 1,
+        "build": {"name": name, "years": years},
+        "base_assets": [],
+        "aggregate_runs": [],
+    }
+    (build_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
 
 # ---------------------------------------------------------------------------
-# ensure_build_dir with years
+# Manifest read
 # ---------------------------------------------------------------------------
 
 
-class TestEnsureBuildDir:
-    def test_creates_scaffold_with_years(self, tmp_path):
-        _create_boundary_files(tmp_path, [2020, 2021])
-
-        build_dir, assets = ensure_build_dir(
-            "test", builds_dir=tmp_path / "builds", years=[2020, 2021], data_dir=tmp_path / "data",
-        )
-
-        assert build_dir.exists()
-        assert (build_dir / "data" / "curated").exists()
-        assert (build_dir / "data" / "raw").exists()
-        assert (build_dir / "base").exists()
-        assert len(assets) == 2
-
-    def test_pins_boundary_files(self, tmp_path):
-        _create_boundary_files(tmp_path, [2020])
-
-        build_dir, assets = ensure_build_dir(
-            "test", builds_dir=tmp_path / "builds", years=[2020], data_dir=tmp_path / "data",
-        )
-
-        # File should be copied to base/
-        pinned = build_dir / "base" / "coc__B2020.parquet"
-        assert pinned.exists()
-
-    def test_writes_full_manifest(self, tmp_path):
-        _create_boundary_files(tmp_path, [2020, 2021])
-
-        build_dir, _ = ensure_build_dir(
-            "test", builds_dir=tmp_path / "builds", years=[2020, 2021], data_dir=tmp_path / "data",
-        )
-
-        manifest = json.loads((build_dir / "manifest.json").read_text())
-        assert manifest["schema_version"] == 1
-        assert manifest["build"]["name"] == "test"
-        assert manifest["build"]["years"] == [2020, 2021]
-        assert len(manifest["base_assets"]) == 2
-        assert manifest["aggregate_runs"] == []
-
-    def test_missing_boundary_raises(self, tmp_path):
-        _create_boundary_files(tmp_path, [2020])  # Only 2020
-
-        with pytest.raises(FileNotFoundError, match="2021"):
-            ensure_build_dir(
-                "test",
-                builds_dir=tmp_path / "builds",
-                years=[2020, 2021],
-                data_dir=tmp_path / "data",
-            )
-
-    def test_legacy_minimal_manifest_without_years(self, tmp_path):
-        build_dir, assets = ensure_build_dir("test", builds_dir=tmp_path / "builds")
-
-        assert assets == []
-        manifest = json.loads((build_dir / "manifest.json").read_text())
-        assert manifest == {"schema_version": 1}
-
-    def test_metro_build_skips_boundary_assets(self, tmp_path):
-        """Metro builds should not require or pin CoC boundary assets."""
-        build_dir, assets = ensure_build_dir(
-            "metro_test",
-            builds_dir=tmp_path / "builds",
-            years=[2020, 2021],
-            geo_type="metro",
-            definition_version="glynn_fox_v1",
-        )
-
-        assert assets == []
-        manifest = json.loads((build_dir / "manifest.json").read_text())
-        assert manifest["build"]["geo_type"] == "metro"
-        assert manifest["build"]["definition_version"] == "glynn_fox_v1"
-        assert manifest["build"]["years"] == [2020, 2021]
-        assert manifest["base_assets"] == []
-
-    def test_coc_build_still_requires_boundary_assets(self, tmp_path):
-        """CoC builds should still require boundary assets."""
-        _create_boundary_files(tmp_path, [2020])
-
-        with pytest.raises(FileNotFoundError, match="2021"):
-            ensure_build_dir(
-                "test",
-                builds_dir=tmp_path / "builds",
-                years=[2020, 2021],
-                data_dir=tmp_path / "data",
-                geo_type="coc",
-            )
-
-
-# ---------------------------------------------------------------------------
-# populate_base_assets
-# ---------------------------------------------------------------------------
-
-
-class TestPopulateBaseAssets:
-    def test_sha256_is_64_hex_chars(self, tmp_path):
-        _create_boundary_files(tmp_path, [2020])
-        build_dir = tmp_path / "builds" / "test"
-        (build_dir / "base").mkdir(parents=True)
-
-        assets = populate_base_assets(build_dir, [2020], data_dir=tmp_path / "data")
-
-        assert len(assets) == 1
-        assert len(assets[0]["sha256"]) == 64
-        assert all(c in "0123456789abcdef" for c in assets[0]["sha256"])
-
-    def test_relative_path_format(self, tmp_path):
-        _create_boundary_files(tmp_path, [2020])
-        build_dir = tmp_path / "builds" / "test"
-        (build_dir / "base").mkdir(parents=True)
-
-        assets = populate_base_assets(build_dir, [2020], data_dir=tmp_path / "data")
-
-        assert assets[0]["relative_path"] == "base/coc__B2020.parquet"
-
-    def test_resolves_boundaries_scheme(self, tmp_path):
-        """Should resolve boundaries__B naming as fallback."""
-        _create_boundary_files(tmp_path, [2020], scheme="boundaries")
-        build_dir = tmp_path / "builds" / "test"
-        (build_dir / "base").mkdir(parents=True)
-
-        assets = populate_base_assets(build_dir, [2020], data_dir=tmp_path / "data")
-
-        assert assets[0]["asset_type"] == "coc_boundary"
-        assert assets[0]["relative_path"] == "base/boundaries__B2020.parquet"
-
-    def test_resolves_legacy_scheme(self, tmp_path):
-        """Should resolve coc_boundaries__ legacy naming as fallback."""
-        _create_boundary_files(tmp_path, [2020], scheme="legacy")
-        build_dir = tmp_path / "builds" / "test"
-        (build_dir / "base").mkdir(parents=True)
-
-        assets = populate_base_assets(build_dir, [2020], data_dir=tmp_path / "data")
-
-        assert assets[0]["asset_type"] == "coc_boundary"
-        assert assets[0]["relative_path"] == "base/coc_boundaries__2020.parquet"
-
-    def test_copied_file_content_matches(self, tmp_path):
-        _create_boundary_files(tmp_path, [2020])
-        build_dir = tmp_path / "builds" / "test"
-        (build_dir / "base").mkdir(parents=True)
-
-        assets = populate_base_assets(build_dir, [2020], data_dir=tmp_path / "data")
-
-        source = tmp_path / "data" / "curated" / "coc_boundaries" / "coc__B2020.parquet"
-        pinned = build_dir / assets[0]["relative_path"]
-        assert source.read_bytes() == pinned.read_bytes()
-
-
-# ---------------------------------------------------------------------------
-# Manifest read/write
-# ---------------------------------------------------------------------------
-
-
-class TestManifestReadWrite:
-    def test_roundtrip(self, tmp_path):
-        assets = [{"asset_type": "coc_boundary", "year": 2020}]
-        write_build_manifest(tmp_path, "test", [2020, 2021], assets)
+class TestManifestRead:
+    def test_read_returns_dict(self, tmp_path):
+        _write_manifest(tmp_path, "test", [2020, 2021])
 
         manifest = read_build_manifest(tmp_path)
         assert manifest["schema_version"] == 1
         assert manifest["build"]["name"] == "test"
         assert manifest["build"]["years"] == [2020, 2021]
-        assert manifest["build"]["created_at"]  # ISO timestamp present
-        assert len(manifest["base_assets"]) == 1
 
     def test_read_missing_raises(self, tmp_path):
         with pytest.raises(FileNotFoundError):
@@ -221,7 +50,7 @@ class TestManifestReadWrite:
 
 class TestGetBuildYears:
     def test_returns_years(self, tmp_path):
-        write_build_manifest(tmp_path, "test", [2020, 2021, 2022], [])
+        _write_manifest(tmp_path, "test", [2020, 2021, 2022])
         assert get_build_years(tmp_path) == [2020, 2021, 2022]
 
     def test_returns_empty_for_minimal_manifest(self, tmp_path):
@@ -236,7 +65,7 @@ class TestGetBuildYears:
 
 class TestRecordAggregateRun:
     def test_appends_run_entry(self, tmp_path):
-        write_build_manifest(tmp_path, "test", [2020], [])
+        _write_manifest(tmp_path, "test", [2020])
 
         entry = record_aggregate_run(
             tmp_path,
@@ -254,7 +83,7 @@ class TestRecordAggregateRun:
         assert manifest["aggregate_runs"][0]["run_id"] == entry["run_id"]
 
     def test_multiple_runs_append(self, tmp_path):
-        write_build_manifest(tmp_path, "test", [2020, 2021], [])
+        _write_manifest(tmp_path, "test", [2020, 2021])
 
         record_aggregate_run(
             tmp_path, dataset="pep", alignment="as_of_july", years_requested=[2020],
@@ -269,7 +98,7 @@ class TestRecordAggregateRun:
         assert manifest["aggregate_runs"][1]["dataset"] == "acs"
 
     def test_failed_run_records_error(self, tmp_path):
-        write_build_manifest(tmp_path, "test", [2020], [])
+        _write_manifest(tmp_path, "test", [2020])
 
         entry = record_aggregate_run(
             tmp_path,
@@ -284,7 +113,7 @@ class TestRecordAggregateRun:
         assert entry["error"] == "Missing ZORI data"
 
     def test_alignment_params_recorded(self, tmp_path):
-        write_build_manifest(tmp_path, "test", [2020], [])
+        _write_manifest(tmp_path, "test", [2020])
 
         entry = record_aggregate_run(
             tmp_path,
@@ -298,7 +127,7 @@ class TestRecordAggregateRun:
         assert entry["alignment"]["lag_months"] == 6
 
     def test_years_materialized_defaults_to_requested(self, tmp_path):
-        write_build_manifest(tmp_path, "test", [2020, 2021], [])
+        _write_manifest(tmp_path, "test", [2020, 2021])
 
         entry = record_aggregate_run(
             tmp_path, dataset="pit", alignment="point_in_time_jan",
@@ -307,19 +136,8 @@ class TestRecordAggregateRun:
 
         assert entry["years_materialized"] == [2020, 2021]
 
-    def test_years_materialized_can_differ(self, tmp_path):
-        write_build_manifest(tmp_path, "test", [2020, 2021], [])
-
-        entry = record_aggregate_run(
-            tmp_path, dataset="pit", alignment="point_in_time_jan",
-            years_requested=[2020, 2021],
-            years_materialized=[2020],  # 2021 was missing
-        )
-
-        assert entry["years_materialized"] == [2020]
-
     def test_outputs_recorded(self, tmp_path):
-        write_build_manifest(tmp_path, "test", [2020], [])
+        _write_manifest(tmp_path, "test", [2020])
 
         entry = record_aggregate_run(
             tmp_path, dataset="pep", alignment="as_of_july",

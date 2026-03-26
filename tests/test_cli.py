@@ -395,3 +395,57 @@ class TestRegistryRebuild:
         assert "empty" in result.output.lower()
 
 
+# ---------------------------------------------------------------------------
+# Regression: retired named-build commands must not reappear
+# ---------------------------------------------------------------------------
+
+
+class TestRetiredCommandRegression:
+    """Guard against deleted commands reappearing in help output."""
+
+    def _command_names(self, group: str) -> set[str]:
+        """Extract registered command names from a group's help output."""
+        result = runner.invoke(app, [group, "--help"])
+        assert result.exit_code == 0
+        # Typer formats commands as "│ name  description │"
+        names = set()
+        for line in result.output.splitlines():
+            stripped = line.strip().lstrip("│").strip()
+            if stripped:
+                token = stripped.split()[0]
+                if token not in ("--help", "Usage:", "Options", "Commands"):
+                    names.add(token)
+        return names
+
+    def test_build_help_excludes_retired(self):
+        names = self._command_names("build")
+        for retired in ("panel", "create", "list", "export"):
+            assert retired not in names, f"Retired command '{retired}' in build help"
+
+    def test_list_help_excludes_artifacts(self):
+        names = self._command_names("list")
+        assert "artifacts" not in names
+
+    def test_generate_help_excludes_catalog(self):
+        names = self._command_names("generate")
+        assert "catalog" not in names
+
+    def test_top_level_crosscheck_removed(self):
+        """Hidden crosscheck commands should no longer be registered."""
+        result = runner.invoke(app, ["crosscheck-pit-vintages", "--help"])
+        assert result.exit_code == 2  # Typer returns 2 for unknown commands
+
+    def test_aggregate_no_build_create_guidance(self):
+        """Aggregate error messages must not reference deleted build create."""
+        with runner.isolated_filesystem():
+            result = runner.invoke(
+                app, ["aggregate", "pit", "--build", "nonexistent"]
+            )
+            assert result.exit_code == 2
+            assert "coclab build create" not in result.output
+
+    def test_aggregate_works_without_build(self):
+        """Aggregate commands should require --years when --build is omitted."""
+        result = runner.invoke(app, ["aggregate", "pit"])
+        assert result.exit_code == 2
+        assert "--years is required" in result.output

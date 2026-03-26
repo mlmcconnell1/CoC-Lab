@@ -38,11 +38,11 @@ Exit behavior:
 ### Crosswalk Generation
 
 ```bash
-coclab generate xwalks --build demo --boundary 2025 --tracts 2023
+coclab generate xwalks --boundary 2025 --tracts 2023
 ```
 
 Important options:
-- `--build` (required)
+- `--build` (optional; writes to named build dir instead of `data/curated/xwalks/`)
 - `--boundary`
 - `--tracts`
 - `--counties`
@@ -53,13 +53,13 @@ Important options:
 ### Aggregation Commands
 
 ```bash
-coclab aggregate acs --build demo
-coclab aggregate zori --build demo
-coclab aggregate pep --build demo
-coclab aggregate pit --build demo
+coclab aggregate acs --years 2018-2024 --weighting population
+coclab aggregate zori --years 2018-2024 --align pit_january
+coclab aggregate pep --years 2018-2024
+coclab aggregate pit --years 2018-2024
 ```
 
-All four require `--build` and write into `builds/<name>/data/curated/<dataset>/`.
+All four write to `data/curated/<dataset>/` by default.  Use `--build <name>` to write to a named build directory instead.  When `--build` is omitted, `--years` is required.
 
 Current ACS aggregation details:
 - `aggregate acs` reads cached tract files only; it does not call Census APIs

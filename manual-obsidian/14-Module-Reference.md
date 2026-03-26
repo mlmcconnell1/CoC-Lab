@@ -5,16 +5,12 @@ This chapter is an orientation map of active modules in the current codebase.
 ## CLI Layer
 
 - `coclab/cli/main.py`: top-level Typer app and command registration
-- `coclab/cli/builds.py`: build scaffold/list/catalog commands
-- `coclab/cli/build_xwalks.py`: crosswalk generation into build scope
+- `coclab/cli/build_xwalks.py`: crosswalk generation
 - `coclab/cli/aggregate.py`: dataset aggregation commands (`acs`, `zori`, `pep`, `pit`)
-- `coclab/cli/build_panel.py`: imperative panel assembly command
 - `coclab/cli/status.py`: one-shot environment readiness report (`coclab status`)
-- `coclab/cli/list_artifacts.py`: build/global artifact inventory for automation
 - `coclab/cli/list_*.py`: dataset discovery commands with optional JSON output
 - `coclab/cli/diagnostics.py` and `coclab/cli/panel_diagnostics.py`: diagnostics commands with optional JSON output
 - `coclab/cli/recipe.py`: recipe execution/provenance/export commands
-- `coclab/cli/export_bundle.py`: analysis bundle export command
 
 ## Recipe System
 
@@ -46,7 +42,7 @@ This chapter is an orientation map of active modules in the current codebase.
 - `coclab/pit/`: PIT ingest, registry, QA
 - `coclab/pep/`: PEP ingest and aggregation
 - `coclab/rents/`: ZORI ingest, weighting, aggregation, diagnostics
-- `coclab/panel/`: imperative panel builder + diagnostics (supports CoC and metro targets)
+- `coclab/panel/`: panel diagnostics and assembly internals
 - `coclab/metro/`: metro analysis geography module
   - `coclab/metro/definitions.py`: Glynn/Fox metro definitions (25 metros, membership tables)
   - `coclab/metro/pit.py`: PIT aggregation from CoC to metro via CoC membership
@@ -55,7 +51,6 @@ This chapter is an orientation map of active modules in the current codebase.
   - `coclab/metro/zori.py`: ZORI aggregation from counties to metro via county membership
   - `coclab/metro/validate.py`: metro artifact validation (ID formats, referential integrity, counts)
   - `coclab/metro/io.py`: read/write curated metro definition artifacts
-- `coclab/export/`: bundle selection/copy/manifest/readme generation
 
 ## Utilities and Supporting Modules
 
