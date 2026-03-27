@@ -421,7 +421,7 @@ def _run_pit_vintages_validation(
 
     # Exit with code 1 if there are changes (useful for CI/CD)
     if len(changed) > 0 or len(added) > 0 or len(removed) > 0:
-        raise typer.Exit(0)  # Changes found but not an error
+        raise typer.Exit(1)
     raise typer.Exit(0)
 
 

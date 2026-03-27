@@ -385,8 +385,11 @@ def delete_boundaries(
 
     if delete_vintage(vintage, source):
         typer.echo(f"Deleted registry entry for vintage '{vintage}' from source '{source}'")
-        # Also clean up source_registry entries that reference the same path
+        # Clean up source_registry entries by both local_path and curated_path
         source_deleted = delete_by_local_path(str(entry.path))
+        from coclab.source_registry import delete_by_curated_path
+
+        source_deleted += delete_by_curated_path(str(entry.path))
         if source_deleted > 0:
             typer.echo(f"Deleted {source_deleted} source registry entry(s) for path '{entry.path}'")
     else:

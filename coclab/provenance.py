@@ -29,6 +29,7 @@ Reading provenance:
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -37,6 +38,8 @@ from typing import Any
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+
+logger = logging.getLogger(__name__)
 
 # Metadata key used in Parquet schema
 PROVENANCE_KEY = b"coclab_provenance"
@@ -232,7 +235,11 @@ def read_provenance(path: Path | str) -> ProvenanceBlock | None:
         return None
 
     json_bytes = metadata[PROVENANCE_KEY]
-    return ProvenanceBlock.from_json(json_bytes.decode("utf-8"))
+    try:
+        return ProvenanceBlock.from_json(json_bytes.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError, KeyError, TypeError):
+        logger.warning("Malformed provenance metadata in %s — returning None", path)
+        return None
 
 
 def has_provenance(path: Path | str) -> bool:

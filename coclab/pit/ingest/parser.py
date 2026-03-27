@@ -471,7 +471,14 @@ def parse_pit_file(
             continue
 
         try:
-            pit_total = int(pit_total)
+            pit_total_f = float(pit_total)
+            if pit_total_f != int(pit_total_f):
+                logger.warning(
+                    f"Skipping {coc_id}: fractional total count {pit_total!r}"
+                )
+                rows_skipped += 1
+                continue
+            pit_total = int(pit_total_f)
         except (ValueError, TypeError):
             logger.warning(f"Skipping {coc_id}: invalid total count {pit_total!r}")
             rows_skipped += 1
@@ -480,14 +487,26 @@ def parse_pit_file(
         pit_sheltered = None
         if sheltered_col and not pd.isna(row.get(sheltered_col)):
             try:
-                pit_sheltered = int(row[sheltered_col])
+                val = float(row[sheltered_col])
+                if val != int(val):
+                    logger.warning(
+                        f"{coc_id}: fractional sheltered count {row[sheltered_col]!r}"
+                    )
+                else:
+                    pit_sheltered = int(val)
             except (ValueError, TypeError):
                 pass
 
         pit_unsheltered = None
         if unsheltered_col and not pd.isna(row.get(unsheltered_col)):
             try:
-                pit_unsheltered = int(row[unsheltered_col])
+                val = float(row[unsheltered_col])
+                if val != int(val):
+                    logger.warning(
+                        f"{coc_id}: fractional unsheltered count {row[unsheltered_col]!r}"
+                    )
+                else:
+                    pit_unsheltered = int(val)
             except (ValueError, TypeError):
                 pass
 

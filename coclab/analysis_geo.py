@@ -162,7 +162,12 @@ def infer_geo_type(df: pd.DataFrame) -> str:
     # Fall back to column heuristic
     if COC_ID_COL in df.columns:
         return GEO_TYPE_COC
-    return GEO_TYPE_COC  # default assumption for legacy data
+    if METRO_ID_COL in df.columns:
+        return GEO_TYPE_METRO
+    raise ValueError(
+        f"Cannot infer geo_type: DataFrame has neither '{GEO_TYPE_COL}', "
+        f"'{COC_ID_COL}', nor '{METRO_ID_COL}' columns"
+    )
 
 
 def ensure_canonical_geo_columns(

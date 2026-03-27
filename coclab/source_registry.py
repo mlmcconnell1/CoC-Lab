@@ -491,6 +491,46 @@ def delete_by_local_path(
     return count
 
 
+def delete_by_curated_path(
+    curated_path: str | Path,
+    registry_path: Path | None = None,
+) -> int:
+    """Delete source registry entries whose metadata.curated_path matches.
+
+    Parameters
+    ----------
+    curated_path : str or Path
+        The curated path value to match.
+    registry_path : Path, optional
+        Path to registry file.
+
+    Returns
+    -------
+    int
+        Number of entries deleted.
+    """
+    df = _load_registry(registry_path)
+    if df.empty:
+        return 0
+
+    curated_str = str(curated_path)
+
+    def _matches(meta_json: str) -> bool:
+        try:
+            meta = json.loads(meta_json) if isinstance(meta_json, str) else {}
+            return meta.get("curated_path") == curated_str
+        except (json.JSONDecodeError, TypeError):
+            return False
+
+    mask = df["metadata"].apply(_matches)
+    count = int(mask.sum())
+    if count > 0:
+        df = df[~mask]
+        _save_registry(df, registry_path)
+        logger.info(f"Deleted {count} source registry entries for curated_path: {curated_str}")
+    return count
+
+
 def summarize_registry(registry_path: Path | None = None) -> str:
     """Generate a text summary of the source registry.
 
