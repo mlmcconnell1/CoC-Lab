@@ -273,10 +273,14 @@ def translate_tracts_2010_to_2020(
 
     # Prepare population-weighted median aggregation
     # Weight = area-weighted population (already weighted in count_cols loop above)
-    translated["__pop_weight"] = translated[population_column].fillna(0)
+    # Use per-column valid masks: only tracts with non-null medians contribute
+    # their population weight to that column's denominator.
     for col in median_cols:
+        valid = translated[col].notna()
+        col_weight = translated[population_column].fillna(0).where(valid, 0)
+        translated[f"__{col}_wt"] = col_weight
         translated[f"__{col}_pw"] = (
-            translated[col].fillna(0) * translated["__pop_weight"]
+            pd.to_numeric(translated[col], errors="coerce").fillna(0) * col_weight
         )
 
     # Handle margin of error columns with proper error propagation
@@ -296,8 +300,8 @@ def translate_tracts_2010_to_2020(
         agg_funcs[col] = "sum"
 
     # Median helper columns: sum (for weighted average computation)
-    agg_funcs["__pop_weight"] = "sum"
     for col in median_cols:
+        agg_funcs[f"__{col}_wt"] = "sum"
         agg_funcs[f"__{col}_pw"] = "sum"
 
     # MOE helper columns: sum of squared weighted values
@@ -318,17 +322,17 @@ def translate_tracts_2010_to_2020(
     # Group by 2020 GEOID and aggregate
     result = translated.groupby("tract_geoid_2020", as_index=False).agg(agg_funcs)
 
-    # Compute final median values: weighted_sum / weight_sum
+    # Compute final median values: weighted_sum / per-column weight_sum
     for col in median_cols:
         pw_col = f"__{col}_pw"
+        wt_col = f"__{col}_wt"
         if pw_col in result.columns:
-            mask = result["__pop_weight"] > 0
+            mask = result[wt_col] > 0
             result.loc[mask, col] = (
-                result.loc[mask, pw_col] / result.loc[mask, "__pop_weight"]
+                result.loc[mask, pw_col] / result.loc[mask, wt_col]
             )
             result.loc[~mask, col] = pd.NA
-            result = result.drop(columns=[pw_col])
-    result = result.drop(columns=["__pop_weight"], errors="ignore")
+            result = result.drop(columns=[pw_col, wt_col])
 
     # Compute final MOE from squared sums
     for moe_col in moe_columns:

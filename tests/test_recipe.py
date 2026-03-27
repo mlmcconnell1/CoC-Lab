@@ -3099,6 +3099,63 @@ class TestRecipeManifest:
         export_bundle(m, tmp_path, out)
         assert (out / "manifest.json").exists()
 
+    def test_export_rejects_absolute_path(self, tmp_path: Path):
+        m = RecipeManifest(
+            recipe_name="test",
+            recipe_version=1,
+            pipeline_id="main",
+            assets=[
+                AssetRecord(
+                    role="dataset",
+                    path="/etc/passwd",
+                    sha256="abc",
+                    size=0,
+                ),
+            ],
+        )
+        with pytest.raises(ValueError, match="Absolute asset path rejected"):
+            export_bundle(m, tmp_path, tmp_path / "bundle")
+
+    def test_export_rejects_path_traversal_source(self, tmp_path: Path):
+        m = RecipeManifest(
+            recipe_name="test",
+            recipe_version=1,
+            pipeline_id="main",
+            assets=[
+                AssetRecord(
+                    role="dataset",
+                    path="../../etc/passwd",
+                    sha256="abc",
+                    size=0,
+                ),
+            ],
+        )
+        with pytest.raises(ValueError, match="escapes project root"):
+            export_bundle(m, tmp_path, tmp_path / "bundle")
+
+    def test_export_rejects_path_traversal_dest(self, tmp_path: Path):
+        """Path that resolves inside project but escapes assets dir."""
+        # Create a source file inside the project root
+        (tmp_path / "project" / "data").mkdir(parents=True)
+        src = tmp_path / "project" / "data" / "ok.parquet"
+        src.write_bytes(b"data")
+
+        m = RecipeManifest(
+            recipe_name="test",
+            recipe_version=1,
+            pipeline_id="main",
+            assets=[
+                AssetRecord(
+                    role="dataset",
+                    path="data/../../../escape.parquet",
+                    sha256="abc",
+                    size=0,
+                ),
+            ],
+        )
+        with pytest.raises(ValueError, match="escapes"):
+            export_bundle(m, tmp_path / "project", tmp_path / "bundle")
+
 
 # ===========================================================================
 # Provenance manifest integration tests

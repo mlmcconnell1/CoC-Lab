@@ -452,6 +452,24 @@ class TestApplyZoriEligibility:
         assert result["zori_is_eligible"].iloc[0]
         assert result["zori_coc"].iloc[0] == 1500.0
 
+    def test_dominance_warning_works_with_metro_id(self):
+        """Regression test for coclab-i2fj.8.3: metro panels use metro_id,
+        not coc_id, so high-dominance logging must not KeyError."""
+        df = pd.DataFrame(
+            {
+                "metro_id": ["GF01"],
+                "zori_coc": [1000.0],
+                "zori_coverage_ratio": [1.0],
+                "zori_max_geo_contribution": [0.95],
+            }
+        )
+        result = apply_zori_eligibility(
+            df,
+            dominance_col="zori_max_geo_contribution",
+            dominance_threshold=0.80,
+        )
+        assert result["zori_is_eligible"].iloc[0]
+
 
 # =============================================================================
 # Unit Tests: Provenance

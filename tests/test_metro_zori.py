@@ -428,6 +428,29 @@ class TestYearlyPopulationWeighted:
         assert r2020 == pytest.approx(1500.0)
         assert r2021 == pytest.approx(1750.0)
 
+    def test_all_missing_population_yields_null_zori(self):
+        """Regression test for coclab-i2fj.8.4: when all county populations
+        are missing for a metro-year, result must be null, not 0.0."""
+        membership = pd.DataFrame({
+            "metro_id": ["M1", "M1"],
+            "county_fips": ["99001", "99002"],
+        })
+        zori = pd.DataFrame({
+            "county_fips": ["99001", "99002"],
+            "year": [2020, 2020],
+            "zori": [1000.0, 2000.0],
+        })
+        pop = pd.DataFrame({
+            "county_fips": pd.Series(dtype=str),
+            "year": pd.Series(dtype=int),
+            "population": pd.Series(dtype=float),
+        })
+        result = aggregate_yearly_zori_to_metro(
+            zori, pop, county_membership_df=membership,
+        )
+        assert len(result) == 1
+        assert pd.isna(result.loc[0, "zori"])
+
     def test_uses_builtin_membership_by_default(self, all_county_fips):
         """Without county_membership_df, uses built-in Glynn-Fox membership."""
         zori = pd.DataFrame({

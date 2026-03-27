@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from coclab import naming
@@ -177,13 +178,15 @@ def _load_source_panel(
 
 
 def _acs_path_for_year(project_root: Path, year: int) -> Path:
-    tract_vintage = 2010 if year <= 2019 else 2020
+    # ACS lag rule: vintage for PIT year Y is Y-1
+    acs_vintage = year - 1
+    tract_vintage = 2010 if acs_vintage <= 2019 else 2020
     return (
         project_root
         / "data"
         / "curated"
         / "acs"
-        / f"acs5_tracts__A{year}xT{tract_vintage}.parquet"
+        / f"acs5_tracts__A{acs_vintage}xT{tract_vintage}.parquet"
     )
 
 
@@ -211,7 +214,7 @@ def _build_metro_source_panel(project_root: Path) -> pd.DataFrame:
     for year in years:
         acs = pd.read_parquet(_acs_path_for_year(project_root, year)).copy()
         acs_for_metro = acs.rename(columns={"tract_geoid": "GEOID"})
-        metro_acs = aggregate_acs_to_metro(acs_for_metro)
+        metro_acs = aggregate_acs_to_metro(acs_for_metro, weighting="population")
         metro_acs["year"] = year
         metro_acs_frames.append(
             metro_acs[
@@ -347,11 +350,27 @@ def _validate_raw_panel(
         passed_checks.append("sorted")
 
     year_counts = raw_df.groupby("geo_id")["year"].nunique()
-    contiguous_ok = not year_counts.empty and year_counts.nunique() == 1
-    if not contiguous_ok:
+    balanced_ok = not year_counts.empty and year_counts.nunique() == 1
+    if not balanced_ok:
         issues.append({"check": "contiguity", "message": "units have uneven year counts"})
     else:
         passed_checks.append("contiguity")
+
+    # Check for globally missing years (gaps in the year sequence)
+    all_years = sorted(raw_df["year"].unique())
+    if len(all_years) >= 2:
+        expected_years = list(range(all_years[0], all_years[-1] + 1))
+        missing_years = sorted(set(expected_years) - set(all_years))
+        if missing_years:
+            issues.append({
+                "check": "year_contiguity",
+                "message": f"globally missing years in panel: {missing_years}",
+                "missing_years": missing_years,
+            })
+        else:
+            passed_checks.append("year_contiguity")
+    else:
+        passed_checks.append("year_contiguity")
 
     numeric_cols = [
         "pit_total",
@@ -416,7 +435,7 @@ def _derive_modeling_ready(raw_df: pd.DataFrame) -> pd.DataFrame:
     df["N_it"] = df["total_population"]
     df["ZRI_it"] = df["zori"]
     df["d_zori"] = df.groupby("geo_id")["zori"].pct_change()
-    df["d_zori"] = df["d_zori"].fillna(0.0)
+    df["d_zori"] = df["d_zori"].replace([np.inf, -np.inf], np.nan).fillna(0.0)
     df["expected_pi"] = EXPECTED_PI
     alpha, beta = _beta_parameters(EXPECTED_PI, BETA_VARIANCE)
     df["a_it"] = alpha

@@ -69,6 +69,49 @@ def test_derive_modeling_ready_has_required_columns_and_zero_first_year():
     assert (modeling_df.groupby("geo_id")["d_zori"].first() == 0.0).all()
 
 
+def test_derive_modeling_ready_zero_zori_yields_finite_d_zori():
+    """Regression test for coclab-i2fj.8.8: zero prior-year ZORI must not
+    produce inf in d_zori."""
+    import numpy as np
+
+    df = pd.DataFrame({
+        "geo_id": ["X", "X", "X"],
+        "year": [2019, 2020, 2021],
+        "pit_total": [5, 6, 7],
+        "pit_sheltered": [3, 4, 4],
+        "pit_unsheltered": [2, 2, 3],
+        "total_population": [500, 510, 520],
+        "median_household_income": [40000.0, 41000.0, 42000.0],
+        "zori": [0.0, 1200.0, 1250.0],
+    })
+    modeling_df = _derive_modeling_ready(df)
+    assert np.isfinite(modeling_df["d_zori"]).all()
+
+
+def test_validation_detects_globally_missing_years():
+    """Regression test for coclab-i2fj.8.6: a panel with years 2015 and 2017
+    (gap at 2016) must NOT pass as structurally valid."""
+    df = pd.DataFrame({
+        "geo_id": ["A", "A", "B", "B"],
+        "year": [2015, 2017, 2015, 2017],
+        "pit_total": [10, 12, 8, 9],
+        "pit_sheltered": [6, 7, 5, 5],
+        "pit_unsheltered": [4, 5, 3, 4],
+        "total_population": [1000, 1010, 800, 810],
+        "median_household_income": [50000.0, 51000.0, 45000.0, 45500.0],
+        "zori": [1000.0, 1050.0, 900.0, 918.0],
+    })
+    validation = _validate_raw_panel(
+        df,
+        spec=AUDIT_PANEL_SPECS[0],
+        drop_reasons={},
+    )
+    assert not validation["structurally_valid"]
+    year_issue = [i for i in validation["issues"] if i["check"] == "year_contiguity"]
+    assert year_issue
+    assert 2016 in year_issue[0]["missing_years"]
+
+
 def test_validation_reports_balanced_panel():
     raw_df = _raw_fixture()
     raw_validation = _validate_raw_panel(

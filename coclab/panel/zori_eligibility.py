@@ -324,11 +324,19 @@ def apply_zori_eligibility(
         )
         if high_dominance_mask.any():
             high_dom_count = high_dominance_mask.sum()
-            affected_cocs = result.loc[high_dominance_mask, "coc_id"].unique()
+            geo_col = next(
+                (c for c in ("coc_id", "metro_id", "geo_id") if c in result.columns),
+                None,
+            )
+            if geo_col is not None:
+                affected_geos = result.loc[high_dominance_mask, geo_col].unique()
+                geo_label = f"Affected geographies: {len(affected_geos)}"
+            else:
+                geo_label = f"Affected rows: {high_dom_count}"
             logger.warning(
                 f"WARNING: {high_dom_count} ZORI-eligible observations have high "
                 f"dominance (> {dominance_threshold:.0%}). "
-                f"Affected CoCs: {len(affected_cocs)}. "
+                f"{geo_label}. "
                 f"This is a warning only; these rows remain eligible."
             )
 

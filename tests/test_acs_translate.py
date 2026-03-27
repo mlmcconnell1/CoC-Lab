@@ -300,6 +300,35 @@ class TestTranslateTracts2010To2020:
         with pytest.raises(ValueError, match="Missing required column: total_population"):
             translate_tracts_2010_to_2020(df)
 
+    def test_missing_median_excluded_from_weighted_average(
+        self, mock_relationship_file
+    ):
+        """Tracts with NA medians must NOT bias the denominator.
+
+        Regression test for coclab-i2fj.5.20: a merged target tract with
+        60 people at income 100 and 40 people with NA should yield 100,
+        not 60.
+        """
+        # Two 2010 tracts that merge into one 2020 tract (01001020301):
+        # 01001020300 → weight 0.7, 01001020400 → weight 0.3
+        df = pd.DataFrame(
+            {
+                "tract_geoid": ["01001020300", "01001020400"],
+                "total_population": [1000, 500],
+                "median_household_income": [100_000.0, pd.NA],
+            }
+        )
+
+        result, _ = translate_tracts_2010_to_2020(df)
+
+        merged = result[result["tract_geoid"] == "01001020301"]
+        assert len(merged) == 1
+        # Only the tract with valid income (pop-weight 1000*0.7=700)
+        # should contribute; result should be 100_000, NOT biased down.
+        assert merged.iloc[0]["median_household_income"] == pytest.approx(
+            100_000.0, rel=0.01
+        )
+
 
 class TestTranslateAcsToTargetVintage:
     """Tests for translate_acs_to_target_vintage function."""

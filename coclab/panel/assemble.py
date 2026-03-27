@@ -340,8 +340,6 @@ def _load_pit_for_year(
         candidates: list[Path] = []
         if exact_path.exists():
             candidates = [exact_path]
-        else:
-            candidates = sorted(pit_dir.glob(f"pit__metro__P{year}@D*.parquet"))
 
         if not candidates:
             logger.warning(
@@ -509,13 +507,17 @@ def _load_acs_measures(
             definition_version,
         )
         acs_year = naming._normalize_acs_vintage(acs_vintage)
-        tract_pattern = f"measures__metro__A{acs_year}@D*xT*.parquet"
-        tract_matches = list(measures_dir.glob(tract_pattern))
+        # Also try with tract vintage suffix, but only for the requested definition
+        exact_tract_path = measures_dir / naming.metro_measures_filename(
+            acs_vintage,
+            definition_version,
+            tract_vintage=2010 if int(acs_year) <= 2019 else 2020,
+        )
         measures_path = None
         if exact_path.exists():
             measures_path = exact_path
-        elif tract_matches:
-            measures_path = tract_matches[0]
+        elif exact_tract_path.exists():
+            measures_path = exact_tract_path
 
         if measures_path is None:
             logger.warning(
@@ -669,6 +671,7 @@ def _load_acs_measures(
         "population_below_poverty",
         "median_household_income",
         "median_gross_rent",
+        "unemployment_rate",
         "coverage_ratio",
     ]
 
@@ -797,9 +800,16 @@ def _load_zori_yearly(
         if geo_type == GEO_TYPE_METRO:
             if definition_version is None:
                 raise ValueError("definition_version is required for geo_type='metro'")
-            candidates = sorted(rents_dir.glob("zori_yearly__metro__*.parquet"), reverse=True)
+            defn = naming._normalize_definition_version(definition_version)
+            candidates = sorted(
+                (p for p in rents_dir.glob("zori_yearly__metro__*.parquet") if defn in p.name),
+                reverse=True,
+            )
             if not candidates:
-                candidates = sorted(rents_dir.glob("zori__metro__*.parquet"), reverse=True)
+                candidates = sorted(
+                    (p for p in rents_dir.glob("zori__metro__*.parquet") if defn in p.name),
+                    reverse=True,
+                )
         else:
             # Auto-discover: try new naming first, then legacy
             candidates = sorted(rents_dir.glob("zori_yearly__A*.parquet"), reverse=True)

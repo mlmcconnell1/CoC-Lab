@@ -121,10 +121,20 @@ def export_bundle(
     assets_dir.mkdir(parents=True, exist_ok=True)
 
     for asset in manifest.assets:
-        src = project_root / asset.path
+        rel = Path(asset.path)
+        if rel.is_absolute():
+            msg = f"Absolute asset path rejected: {asset.path}"
+            raise ValueError(msg)
+        src = (project_root / rel).resolve()
+        if not src.is_relative_to(project_root.resolve()):
+            msg = f"Asset path escapes project root: {asset.path}"
+            raise ValueError(msg)
         if not src.exists():
             continue
-        dst = assets_dir / asset.path
+        dst = (assets_dir / rel).resolve()
+        if not dst.is_relative_to(assets_dir.resolve()):
+            msg = f"Asset path escapes bundle directory: {asset.path}"
+            raise ValueError(msg)
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
 
