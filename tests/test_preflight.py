@@ -853,6 +853,156 @@ class TestRecipeScopedPathChecks:
         assert len(ds_findings) == 0
         assert report.is_ready
 
+    def test_file_set_distinct_paths_do_not_trigger_static_broadcast(
+        self, tmp_path: Path,
+    ):
+        """A file_set with distinct per-year files is safe without a
+        year column in the individual parquet files."""
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(parents=True)
+        for year in (2020, 2021, 2022):
+            pd.DataFrame({
+                "coc_id": ["COC1"],
+                "pit_total": [10 + (year - 2020)],
+            }).to_parquet(data_dir / f"pit_{year}.parquet")
+
+        recipe_data = {
+            "version": 1,
+            "name": "distinct-fileset-test",
+            "universe": {"range": "2020-2022"},
+            "targets": [
+                {"id": "coc_panel", "geometry": {"type": "coc", "vintage": 2025}},
+            ],
+            "datasets": {
+                "pit": {
+                    "provider": "hud",
+                    "product": "pit",
+                    "version": 1,
+                    "native_geometry": {"type": "coc"},
+                    "file_set": {
+                        "path_template": "data/pit_{year}.parquet",
+                        "segments": [
+                            {"years": "2020-2022", "geometry": {"type": "coc"}},
+                        ],
+                    },
+                },
+            },
+            "transforms": [],
+            "pipelines": [
+                {
+                    "id": "main",
+                    "target": "coc_panel",
+                    "steps": [
+                        {
+                            "resample": {
+                                "dataset": "pit",
+                                "to_geometry": {"type": "coc", "vintage": 2025},
+                                "method": "identity",
+                                "measures": ["pit_total"],
+                            },
+                        },
+                        {
+                            "join": {
+                                "datasets": ["pit"],
+                                "join_on": ["geo_id", "year"],
+                            },
+                        },
+                    ],
+                },
+            ],
+        }
+
+        recipe = load_recipe(recipe_data)
+        report = run_preflight(recipe, project_root=tmp_path)
+        broadcast_findings = [
+            f for f in report.findings
+            if f.kind == FindingKind.STATIC_BROADCAST
+        ]
+        assert len(broadcast_findings) == 0
+        assert report.is_ready
+
+    def test_generated_metro_transform_ready_when_inputs_exist(
+        self, tmp_path: Path,
+    ):
+        """Generated metro transforms should not block preflight when
+        their source artifacts are present."""
+        data_dir = tmp_path / "data"
+        (data_dir / "curated" / "metro").mkdir(parents=True)
+        pd.DataFrame({
+            "county_fips": ["01001"],
+            "year": [2020],
+            "population": [1000],
+        }).to_parquet(data_dir / "pep.parquet")
+        pd.DataFrame({"metro_id": ["GF01"], "county_fips": ["01001"]}).to_parquet(
+            data_dir
+            / "curated"
+            / "metro"
+            / "metro_county_membership__glynn_fox_v1.parquet"
+        )
+
+        recipe_data = {
+            "version": 1,
+            "name": "metro-transform-test",
+            "universe": {"range": "2020-2020"},
+            "targets": [
+                {"id": "metro_panel", "geometry": {"type": "metro", "source": "glynn_fox_v1"}},
+            ],
+            "datasets": {
+                "pep_county": {
+                    "provider": "census",
+                    "product": "pep",
+                    "version": 1,
+                    "native_geometry": {"type": "county", "vintage": 2020},
+                    "path": "data/pep.parquet",
+                    "years": "2020-2020",
+                    "year_column": "year",
+                    "geo_column": "county_fips",
+                },
+            },
+            "transforms": [
+                {
+                    "id": "county_to_metro",
+                    "type": "crosswalk",
+                    "from": {"type": "county", "vintage": 2020},
+                    "to": {"type": "metro", "source": "glynn_fox_v1"},
+                    "spec": {"weighting": {"scheme": "area"}},
+                },
+            ],
+            "pipelines": [
+                {
+                    "id": "main",
+                    "target": "metro_panel",
+                    "steps": [
+                        {"materialize": {"transforms": ["county_to_metro"]}},
+                        {
+                            "resample": {
+                                "dataset": "pep_county",
+                                "to_geometry": {"type": "metro", "source": "glynn_fox_v1"},
+                                "method": "aggregate",
+                                "via": "county_to_metro",
+                                "measures": ["population"],
+                            },
+                        },
+                        {
+                            "join": {
+                                "datasets": ["pep_county"],
+                                "join_on": ["geo_id", "year"],
+                            },
+                        },
+                    ],
+                },
+            ],
+        }
+
+        recipe = load_recipe(recipe_data)
+        report = run_preflight(recipe, project_root=tmp_path)
+        transform_findings = [
+            f for f in report.findings
+            if f.kind == FindingKind.MISSING_TRANSFORM
+        ]
+        assert len(transform_findings) == 0
+        assert report.is_ready
+
     def test_multi_pipeline_deduplicates_dataset_year_checks(
         self, tmp_path: Path,
     ):

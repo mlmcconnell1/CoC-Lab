@@ -1,0 +1,103 @@
+version: 1
+name: coc_pep_zori_calendar_2020_2024
+description: >
+  Build a county-driven CoC panel using county PEP population and calendar-mean
+  county ZORI. This example focuses on county-to-CoC resampling and exercises
+  the non-default calendar-year temporal collapse for ZORI.
+
+universe:
+  range: "2020-2024"
+
+targets:
+  - id: coc_panel
+    geometry: { type: coc, vintage: 2025, source: hud_exchange }
+    outputs: [panel]
+
+datasets:
+  pep_county:
+    provider: census
+    product: pep
+    version: 1
+    native_geometry: { type: county, vintage: 2020 }
+    year_column: year
+    geo_column: county_fips
+    file_set:
+      path_template: "data/curated/pep/pep_county__v{pep_vintage}.parquet"
+      segments:
+        - years: "2020-2020"
+          geometry: { type: county, vintage: 2020 }
+          constants: { pep_vintage: 2020 }
+        - years: "2021-2024"
+          geometry: { type: county, vintage: 2020 }
+          constants: { pep_vintage: 2024 }
+
+  zori_county:
+    provider: zillow
+    product: zori
+    version: 1
+    native_geometry: { type: county, vintage: 2020 }
+    years: "2020-2024"
+    year_column: year
+    geo_column: geo_id
+    params:
+      align: calendar_mean
+    path: data/curated/zori/zori__county__Z2026.parquet
+
+filters:
+  zori_county:
+    type: temporal
+    column: date
+    method: calendar_mean
+
+transforms:
+  - id: county_to_coc_area
+    type: crosswalk
+    from: { type: county, vintage: 2020 }
+    to: { type: coc, vintage: 2025, source: hud_exchange }
+    spec:
+      weighting:
+        scheme: area
+
+  - id: county_to_coc_population
+    type: crosswalk
+    from: { type: county, vintage: 2020 }
+    to: { type: coc, vintage: 2025, source: hud_exchange }
+    spec:
+      weighting:
+        scheme: population
+        population_source: pep_county
+        population_field: population
+
+pipelines:
+  - id: build_coc_panel
+    target: coc_panel
+    steps:
+      - materialize:
+          transforms: [county_to_coc_area, county_to_coc_population]
+
+      - resample:
+          dataset: pep_county
+          to_geometry: { type: coc, vintage: 2025, source: hud_exchange }
+          method: aggregate
+          via: county_to_coc_area
+          measures: [population]
+          aggregation: sum
+
+      - resample:
+          dataset: zori_county
+          to_geometry: { type: coc, vintage: 2025, source: hud_exchange }
+          method: aggregate
+          via: county_to_coc_population
+          measures:
+            zori: { aggregation: weighted_mean }
+
+      - join:
+          datasets: [pep_county, zori_county]
+          join_on: [geo_id, year]
+
+validation:
+  crosswalk_coverage:
+    warn_below: 0.95
+    fail_below: 0.90
+  missing_dataset:
+    default: fail

@@ -258,6 +258,11 @@ def probe_transform_path(
     ProbeResult
         ok=True if the file exists, ok=False with the expected path.
     """
+    from coclab.naming import (
+        metro_coc_membership_path,
+        metro_county_membership_path,
+        tract_path,
+    )
     from coclab.recipe.executor import (
         _identify_metro_and_base,
         _resolve_transform_path,
@@ -281,7 +286,7 @@ def probe_transform_path(
         return ProbeResult(ok=False, message=str(exc))
 
     # For metro transforms, the artifact can be generated on demand
-    metro_ref, _ = _identify_metro_and_base(transform.from_, transform.to)
+    metro_ref, base_ref = _identify_metro_and_base(transform.from_, transform.to)
     can_generate = metro_ref is not None
 
     if path.exists():
@@ -293,6 +298,33 @@ def probe_transform_path(
             },
         )
 
+    generation_ready = False
+    missing_inputs: list[str] = []
+    if can_generate and metro_ref is not None and metro_ref.source:
+        data_root = project_root / "data"
+        prereq_paths: list[Path] = []
+        if base_ref.type == "coc":
+            prereq_paths.append(
+                metro_coc_membership_path(metro_ref.source, data_root)
+            )
+        elif base_ref.type == "county":
+            prereq_paths.append(
+                metro_county_membership_path(metro_ref.source, data_root)
+            )
+        elif base_ref.type == "tract":
+            prereq_paths.append(
+                metro_county_membership_path(metro_ref.source, data_root)
+            )
+            if base_ref.vintage is not None:
+                prereq_paths.append(tract_path(base_ref.vintage, data_root))
+
+        missing_inputs = [
+            str(path.relative_to(project_root))
+            for path in prereq_paths
+            if not path.exists()
+        ]
+        generation_ready = len(missing_inputs) == 0
+
     return ProbeResult(
         ok=False,
         message=(
@@ -302,6 +334,8 @@ def probe_transform_path(
         detail={
             "path": str(path.relative_to(project_root)),
             "can_generate": can_generate,
+            "generation_ready": generation_ready,
+            "missing_inputs": missing_inputs,
         },
     )
 

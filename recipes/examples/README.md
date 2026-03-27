@@ -1,0 +1,54 @@
+# Example Recipes
+
+These recipes are intended to be runnable, high-signal examples for future
+users. Together they cover the current recipe surface:
+
+- CoC and metro targets
+- PIT, ACS5 tract inputs, PEP county inputs, ZORI county inputs, and ACS1 metro inputs
+- Identity and aggregate resampling
+- CoC crosswalks and generated metro transforms
+- `file_set`-driven year/geometry switching
+- Point-in-time and calendar-mean temporal filters
+
+## Cohort-Style Examples
+
+The current recipe DSL builds a target geography and time span, but it does not
+yet have a first-class selector for ranked cohorts like "top 50 CoCs by 2021
+population." Use the base recipes below to build the panel, then rank and slice
+the output downstream.
+
+- Requested idea: top 50 CoCs by population with ACS income and ZORI, 2015-2021
+  Use `coc-base-pit-acs-zori-2016-2021.yaml`, then filter the built panel on
+  `year == 2021` and keep the 50 largest `population` values.
+- Requested idea: 25 smallest metros with at least 1M population and ACS income, 2019-2025
+  Use `metro-glynnfox-acs-income-2019-2025.yaml`. The current metro example
+  set uses the fixed 25 Glynn/Fox metros, so downstream ranking happens after
+  the panel is built.
+
+## Recipes
+
+- `coc-base-pit-acs-zori-2016-2021.yaml`
+  National CoC base panel for downstream top-N slicing. Includes PIT, PEP,
+  lagged ACS5 demographics, and January ZORI.
+- `coc-pep-zori-calendar-2020-2024.yaml`
+  County-driven CoC panel using PEP population plus calendar-mean ZORI.
+- `metro-glynnfox-acs-income-2019-2025.yaml`
+  ACS-only metro panel for the 25 Glynn/Fox metros. Good for long ACS-only
+  spans that extend beyond PIT coverage.
+- `metro-glynnfox-pit-acs-pep-zori-2016-2024.yaml`
+  Full-feature metro panel that combines all major crosswalk-based inputs.
+- `metro-glynnfox-pit-pep-2011-2014.yaml`
+  Early-year metro panel focused on PIT + PEP before ZORI availability.
+- `metro-glynnfox-pit-pep-acs1-2023.yaml`
+  One-year metro panel showing ACS1 metro-native identity resampling alongside
+  PIT and PEP.
+
+## Suggested Commands
+
+```bash
+COCLAB_NON_INTERACTIVE=1 coclab build recipe-preflight \
+  --recipe recipes/examples/coc-base-pit-acs-zori-2016-2021.yaml --json
+
+COCLAB_NON_INTERACTIVE=1 coclab build recipe \
+  --recipe recipes/examples/coc-base-pit-acs-zori-2016-2021.yaml --json
+```

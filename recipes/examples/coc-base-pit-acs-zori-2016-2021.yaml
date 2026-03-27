@@ -1,0 +1,172 @@
+version: 1
+name: coc_base_pit_acs_zori_2016_2021
+description: >
+  Build the full national CoC panel that supports downstream "top 50 CoCs by
+  2021 population" slicing. The current recipe DSL builds the full CoC
+  universe first, then analysis can rank and filter the output. This example
+  combines PIT counts, county PEP population, lagged ACS5 demographic
+  measures, and January county ZORI for analysis years 2016-2021.
+
+universe:
+  range: "2016-2021"
+
+targets:
+  - id: coc_panel
+    geometry: { type: coc, vintage: 2025, source: hud_exchange }
+    outputs: [panel]
+
+datasets:
+  pit:
+    provider: hud
+    product: pit
+    version: 1
+    native_geometry: { type: coc }
+    years: "2016-2021"
+    year_column: pit_year
+    geo_column: coc_id
+    params:
+      vintage: 2024
+      align: point_in_time_jan
+    path: data/curated/pit/pit_vintage__P2024.parquet
+
+  pep_county:
+    provider: census
+    product: pep
+    version: 1
+    native_geometry: { type: county, vintage: 2020 }
+    year_column: year
+    geo_column: county_fips
+    file_set:
+      path_template: "data/curated/pep/pep_county__v{pep_vintage}.parquet"
+      segments:
+        - years: "2016-2020"
+          geometry: { type: county, vintage: 2020 }
+          constants: { pep_vintage: 2020 }
+        - years: "2021-2021"
+          geometry: { type: county, vintage: 2020 }
+          constants: { pep_vintage: 2024 }
+
+  acs_tract:
+    provider: census
+    product: acs5
+    version: 1
+    native_geometry: { type: tract }
+    geo_column: tract_geoid
+    file_set:
+      path_template: "data/curated/acs/acs5_tracts__A{acs_end}xT{tract}.parquet"
+      segments:
+        - years: "2016-2020"
+          geometry: { type: tract, vintage: 2010 }
+          constants: { tract: 2010 }
+          year_offsets: { acs_end: -1 }
+        - years: "2021-2021"
+          geometry: { type: tract, vintage: 2020 }
+          constants: { tract: 2020 }
+          year_offsets: { acs_end: -1 }
+
+  zori_county:
+    provider: zillow
+    product: zori
+    version: 1
+    native_geometry: { type: county, vintage: 2020 }
+    years: "2016-2021"
+    year_column: year
+    geo_column: geo_id
+    params:
+      align: point_in_time_jan
+    path: data/curated/zori/zori__county__Z2026.parquet
+
+filters:
+  zori_county:
+    type: temporal
+    column: date
+    method: point_in_time
+    month: 1
+
+transforms:
+  - id: tract_to_coc_2010
+    type: crosswalk
+    from: { type: tract, vintage: 2010 }
+    to: { type: coc, vintage: 2025, source: hud_exchange }
+    spec:
+      weighting:
+        scheme: area
+
+  - id: tract_to_coc_2020
+    type: crosswalk
+    from: { type: tract, vintage: 2020 }
+    to: { type: coc, vintage: 2025, source: hud_exchange }
+    spec:
+      weighting:
+        scheme: area
+
+  - id: county_to_coc_area
+    type: crosswalk
+    from: { type: county, vintage: 2020 }
+    to: { type: coc, vintage: 2025, source: hud_exchange }
+    spec:
+      weighting:
+        scheme: area
+
+  - id: county_to_coc_population
+    type: crosswalk
+    from: { type: county, vintage: 2020 }
+    to: { type: coc, vintage: 2025, source: hud_exchange }
+    spec:
+      weighting:
+        scheme: population
+        population_source: pep_county
+        population_field: population
+
+pipelines:
+  - id: build_coc_panel
+    target: coc_panel
+    steps:
+      - materialize:
+          transforms:
+            [tract_to_coc_2010, tract_to_coc_2020, county_to_coc_area, county_to_coc_population]
+
+      - resample:
+          dataset: pit
+          to_geometry: { type: coc, vintage: 2025, source: hud_exchange }
+          method: identity
+          measures: [pit_total, pit_sheltered, pit_unsheltered]
+
+      - resample:
+          dataset: pep_county
+          to_geometry: { type: coc, vintage: 2025, source: hud_exchange }
+          method: aggregate
+          via: county_to_coc_area
+          measures: [population]
+          aggregation: sum
+
+      - resample:
+          dataset: acs_tract
+          to_geometry: { type: coc, vintage: 2025, source: hud_exchange }
+          method: aggregate
+          via: auto
+          measures:
+            total_population: { aggregation: sum }
+            adult_population: { aggregation: sum }
+            population_below_poverty: { aggregation: sum }
+            median_household_income: { aggregation: weighted_mean }
+            median_gross_rent: { aggregation: weighted_mean }
+
+      - resample:
+          dataset: zori_county
+          to_geometry: { type: coc, vintage: 2025, source: hud_exchange }
+          method: aggregate
+          via: county_to_coc_population
+          measures:
+            zori: { aggregation: weighted_mean }
+
+      - join:
+          datasets: [pit, pep_county, acs_tract, zori_county]
+          join_on: [geo_id, year]
+
+validation:
+  crosswalk_coverage:
+    warn_below: 0.95
+    fail_below: 0.90
+  missing_dataset:
+    default: fail

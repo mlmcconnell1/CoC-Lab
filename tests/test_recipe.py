@@ -2800,6 +2800,41 @@ class TestColumnResolution:
         assert len(df) == 1
         assert df["val"].iloc[0] == 10
 
+    def test_declared_year_column_string_values_used(self, tmp_path: Path):
+        """String-typed year columns should still match the requested year."""
+        ds_path = tmp_path / "data" / "ds.parquet"
+        ds_path.parent.mkdir(parents=True)
+        pd.DataFrame({
+            "metro_id": ["GF01", "GF01"],
+            "acs1_vintage": ["2023", "2024"],
+            "val": [10, 20],
+        }).to_parquet(ds_path)
+
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["year_column"] = "acs1_vintage"
+        data["datasets"]["pit"]["geo_column"] = "metro_id"
+        recipe = load_recipe(data)
+        ctx = ExecutionContext(project_root=tmp_path, recipe=recipe)
+
+        task = ResampleTask(
+            dataset_id="pit",
+            year=2023,
+            input_path="data/ds.parquet",
+            effective_geometry=GeometryRef(type="metro"),
+            method="identity",
+            transform_id=None,
+            to_geometry=GeometryRef(type="metro", source="glynn_fox_v1"),
+            measures=["val"],
+            year_column="acs1_vintage",
+            geo_column="metro_id",
+        )
+        result = _execute_resample(task, ctx)
+        assert result.success
+        df = ctx.intermediates[("pit", 2023)]
+        assert len(df) == 1
+        assert df["year"].iloc[0] == 2023
+        assert df["val"].iloc[0] == 10
+
     def test_ambiguous_geo_column_errors(self, tmp_path: Path):
         """Multiple geo-ID candidate columns without declaration should error."""
         ds_path = tmp_path / "data" / "ds.parquet"

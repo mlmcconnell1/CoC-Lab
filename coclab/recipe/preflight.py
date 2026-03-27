@@ -350,6 +350,12 @@ def _check_transforms(
                 result.detail.get("can_generate", False)
                 if result.detail else False
             )
+            generation_ready = (
+                result.detail.get("generation_ready", False)
+                if result.detail else False
+            )
+            if can_generate and generation_ready:
+                continue
             transform = None
             for t in recipe.transforms:
                 if t.id == tid:
@@ -362,10 +368,20 @@ def _check_transforms(
             )
             if is_metro:
                 cmd = "coclab generate metro"
-                hint = (
-                    f"Metro transform '{tid}' can be generated. "
-                    f"Ensure metro definition artifacts exist."
+                missing_inputs = (
+                    result.detail.get("missing_inputs", [])
+                    if result.detail else []
                 )
+                if missing_inputs:
+                    hint = (
+                        f"Metro transform '{tid}' can be generated once its "
+                        f"source artifacts exist. Missing: {missing_inputs}"
+                    )
+                else:
+                    hint = (
+                        f"Metro transform '{tid}' can be generated. "
+                        f"Ensure metro definition artifacts exist."
+                    )
             else:
                 cmd = "coclab generate xwalks"
                 hint = (
@@ -389,6 +405,12 @@ def _check_dataset_schemas(
     """Inspect dataset schemas for column issues without loading data."""
     findings: list[PreflightFinding] = []
     universe_years = expand_year_spec(recipe.universe)
+    distinct_paths_by_dataset: dict[str, set[str]] = {}
+    for task in resample_tasks:
+        if task.input_path is not None:
+            distinct_paths_by_dataset.setdefault(task.dataset_id, set()).add(
+                task.input_path
+            )
 
     # Deduplicate: check each (dataset_id, path) once
     checked: set[tuple[str, str]] = set()
@@ -490,6 +512,11 @@ def _check_dataset_schemas(
             task.dataset_id,
             year_column_found=year_col_found,
             universe_year_count=len(universe_years),
+            distinct_paths=(
+                len(distinct_paths_by_dataset.get(task.dataset_id, set()))
+                if ds.file_set is not None
+                else None
+            ),
         )
         if not broadcast_result.ok:
             findings.append(PreflightFinding(

@@ -44,6 +44,7 @@ coclab build recipe-export --manifest data/curated/panel/<file>.manifest.json --
 - `coclab build recipe-preflight --json` is the default no-execute automation/CI gate.
 - `coclab build recipe-plan --json` is for authoring/debugging, not for readiness checking.
 - `coclab aggregate ...` is a parallel path for standalone CoC artifacts, not a default prerequisite for recipe execution.
+- See `recipes/examples/README.md` for runnable example recipes that cover CoC, metro, PIT, ACS5, PEP, ZORI, and ACS1 paths.
 - Use `--non-interactive` (or `COCLAB_NON_INTERACTIVE=1`) for agent automation.
 
 ---

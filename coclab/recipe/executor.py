@@ -417,6 +417,24 @@ def _resolve_geo_column(
     return result.detail["geo_column"]
 
 
+def _filter_to_year(
+    df: pd.DataFrame,
+    year_col: str,
+    year: int,
+) -> pd.DataFrame:
+    """Filter a DataFrame to a requested year, tolerating string year values."""
+    series = df[year_col]
+    if pd.api.types.is_numeric_dtype(series):
+        mask = series == year
+    else:
+        coerced = pd.to_numeric(series, errors="coerce")
+        if coerced.notna().any():
+            mask = coerced == year
+        else:
+            mask = series.astype(str) == str(year)
+    return df[mask].copy()
+
+
 def _validate_columns(
     df: pd.DataFrame,
     measures: list[str],
@@ -578,7 +596,7 @@ def _load_support_dataset_for_year(
 
     year_col = _resolve_year_column(df, ds.year_column)
     if year_col is not None:
-        df = df[df[year_col] == year].copy()
+        df = _filter_to_year(df, year_col, year)
         if df.empty:
             raise ExecutorError(
                 f"Dataset '{dataset_id}' year {year}: no rows after filtering "
@@ -1021,7 +1039,7 @@ def _execute_resample(
             error=static_broadcast_error,
         )
     if year_col is not None:
-        df = df[df[year_col] == task.year].copy()
+        df = _filter_to_year(df, year_col, task.year)
         if df.empty:
             return StepResult(
                 step_kind="resample",
@@ -1034,6 +1052,7 @@ def _execute_resample(
             )
         if year_col != "year":
             df = df.rename(columns={year_col: "year"})
+        df["year"] = task.year
 
     try:
         if task.method == "identity":
