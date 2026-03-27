@@ -1,3 +1,7 @@
+# Example recipe: full-feature Glynn/Fox metro panel.
+# Builds PIT + county PEP + lagged ACS5 + January county ZORI for 2016-2024.
+# This is the broadest metro example and exercises every major resampling path.
+
 version: 1
 name: metro_glynnfox_pit_acs_pep_zori_2016_2024
 description: >
@@ -14,6 +18,7 @@ targets:
     geometry: { type: metro, source: glynn_fox_v1 }
     outputs: [panel]
 
+# Source datasets.
 datasets:
   pit:
     provider: hud
@@ -82,6 +87,7 @@ filters:
     method: point_in_time
     month: 1
 
+# Metro transforms generated from CoC membership, county membership, and tract expansion.
 transforms:
   - id: coc_to_metro
     type: crosswalk

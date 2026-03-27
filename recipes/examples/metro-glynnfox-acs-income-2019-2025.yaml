@@ -1,3 +1,7 @@
+# Example recipe: ACS-only Glynn/Fox metro panel.
+# Builds lagged ACS5 demographic and income measures for the 25 fixed metros
+# across the 2010/2020 tract-vintage boundary for 2019-2025.
+
 version: 1
 name: metro_glynnfox_acs_income_2019_2025
 description: >
@@ -15,6 +19,7 @@ targets:
     geometry: { type: metro, source: glynn_fox_v1 }
     outputs: [panel]
 
+# Source datasets.
 datasets:
   acs_tract:
     provider: census
@@ -51,6 +56,7 @@ transforms:
       weighting:
         scheme: area
 
+# Pipeline: aggregate ACS from tracts to the metro definition.
 pipelines:
   - id: build_metro_panel
     target: metro_panel

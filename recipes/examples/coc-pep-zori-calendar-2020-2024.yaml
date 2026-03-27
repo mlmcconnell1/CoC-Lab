@@ -1,3 +1,7 @@
+# Example recipe: county-driven CoC panel with calendar-mean rents.
+# Builds county PEP + calendar-mean county ZORI aggregated to CoCs for 2020-2024.
+# Use this to show the non-default ZORI temporal collapse path.
+
 version: 1
 name: coc_pep_zori_calendar_2020_2024
 description: >
@@ -13,6 +17,7 @@ targets:
     geometry: { type: coc, vintage: 2025, source: hud_exchange }
     outputs: [panel]
 
+# Source datasets.
 datasets:
   pep_county:
     provider: census
@@ -49,6 +54,7 @@ filters:
     column: date
     method: calendar_mean
 
+# County-to-CoC crosswalks for population and rent aggregation.
 transforms:
   - id: county_to_coc_area
     type: crosswalk

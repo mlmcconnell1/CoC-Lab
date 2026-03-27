@@ -1,3 +1,7 @@
+# Example recipe: national CoC base panel for downstream top-N slicing.
+# Builds PIT + county PEP + lagged ACS5 + January county ZORI for 2016-2021.
+# Use this when you want a broad CoC panel first and cohort selection later.
+
 version: 1
 name: coc_base_pit_acs_zori_2016_2021
 description: >
@@ -15,6 +19,7 @@ targets:
     geometry: { type: coc, vintage: 2025, source: hud_exchange }
     outputs: [panel]
 
+# Source datasets.
 datasets:
   pit:
     provider: hud
@@ -83,6 +88,7 @@ filters:
     method: point_in_time
     month: 1
 
+# Crosswalks used to move tract and county data onto CoCs.
 transforms:
   - id: tract_to_coc_2010
     type: crosswalk

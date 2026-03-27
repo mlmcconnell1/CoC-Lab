@@ -1,3 +1,7 @@
+# Example recipe: early-year Glynn/Fox metro panel.
+# Builds PIT + county PEP for 2011-2014, before ZORI enters the example set.
+# Use this as the smallest metro recipe that still exercises CoC and county aggregation.
+
 version: 1
 name: metro_glynnfox_pit_pep_2011_2014
 description: >
@@ -14,6 +18,7 @@ targets:
     geometry: { type: metro, source: glynn_fox_v1 }
     outputs: [panel]
 
+# Source datasets.
 datasets:
   pit:
     provider: hud
@@ -58,6 +63,7 @@ transforms:
       weighting:
         scheme: area
 
+# Pipeline: aggregate PIT and PEP to the metro definition and join.
 pipelines:
   - id: build_metro_panel
     target: metro_panel

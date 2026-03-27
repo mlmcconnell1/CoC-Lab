@@ -1,3 +1,7 @@
+# Example recipe: one-year Glynn/Fox metro panel with metro-native ACS1.
+# Builds PIT + county PEP + ACS1 unemployment for 2023.
+# This is the identity-resample example for a metro-native dataset.
+
 version: 1
 name: metro_glynnfox_pit_pep_acs1_2023
 description: >
@@ -13,6 +17,7 @@ targets:
     geometry: { type: metro, source: glynn_fox_v1 }
     outputs: [panel]
 
+# Source datasets.
 datasets:
   pit:
     provider: hud
@@ -70,6 +75,7 @@ transforms:
       weighting:
         scheme: area
 
+# Pipeline: aggregate PIT and PEP, then join the metro-native ACS1 file directly.
 pipelines:
   - id: build_metro_panel
     target: metro_panel
