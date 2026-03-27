@@ -262,8 +262,11 @@ def _normalize_to_schema(gdf: gpd.GeoDataFrame, year: int) -> gpd.GeoDataFrame:
     # Ensure GEOIDs are properly zero-padded (11 characters for tracts)
     geoid_values = geoid_values.str.zfill(11)
 
-    # Reproject to EPSG:4326 if needed
-    if gdf.crs and gdf.crs.to_epsg() != 4326:
+    # Reproject to EPSG:4326 if needed; reject missing CRS
+    if gdf.crs is None:
+        msg = "Source GeoDataFrame has no CRS; cannot safely assume EPSG:4326."
+        raise ValueError(msg)
+    if gdf.crs.to_epsg() != 4326:
         gdf = gdf.to_crs(epsg=4326)
 
     # Build standardized output matching TIGER schema
@@ -446,8 +449,11 @@ def _normalize_county_to_schema(gdf: gpd.GeoDataFrame, year: int) -> gpd.GeoData
     # Ensure GEOIDs are properly zero-padded (5 characters for counties)
     geoid_values = geoid_values.str.zfill(5)
 
-    # Reproject to EPSG:4326 if needed
-    if gdf.crs and gdf.crs.to_epsg() != 4326:
+    # Reproject to EPSG:4326 if needed; reject missing CRS
+    if gdf.crs is None:
+        msg = "Source GeoDataFrame has no CRS; cannot safely assume EPSG:4326."
+        raise ValueError(msg)
+    if gdf.crs.to_epsg() != 4326:
         gdf = gdf.to_crs(epsg=4326)
 
     # Build standardized output matching TIGER schema

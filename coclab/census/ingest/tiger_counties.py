@@ -99,8 +99,11 @@ def download_tiger_counties(
         # Read the shapefile
         gdf = gpd.read_file(shp_files[0])
 
-    # Reproject to EPSG:4326 if needed
-    if gdf.crs and gdf.crs.to_epsg() != 4326:
+    # Reproject to EPSG:4326 if needed; reject missing CRS
+    if gdf.crs is None:
+        msg = "Source GeoDataFrame has no CRS; cannot safely assume EPSG:4326."
+        raise ValueError(msg)
+    if gdf.crs.to_epsg() != 4326:
         gdf = gdf.to_crs(epsg=4326)
 
     # Standardize schema

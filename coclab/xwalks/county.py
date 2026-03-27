@@ -76,6 +76,9 @@ def build_county_crosswalk(
         keep_geom_type=False,
     )
 
+    # Filter out empty/degenerate geometries from overlay
+    intersections = intersections[~intersections.geometry.is_empty].copy()
+
     # Calculate intersection areas
     intersections["intersection_area"] = intersections.geometry.area
 

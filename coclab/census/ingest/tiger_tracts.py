@@ -222,8 +222,11 @@ def download_tiger_tracts(
     combined = pd.concat(gdfs, ignore_index=True)
     combined = gpd.GeoDataFrame(combined, crs=gdfs[0].crs)
 
-    # Reproject to EPSG:4326 if needed
-    if combined.crs and combined.crs.to_epsg() != 4326:
+    # Reproject to EPSG:4326 if needed; reject missing CRS
+    if combined.crs is None:
+        msg = "Combined GeoDataFrame has no CRS; cannot safely assume EPSG:4326."
+        raise ValueError(msg)
+    if combined.crs.to_epsg() != 4326:
         combined = combined.to_crs(epsg=4326)
 
     # Standardize schema

@@ -277,20 +277,22 @@ def _validate_anomalies(gdf: "gpd.GeoDataFrame", result: ValidationResult) -> No
         except Exception:
             pass  # Area calculation failed, skip this check
 
-        # Check bounding box for valid coordinate ranges (EPSG:4326)
-        try:
-            minx, miny, maxx, maxy = geom.bounds
-            if minx < -180 or maxx > 180:
-                result.add_error(
-                    "INVALID_LONGITUDE",
-                    f"Longitude out of range: [{minx:.4f}, {maxx:.4f}]",
-                    row_index=idx,
-                )
-            if miny < -90 or maxy > 90:
-                result.add_error(
-                    "INVALID_LATITUDE",
-                    f"Latitude out of range: [{miny:.4f}, {maxy:.4f}]",
-                    row_index=idx,
-                )
-        except Exception:
-            pass  # Bounds calculation failed, skip this check
+        # Check bounding box for valid coordinate ranges (EPSG:4326 only)
+        is_geographic = gdf.crs is not None and gdf.crs.is_geographic
+        if is_geographic:
+            try:
+                minx, miny, maxx, maxy = geom.bounds
+                if minx < -180 or maxx > 180:
+                    result.add_error(
+                        "INVALID_LONGITUDE",
+                        f"Longitude out of range: [{minx:.4f}, {maxx:.4f}]",
+                        row_index=idx,
+                    )
+                if miny < -90 or maxy > 90:
+                    result.add_error(
+                        "INVALID_LATITUDE",
+                        f"Latitude out of range: [{miny:.4f}, {maxy:.4f}]",
+                        row_index=idx,
+                    )
+            except Exception:
+                pass  # Bounds calculation failed, skip this check
