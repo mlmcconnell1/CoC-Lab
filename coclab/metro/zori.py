@@ -179,9 +179,14 @@ def aggregate_yearly_zori_to_metro(
     merged = merged.merge(county_population, on=["county_fips", "year"], how="left")
 
     # Compute per-metro-year normalised weights.
-    # Null out metro-years where all county populations are missing.
+    # Null out metro-years where any county population is missing to avoid
+    # silently renormalizing weights over a subset of counties.
+    any_missing = merged.groupby(["metro_id", "year"])["population"].transform(
+        lambda s: s.isna().any()
+    )
+    pop_for_weight = merged["population"].where(~any_missing)
     pop_sum = merged.groupby(["metro_id", "year"])["population"].transform("sum")
-    merged["weight"] = merged["population"] / pop_sum
+    merged["weight"] = pop_for_weight / pop_sum
     merged["weighted_zori"] = merged["zori"] * merged["weight"]
 
     result = (

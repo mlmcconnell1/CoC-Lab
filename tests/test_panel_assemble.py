@@ -258,6 +258,41 @@ class TestLoadAcsMeasures:
         assert "coc_id" in result.columns
         assert set(result["coc_id"]) == {"CO-500", "CA-600"}
 
+    def test_fallback_does_not_load_wrong_acs_vintage(self, tmp_path):
+        """Regression test for coclab-s4hw: when only measures files with a
+        different ACS vintage exist, the loader must return empty rather than
+        silently binding an incompatible file."""
+        measures_dir = tmp_path / "measures"
+        measures_dir.mkdir(parents=True)
+
+        df = pd.DataFrame(
+            {
+                "coc_id": ["CO-500"],
+                "total_population": [500000],
+                "adult_population": [400000],
+                "population_below_poverty": [50000],
+                "median_household_income": [65000],
+                "median_gross_rent": [1200],
+                "coverage_ratio": [0.95],
+            }
+        )
+        # Only A2023 exists, but we will request A2018 (2015-era tracts).
+        df.to_parquet(
+            measures_dir / "measures__A2023@B2024xT2020.parquet",
+            index=False,
+        )
+
+        result, tract_vintage = _load_acs_measures(
+            boundary_vintage="2024",
+            acs_vintage="2014-2018",
+            weighting="population",
+            measures_dir=measures_dir,
+        )
+
+        # Must return empty — not silently use the A2023 file.
+        assert len(result) == 0
+        assert tract_vintage is None
+
 
 class TestDetectBoundaryChanges:
     """Tests for _detect_boundary_changes function."""

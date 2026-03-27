@@ -87,8 +87,9 @@ class TestMeasuresBoundaryFallback:
         assert not result.empty
         assert result["coc_id"].iloc[0] == "CO-500"
 
-    def test_fallback_to_boundary_match(self, tmp_path):
-        """When exact ACS vintage not found, fall back to same-boundary file."""
+    def test_wrong_acs_vintage_returns_empty(self, tmp_path):
+        """Regression for coclab-s4hw: a file with a different ACS vintage
+        must NOT be silently loaded as a fallback."""
         measures_dir = tmp_path / "measures"
         measures_dir.mkdir()
 
@@ -103,8 +104,7 @@ class TestMeasuresBoundaryFallback:
         # boundary_vintage=2024, acs_vintage=2023 (not in any filename)
         result, _ = _load_acs_measures("2024", "2023", "area", measures_dir)
 
-        assert not result.empty
-        assert result["coc_id"].iloc[0] == "CO-500"
+        assert result.empty
 
     def test_no_match_returns_empty(self, tmp_path):
         """No matching file returns empty DataFrame."""

@@ -609,21 +609,6 @@ def _load_acs_measures(
     elif legacy_generic_path.exists():
         measures_path = legacy_generic_path
 
-    # Fallback: discover any measures file for this boundary vintage
-    # regardless of ACS vintage. This handles the case where aggregate
-    # acs uses a different ACS alignment than the panel policy expects
-    # (e.g., aggregate produces A2024@B2024 but panel asks for A2023@B2024).
-    if measures_path is None:
-        boundary_matches = sorted(
-            measures_dir.glob(f"measures__A*@B{boundary_vintage}*.parquet")
-        )
-        if boundary_matches:
-            measures_path = boundary_matches[0]
-            logger.info(
-                f"Exact ACS vintage '{acs_vintage}' not found for boundary "
-                f"{boundary_vintage}; falling back to {measures_path.name}"
-            )
-
     if measures_path is None:
         logger.warning(
             f"No ACS measures found for boundary={boundary_vintage}, "

@@ -66,6 +66,8 @@ class AuditPanelSpec:
     missing_policy: str
     rent_proxy: str
     notes: str
+    start_year: int = 2015
+    end_year: int = 2024
     selected_geo_ids: tuple[str, ...] | None = None
 
 
@@ -356,19 +358,18 @@ def _validate_raw_panel(
     else:
         passed_checks.append("contiguity")
 
-    # Check for globally missing years (gaps in the year sequence)
+    # Check for missing years against the spec's declared audit window.
     all_years = sorted(raw_df["year"].unique())
-    if len(all_years) >= 2:
-        expected_years = list(range(all_years[0], all_years[-1] + 1))
-        missing_years = sorted(set(expected_years) - set(all_years))
-        if missing_years:
-            issues.append({
-                "check": "year_contiguity",
-                "message": f"globally missing years in panel: {missing_years}",
-                "missing_years": missing_years,
-            })
-        else:
-            passed_checks.append("year_contiguity")
+    expected_years = list(range(spec.start_year, spec.end_year + 1))
+    missing_years = sorted(set(expected_years) - set(all_years))
+    if missing_years:
+        issues.append({
+            "check": "year_contiguity",
+            "message": f"panel missing required years from declared window "
+                       f"{spec.start_year}-{spec.end_year}: {missing_years}",
+            "missing_years": missing_years,
+            "expected_range": f"{spec.start_year}-{spec.end_year}",
+        })
     else:
         passed_checks.append("year_contiguity")
 

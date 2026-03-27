@@ -7,6 +7,7 @@ import pandas as pd
 
 from coclab.audit_panels import (
     AUDIT_PANEL_SPECS,
+    AuditPanelSpec,
     METRO_DEFINITION_VERSION,
     MODELING_READY_COLUMNS,
     RAW_REQUIRED_COLUMNS,
@@ -112,11 +113,49 @@ def test_validation_detects_globally_missing_years():
     assert 2016 in year_issue[0]["missing_years"]
 
 
+def test_validation_detects_missing_leading_trailing_years():
+    """Regression test for coclab-z0xw: a panel covering 2016-2024 must fail
+    validation against a spec requiring 2015-2024 (missing leading year 2015)."""
+    years = list(range(2016, 2025))  # 2016-2024, missing 2015
+    df = pd.DataFrame({
+        "geo_id": ["A"] * len(years) + ["B"] * len(years),
+        "year": years * 2,
+        "pit_total": [10] * len(years) * 2,
+        "pit_sheltered": [6] * len(years) * 2,
+        "pit_unsheltered": [4] * len(years) * 2,
+        "total_population": [1000] * len(years) * 2,
+        "median_household_income": [50000.0] * len(years) * 2,
+        "zori": [1000.0] * len(years) * 2,
+    })
+    validation = _validate_raw_panel(
+        df,
+        spec=AUDIT_PANEL_SPECS[0],  # requires 2015-2024
+        drop_reasons={},
+    )
+    assert not validation["structurally_valid"]
+    year_issue = [i for i in validation["issues"] if i["check"] == "year_contiguity"]
+    assert year_issue
+    assert 2015 in year_issue[0]["missing_years"]
+
+
 def test_validation_reports_balanced_panel():
     raw_df = _raw_fixture()
+    # Use a spec whose year window matches the fixture (2020-2021).
+    spec = AuditPanelSpec(
+        panel_name="test_panel",
+        workload_id="T",
+        unit_type="coc",
+        source_panel_path="",
+        selection_rule="",
+        missing_policy="drop",
+        rent_proxy="zori_january",
+        notes="",
+        start_year=2020,
+        end_year=2021,
+    )
     raw_validation = _validate_raw_panel(
         raw_df,
-        spec=AUDIT_PANEL_SPECS[0],
+        spec=spec,
         drop_reasons={},
     )
     modeling_df = _derive_modeling_ready(raw_df)
