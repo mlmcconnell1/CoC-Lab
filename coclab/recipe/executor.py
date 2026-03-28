@@ -738,12 +738,9 @@ def _resample_aggregate(
         )
 
     # Resolve per-measure aggregation methods
-    measure_aggs: dict[str, str] = {}
-    if task.measure_aggregations:
-        measure_aggs = task.measure_aggregations
-    else:
-        default_agg = task.aggregation or "sum"
-        measure_aggs = {m: default_agg for m in task.measures}
+    measure_aggs: dict[str, str] = task.measure_aggregations or {
+        m: "sum" for m in task.measures
+    }
 
     # Convert measures to float64 to handle nullable Pandas types (Int64, Float64)
     for m in task.measures:
@@ -1350,44 +1347,52 @@ def _canonicalize_panel_for_target(
     return result
 
 
-def _persist_outputs(
+@dataclass
+class _AssembledPanel:
+    """Result of assembling a panel from joined intermediates."""
+
+    panel: pd.DataFrame
+    frames: list[pd.DataFrame]
+    target: object  # TargetSpec
+    target_geo_type: str
+    boundary_vintage: str | None
+    definition_version: str | None
+
+
+def _assemble_panel(
     plan: ExecutionPlan,
     ctx: ExecutionContext,
-) -> StepResult:
-    """Collect joined intermediates and write panel output.
+    *,
+    step_kind: str = "persist",
+) -> _AssembledPanel | StepResult:
+    """Collect joined intermediates, canonicalize, and apply cohort selector.
 
-    Concatenates all ``("__joined__", year)`` intermediates into a
-    single DataFrame, writes it to the canonical panel path, and
-    attaches provenance metadata.
+    Returns an :class:`_AssembledPanel` on success or a failed
+    :class:`StepResult` on error.  Shared by ``_persist_outputs`` and
+    ``_persist_diagnostics`` to avoid duplicating panel assembly logic.
     """
-    # Find the pipeline target to determine output geometry
-    pipeline = None
-    for p in ctx.recipe.pipelines:
-        if p.id == plan.pipeline_id:
-            pipeline = p
-            break
+    pipeline = next(
+        (p for p in ctx.recipe.pipelines if p.id == plan.pipeline_id), None,
+    )
     if pipeline is None:
         return StepResult(
-            step_kind="persist",
-            detail="persist outputs",
+            step_kind=step_kind,
+            detail=f"{step_kind}",
             success=False,
             error=f"Pipeline '{plan.pipeline_id}' not found in recipe.",
         )
 
-    target = None
-    for t in ctx.recipe.targets:
-        if t.id == pipeline.target:
-            target = t
-            break
+    target = next(
+        (t for t in ctx.recipe.targets if t.id == pipeline.target), None,
+    )
     if target is None:
         return StepResult(
-            step_kind="persist",
-            detail="persist outputs",
+            step_kind=step_kind,
+            detail=f"{step_kind}",
             success=False,
             error=f"Target '{pipeline.target}' not found in recipe.",
         )
 
-    # Collect joined DataFrames
     universe_years = expand_year_spec(ctx.recipe.universe)
     frames: list[pd.DataFrame] = []
     for year in universe_years:
@@ -1397,16 +1402,15 @@ def _persist_outputs(
 
     if not frames:
         return StepResult(
-            step_kind="persist",
-            detail="persist outputs",
+            step_kind=step_kind,
+            detail=f"{step_kind}",
             success=False,
-            error="No joined outputs to persist.",
+            error="No joined outputs available.",
         )
 
     panel = pd.concat(frames, ignore_index=True)
     panel = _canonicalize_panel_for_target(panel, target.geometry)
 
-    # Apply cohort selector if declared on the target
     if target.cohort is not None:
         pre_count = panel["geo_id"].nunique() if "geo_id" in panel.columns else len(panel)
         panel = _apply_cohort_selector(panel, target.cohort)
@@ -1418,10 +1422,42 @@ def _persist_outputs(
             f"{pre_count} → {post_count} geographies",
         )
 
-    # Determine output path using canonical naming
     target_geo_type, boundary_vintage, definition_version = _target_geometry_metadata(
-        target.geometry
+        target.geometry,
     )
+
+    return _AssembledPanel(
+        panel=panel,
+        frames=frames,
+        target=target,
+        target_geo_type=target_geo_type,
+        boundary_vintage=boundary_vintage,
+        definition_version=definition_version,
+    )
+
+
+def _persist_outputs(
+    plan: ExecutionPlan,
+    ctx: ExecutionContext,
+) -> StepResult:
+    """Collect joined intermediates and write panel output.
+
+    Concatenates all ``("__joined__", year)`` intermediates into a
+    single DataFrame, writes it to the canonical panel path, and
+    attaches provenance metadata.
+    """
+    assembled = _assemble_panel(plan, ctx, step_kind="persist")
+    if isinstance(assembled, StepResult):
+        return assembled
+
+    panel = assembled.panel
+    frames = assembled.frames
+    target_geo_type = assembled.target_geo_type
+    boundary_vintage = assembled.boundary_vintage
+    definition_version = assembled.definition_version
+
+    universe_years = expand_year_spec(ctx.recipe.universe)
+
     if target_geo_type == "metro":
         if definition_version is None:
             return StepResult(
@@ -1544,44 +1580,16 @@ def _persist_diagnostics(
     """
     from coclab.panel.diagnostics import generate_diagnostics_report
 
-    # Re-collect the panel from intermediates (same logic as _persist_outputs)
+    assembled = _assemble_panel(plan, ctx, step_kind="persist_diagnostics")
+    if isinstance(assembled, StepResult):
+        return assembled
+
+    panel = assembled.panel
+    target_geo_type = assembled.target_geo_type
+    boundary_vintage = assembled.boundary_vintage
+    definition_version = assembled.definition_version
+
     universe_years = expand_year_spec(ctx.recipe.universe)
-    frames: list[pd.DataFrame] = []
-    for year in universe_years:
-        key = ("__joined__", year)
-        if key in ctx.intermediates:
-            frames.append(ctx.intermediates[key])
-
-    if not frames:
-        return StepResult(
-            step_kind="persist_diagnostics",
-            detail="persist diagnostics",
-            success=False,
-            error="No joined outputs available for diagnostics.",
-        )
-
-    panel = pd.concat(frames, ignore_index=True)
-
-    # Resolve output path: same directory as panel, same stem + __diagnostics.json
-    pipeline = next(
-        (p for p in ctx.recipe.pipelines if p.id == plan.pipeline_id), None
-    )
-    target = None
-    if pipeline is not None:
-        target = next(
-            (t for t in ctx.recipe.targets if t.id == pipeline.target), None
-        )
-    if target is not None:
-        panel = _canonicalize_panel_for_target(panel, target.geometry)
-        if target.cohort is not None:
-            panel = _apply_cohort_selector(panel, target.cohort)
-        (
-            target_geo_type,
-            boundary_vintage,
-            definition_version,
-        ) = _target_geometry_metadata(target.geometry)
-    else:
-        target_geo_type, boundary_vintage, definition_version = ("coc", None, None)
     start_year = min(universe_years)
     end_year = max(universe_years)
     output_dir = ctx.project_root / "data" / "curated" / "panel"

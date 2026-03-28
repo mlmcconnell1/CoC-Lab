@@ -9,7 +9,6 @@ from typing import Annotated
 import typer
 
 from coclab.recipe.adapters import (
-    ValidationDiagnostic,
     dataset_registry,
     geometry_registry,
     validate_recipe_adapters,
@@ -22,7 +21,7 @@ from coclab.recipe.manifest import export_bundle as do_export_bundle
 from coclab.recipe.manifest import read_manifest
 from coclab.recipe.planner import PlannerError, resolve_plan
 from coclab.recipe.preflight import PreflightReport, Severity, run_preflight
-from coclab.recipe.recipe_schema import RecipeV1, expand_year_spec
+from coclab.recipe.recipe_schema import RecipeV1
 
 # Common --json flag definition
 _JSON_OPTION = Annotated[
@@ -57,98 +56,6 @@ def _format_geometry(ref: object) -> str:
     if source:
         return f"{geo_type}@{source}"
     return str(geo_type)
-
-
-def _missing_file_level(
-    ds_id: str,
-    optional: bool,
-    policy_default: str,
-    policy_extra: dict[str, str],
-) -> str:
-    """Determine diagnostic level for a missing dataset file.
-
-    Priority: per-dataset policy override > optional flag > policy default.
-    Returns ``"error"`` or ``"warning"``.
-    """
-    if ds_id in policy_extra:
-        return "warning" if policy_extra[ds_id] == "warn" else "error"
-    if optional:
-        return "warning"
-    return "warning" if policy_default == "warn" else "error"
-
-
-def _check_dataset_paths(
-    parsed: RecipeV1, project_root: Path | None = None,
-) -> list[ValidationDiagnostic]:
-    """Check that all referenced dataset files exist on disk.
-
-    Returns diagnostics for missing files.  Level (error/warning) is
-    determined by the dataset's ``optional`` flag and the recipe's
-    ``missing_dataset`` validation policy.
-
-    Dataset paths in recipes are project-relative, so *project_root*
-    (defaulting to ``Path.cwd()``) is used as the base for resolution.
-    """
-    if project_root is None:
-        project_root = Path.cwd()
-
-    results: list[ValidationDiagnostic] = []
-    policy = parsed.validation.missing_dataset
-    policy_extra: dict[str, str] = policy.model_extra or {}
-
-    for ds_id, ds in parsed.datasets.items():
-        level = _missing_file_level(
-            ds_id, ds.optional, policy.default, policy_extra,
-        )
-
-        # Static path
-        if ds.path is not None:
-            resolved = project_root / ds.path
-            if not resolved.exists():
-                results.append(ValidationDiagnostic(
-                    level=level,
-                    message=f"Dataset '{ds_id}' path not found: {ds.path}",
-                ))
-
-        # File set: check template-expanded paths and overrides
-        if ds.file_set is not None:
-            for seg in ds.file_set.segments:
-                seg_years = expand_year_spec(seg.years)
-                for year in seg_years:
-                    if year in seg.overrides:
-                        p = seg.overrides[year]
-                    else:
-                        render_ctx: dict[str, object] = {"year": year}
-                        render_ctx.update(seg.constants)
-                        render_ctx.update(
-                            {k: year + offset
-                             for k, offset in seg.year_offsets.items()}
-                        )
-                        try:
-                            p = ds.file_set.path_template.format(
-                                **render_ctx,
-                            )
-                        except KeyError as exc:
-                            results.append(ValidationDiagnostic(
-                                level=level,
-                                message=(
-                                    f"Dataset '{ds_id}' file_set template "
-                                    f"variable '{exc.args[0]}' not provided "
-                                    f"for year {year}."
-                                ),
-                            ))
-                            continue
-                    resolved = project_root / p
-                    if not resolved.exists():
-                        results.append(ValidationDiagnostic(
-                            level=level,
-                            message=(
-                                f"Dataset '{ds_id}' year {year} "
-                                f"file not found: {p}"
-                            ),
-                        ))
-
-    return results
 
 
 def _validate_recipe(

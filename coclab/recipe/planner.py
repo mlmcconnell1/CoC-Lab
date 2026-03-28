@@ -21,7 +21,6 @@ from coclab.recipe.recipe_schema import (
     RecipeV1,
     ResampleStep,
     RollupTransform,
-    VintageSetSpec,
     expand_year_spec,
 )
 
@@ -54,8 +53,7 @@ class ResampleTask:
     transform_id: Optional[str]
     to_geometry: GeometryRef
     measures: list[str]
-    aggregation: Optional[str] = None
-    measure_aggregations: Optional[dict[str, str]] = None
+    measure_aggregations: dict[str, str] | None = None
     year_column: Optional[str] = None
     geo_column: Optional[str] = None
 
@@ -111,7 +109,6 @@ class ExecutionPlan:
                     "transform_id": t.transform_id,
                     "to_geometry": _geometry_to_dict(t.to_geometry),
                     "measures": t.measures,
-                    "aggregation": t.aggregation,
                     "measure_aggregations": t.measure_aggregations,
                 }
                 for t in self.resample_tasks
@@ -356,7 +353,6 @@ def resolve_plan(recipe: RecipeV1, pipeline_id: str) -> ExecutionPlan:
                         transform_id=transform_id,
                         to_geometry=step.to_geometry,
                         measures=step.measure_names,
-                        aggregation=step.aggregation,
                         measure_aggregations=measure_aggs,
                         year_column=ds.year_column,
                         geo_column=ds.geo_column,
@@ -374,94 +370,3 @@ def resolve_plan(recipe: RecipeV1, pipeline_id: str) -> ExecutionPlan:
                 )
 
     return plan
-
-
-# ---------------------------------------------------------------------------
-# Vintage-set expansion
-# ---------------------------------------------------------------------------
-
-def expand_vintage_set(spec: VintageSetSpec) -> dict[int, dict[str, int | str]]:
-    """Expand a VintageSetSpec into a mapping of year -> dimension values.
-
-    Each rule covers a range of years.  For each year, dimension values are
-    computed from constants (fixed) and year_offsets (year + offset).
-
-    Parameters
-    ----------
-    spec : VintageSetSpec
-        The vintage set specification with dimensions and rules.
-
-    Returns
-    -------
-    dict[int, dict[str, int | str]]
-        Mapping from year to a dict of dimension_name -> value.
-        Every dimension declared in spec.dimensions is guaranteed present.
-
-    Raises
-    ------
-    PlannerError
-        If a year appears in multiple rules or a rule doesn't cover all
-        declared dimensions.
-    """
-    result: dict[int, dict[str, int | str]] = {}
-    for rule in spec.rules:
-        years = expand_year_spec(rule.years)
-        for year in years:
-            if year in result:
-                raise PlannerError(
-                    f"Vintage set has overlapping rules: year {year} is covered "
-                    f"by multiple rules."
-                )
-            values: dict[str, int | str] = {}
-            values.update(rule.constants)
-            values.update(
-                {k: year + offset for k, offset in rule.year_offsets.items()}
-            )
-            missing = set(spec.dimensions) - set(values.keys())
-            if missing:
-                raise PlannerError(
-                    f"Vintage set rule for year {year} does not provide "
-                    f"dimensions: {sorted(missing)}."
-                )
-            result[year] = values
-    return result
-
-
-def resolve_vintage_tuple(
-    vintage_set_name: str,
-    year: int,
-    recipe: RecipeV1,
-) -> dict[str, int | str]:
-    """Resolve a single year's tuple from a named vintage set.
-
-    Parameters
-    ----------
-    vintage_set_name : str
-        Name of the vintage set in recipe.vintage_sets.
-    year : int
-        The year to resolve.
-    recipe : RecipeV1
-        The recipe containing vintage_sets declarations.
-
-    Returns
-    -------
-    dict[str, int | str]
-        The dimension values for the given year.
-
-    Raises
-    ------
-    PlannerError
-        If the vintage set doesn't exist or doesn't cover the year.
-    """
-    if vintage_set_name not in recipe.vintage_sets:
-        raise PlannerError(
-            f"Vintage set '{vintage_set_name}' not found in recipe. "
-            f"Available: {sorted(recipe.vintage_sets.keys())}"
-        )
-    expanded = expand_vintage_set(recipe.vintage_sets[vintage_set_name])
-    if year not in expanded:
-        raise PlannerError(
-            f"Vintage set '{vintage_set_name}' has no rule covering year {year}. "
-            f"Covered years: {sorted(expanded.keys())}"
-        )
-    return expanded[year]

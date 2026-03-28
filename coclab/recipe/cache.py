@@ -17,7 +17,14 @@ import pandas as pd
 
 @dataclass(frozen=True)
 class FileIdentity:
-    """Content-addressed identity of a file on disk."""
+    """Content-addressed identity of a file on disk.
+
+    Note: ``path`` stores the string representation of the path passed to
+    :meth:`RecipeCache.file_identity` and may be absolute.  Consumers
+    needing project-relative paths (e.g. for :class:`AssetRecord`) should
+    call ``relative_to(project_root)`` on the *original* ``Path`` object,
+    not read this field.
+    """
 
     path: str
     sha256: str

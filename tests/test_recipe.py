@@ -10,7 +10,6 @@ import pytest
 from typer.testing import CliRunner
 
 from coclab.cli.main import app
-from coclab.cli.recipe import _missing_file_level
 from coclab.recipe.adapters import (
     DatasetAdapterRegistry,
     GeometryAdapterRegistry,
@@ -52,8 +51,6 @@ from coclab.recipe.recipe_schema import (
     GeometryRef,
     RecipeV1,
     TemporalFilter,
-    VintageSetRule,
-    VintageSetSpec,
     YearSpec,
     expand_year_spec,
 )
@@ -534,35 +531,6 @@ class TestRecipeCLI:
 
 
 # ===========================================================================
-# _missing_file_level unit tests
-# ===========================================================================
-
-
-class TestMissingFileLevel:
-
-    def test_default_fail_returns_error(self):
-        assert _missing_file_level("ds", False, "fail", {}) == "error"
-
-    def test_default_warn_returns_warning(self):
-        assert _missing_file_level("ds", False, "warn", {}) == "warning"
-
-    def test_optional_returns_warning(self):
-        assert _missing_file_level("ds", True, "fail", {}) == "warning"
-
-    def test_per_dataset_warn_overrides_default_fail(self):
-        assert _missing_file_level("ds", False, "fail", {"ds": "warn"}) == "warning"
-
-    def test_per_dataset_fail_overrides_optional(self):
-        assert _missing_file_level("ds", True, "warn", {"ds": "fail"}) == "error"
-
-    def test_per_dataset_takes_precedence_over_default(self):
-        assert _missing_file_level("ds", False, "warn", {"ds": "fail"}) == "error"
-
-    def test_unmatched_per_dataset_key_ignored(self):
-        assert _missing_file_level("ds", False, "fail", {"other": "warn"}) == "error"
-
-
-# ===========================================================================
 # expand_year_spec tests
 # ===========================================================================
 
@@ -1008,6 +976,42 @@ class TestVintageSetsSchema:
         assert len(recipe.vintage_sets) == 2
 
 
+# ===========================================================================
+# MissingDatasetPolicy validation tests
+# ===========================================================================
+
+
+class TestMissingDatasetPolicyValidation:
+
+    def test_valid_per_dataset_policy_accepted(self):
+        """Per-dataset policy keys matching declared datasets are accepted."""
+        data = _minimal_recipe()
+        data["validation"] = {
+            "missing_dataset": {"default": "fail", "acs": "warn"},
+        }
+        recipe = load_recipe(data)
+        assert recipe.validation.missing_dataset.default == "fail"
+        assert recipe.validation.missing_dataset.model_extra == {"acs": "warn"}
+
+    def test_unknown_per_dataset_policy_key_rejected(self):
+        """Per-dataset policy key not matching any declared dataset raises."""
+        data = _minimal_recipe()
+        data["validation"] = {
+            "missing_dataset": {"default": "fail", "nonexistent_ds": "warn"},
+        }
+        with pytest.raises(RecipeLoadError, match="unknown dataset"):
+            load_recipe(data)
+
+    def test_typo_in_policy_key_rejected(self):
+        """Typo in per-dataset policy key (e.g., 'acs_data' vs 'acs') raises."""
+        data = _minimal_recipe()
+        data["validation"] = {
+            "missing_dataset": {"default": "warn", "acs_data": "fail"},
+        }
+        with pytest.raises(RecipeLoadError, match="unknown dataset"):
+            load_recipe(data)
+
+
 # ---------------------------------------------------------------------------
 # Default adapter registration tests
 # ---------------------------------------------------------------------------
@@ -1188,193 +1192,6 @@ class TestDefaultAdapters:
         diags = validate_recipe_adapters(recipe, geometry_registry, dataset_registry)
         errors = [d for d in diags if d.level == "error"]
         assert errors == [], f"Unexpected errors: {[e.message for e in errors]}"
-
-
-# ---------------------------------------------------------------------------
-# Check dataset paths (file_set template expansion) tests
-# ---------------------------------------------------------------------------
-
-
-class TestCheckDatasetPathsFileSet:
-    """Tests for _check_dataset_paths with file_set templates."""
-
-    def test_file_set_template_variables_expanded(self, tmp_path):
-        """file_set path template should expand segment constants and year_offsets."""
-        from coclab.cli.recipe import _check_dataset_paths
-
-        recipe = load_recipe({
-            "version": 1,
-            "name": "test",
-            "universe": {"range": "2020-2021"},
-            "targets": [{"id": "t", "geometry": {"type": "coc"}}],
-            "datasets": {
-                "acs": {
-                    "provider": "census",
-                    "product": "acs",
-                    "version": 1,
-                    "native_geometry": {"type": "tract"},
-                    "file_set": {
-                        "path_template": "data/acs__A{acs_end}xT{tract}.parquet",
-                        "segments": [{
-                            "years": "2020-2021",
-                            "geometry": {"type": "tract", "vintage": 2020},
-                            "constants": {"tract": 2020},
-                            "year_offsets": {"acs_end": -1},
-                        }],
-                    },
-                },
-            },
-        })
-
-        # Create the expected files
-        for year in [2020, 2021]:
-            acs_end = year - 1
-            p = tmp_path / f"data/acs__A{acs_end}xT2020.parquet"
-            p.parent.mkdir(parents=True, exist_ok=True)
-            p.touch()
-
-        diags = _check_dataset_paths(recipe, project_root=tmp_path)
-        assert diags == [], f"Expected no diagnostics, got: {[d.message for d in diags]}"
-
-    def test_file_set_template_missing_file_reported(self, tmp_path):
-        """Missing file with correct template expansion should be reported."""
-        from coclab.cli.recipe import _check_dataset_paths
-
-        recipe = load_recipe({
-            "version": 1,
-            "name": "test",
-            "universe": {"range": "2020-2020"},
-            "targets": [{"id": "t", "geometry": {"type": "coc"}}],
-            "datasets": {
-                "acs": {
-                    "provider": "census",
-                    "product": "acs",
-                    "version": 1,
-                    "native_geometry": {"type": "tract"},
-                    "file_set": {
-                        "path_template": "data/acs__A{acs_end}xT{tract}.parquet",
-                        "segments": [{
-                            "years": "2020-2020",
-                            "geometry": {"type": "tract", "vintage": 2020},
-                            "constants": {"tract": 2020},
-                            "year_offsets": {"acs_end": -1},
-                        }],
-                    },
-                },
-            },
-        })
-
-        # Don't create the file - should report missing
-        diags = _check_dataset_paths(recipe, project_root=tmp_path)
-        assert len(diags) == 1
-        assert "A2019xT2020" in diags[0].message
-
-
-# ---------------------------------------------------------------------------
-# Vintage set expansion tests
-# ---------------------------------------------------------------------------
-
-
-class TestExpandVintageSet:
-    """Tests for vintage set tuple expansion."""
-
-    def test_basic_expansion(self):
-        from coclab.recipe.planner import expand_vintage_set
-
-        spec = VintageSetSpec(
-            dimensions=["analysis_year", "acs_end", "tract"],
-            rules=[
-                VintageSetRule(
-                    years=YearSpec(range="2015-2017"),
-                    constants={"tract": 2010},
-                    year_offsets={"analysis_year": 0, "acs_end": -1},
-                ),
-                VintageSetRule(
-                    years=YearSpec(range="2020-2022"),
-                    constants={"tract": 2020},
-                    year_offsets={"analysis_year": 0, "acs_end": -1},
-                ),
-            ],
-        )
-        result = expand_vintage_set(spec)
-        assert result[2015] == {"analysis_year": 2015, "acs_end": 2014, "tract": 2010}
-        assert result[2017] == {"analysis_year": 2017, "acs_end": 2016, "tract": 2010}
-        assert result[2020] == {"analysis_year": 2020, "acs_end": 2019, "tract": 2020}
-        assert result[2022] == {"analysis_year": 2022, "acs_end": 2021, "tract": 2020}
-        assert 2018 not in result
-
-    def test_overlapping_rules_raises(self):
-        from coclab.recipe.planner import PlannerError, expand_vintage_set
-
-        spec = VintageSetSpec(
-            dimensions=["x"],
-            rules=[
-                VintageSetRule(
-                    years=YearSpec(range="2015-2020"),
-                    year_offsets={"x": 0},
-                ),
-                VintageSetRule(
-                    years=YearSpec(range="2019-2024"),
-                    year_offsets={"x": 0},
-                ),
-            ],
-        )
-        with pytest.raises(PlannerError, match="overlapping"):
-            expand_vintage_set(spec)
-
-    def test_missing_dimension_raises(self):
-        from coclab.recipe.planner import PlannerError, expand_vintage_set
-
-        spec = VintageSetSpec(
-            dimensions=["x", "y"],
-            rules=[
-                VintageSetRule(
-                    years=YearSpec(range="2020-2020"),
-                    year_offsets={"x": 0},
-                ),
-            ],
-        )
-        with pytest.raises(PlannerError, match="dimensions"):
-            expand_vintage_set(spec)
-
-    def test_single_tuple_resolution(self):
-        from coclab.recipe.planner import resolve_vintage_tuple
-
-        recipe_data = _minimal_recipe()
-        recipe_data["vintage_sets"] = {
-            "test_vs": {
-                "dimensions": ["boundary", "tract"],
-                "rules": [{
-                    "years": "2020-2022",
-                    "year_offsets": {"boundary": 0},
-                    "constants": {"tract": 2020},
-                }],
-            },
-        }
-        recipe = load_recipe(recipe_data)
-        result = resolve_vintage_tuple("test_vs", 2021, recipe)
-        assert result == {"boundary": 2021, "tract": 2020}
-
-    def test_resolve_missing_vintage_set(self):
-        from coclab.recipe.planner import PlannerError, resolve_vintage_tuple
-
-        recipe = load_recipe(_minimal_recipe())
-        with pytest.raises(PlannerError, match="not found"):
-            resolve_vintage_tuple("nonexistent", 2020, recipe)
-
-    def test_resolve_uncovered_year(self):
-        from coclab.recipe.planner import PlannerError, resolve_vintage_tuple
-
-        recipe_data = _minimal_recipe()
-        recipe_data["vintage_sets"] = {
-            "test_vs": {
-                "dimensions": ["x"],
-                "rules": [{"years": "2020-2022", "year_offsets": {"x": 0}}],
-            },
-        }
-        recipe = load_recipe(recipe_data)
-        with pytest.raises(PlannerError, match="no rule covering"):
-            resolve_vintage_tuple("test_vs", 2025, recipe)
 
 
 # ===========================================================================
@@ -2280,7 +2097,7 @@ class TestResampleAggregate:
             transform_id="tract_to_coc",
             to_geometry=GeometryRef(type="coc", vintage=2025),
             measures=["pop"],
-            aggregation="sum",
+            measure_aggregations={"pop": "sum"},
         )
         result = _execute_resample(task, ctx)
         assert result.success
@@ -2304,7 +2121,7 @@ class TestResampleAggregate:
             transform_id="tract_to_coc",
             to_geometry=GeometryRef(type="coc", vintage=2025),
             measures=["income"],
-            aggregation="weighted_mean",
+            measure_aggregations={"income": "weighted_mean"},
         )
         result = _execute_resample(task, ctx)
         assert result.success
@@ -2357,7 +2174,7 @@ class TestResampleAggregate:
             transform_id="coc_to_metro",
             to_geometry=GeometryRef(type="metro", source="glynn_fox_v1"),
             measures=["pop"],
-            aggregation="sum",
+            measure_aggregations={"pop": "sum"},
         )
         result = _execute_resample(task, ctx)
 
@@ -2438,7 +2255,7 @@ class TestResampleAggregate:
             transform_id="county_to_metro",
             to_geometry=GeometryRef(type="metro", source="glynn_fox_v1"),
             measures=["rent"],
-            aggregation="weighted_mean",
+            measure_aggregations={"rent": "weighted_mean"},
             geo_column="county_fips",
         )
         result = _execute_resample(task, ctx)
@@ -2465,7 +2282,7 @@ class TestResampleAggregate:
             transform_id="tract_to_coc",
             to_geometry=GeometryRef(type="coc", vintage=2025),
             measures=["pop"],
-            aggregation="sum",
+            measure_aggregations={"pop": "sum"},
         )
         result = _execute_resample(task, ctx)
         assert not result.success
@@ -2498,7 +2315,7 @@ class TestResampleAggregate:
             transform_id="tract_to_coc",
             to_geometry=GeometryRef(type="coc", vintage=2025),
             measures=["pop"],
-            aggregation="sum",
+            measure_aggregations={"pop": "sum"},
         )
         result = _execute_resample(task, ctx)
         assert not result.success
@@ -2515,7 +2332,7 @@ class TestResampleAggregate:
             transform_id="tract_to_coc",
             to_geometry=GeometryRef(type="coc", vintage=2025),
             measures=["pop"],
-            aggregation="mean",
+            measure_aggregations={"pop": "mean"},
         )
         result = _execute_resample(task, ctx)
         assert result.success
@@ -2563,7 +2380,7 @@ class TestResampleAggregate:
             transform_id="county_to_coc",
             to_geometry=GeometryRef(type="coc", vintage=2025),
             measures=["pop"],
-            aggregation="sum",
+            measure_aggregations={"pop": "sum"},
         )
         result = _execute_resample(task, ctx)
         assert result.success
@@ -2638,7 +2455,7 @@ class TestResampleAggregate:
             transform_id="tract_to_coc",
             to_geometry=GeometryRef(type="coc", vintage=2025),
             measures=["pop"],
-            aggregation="sum",
+            measure_aggregations={"pop": "sum"},
         )
         result = _execute_resample(task, ctx)
         assert result.success

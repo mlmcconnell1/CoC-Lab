@@ -734,6 +734,20 @@ class RecipeV1(BaseModel):
         return self
 
     @model_validator(mode="after")
+    def _validate_missing_dataset_policy(self) -> "RecipeV1":
+        """Validate that missing_dataset policy extra keys reference declared datasets."""
+        policy_extra = self.validation.missing_dataset.model_extra or {}
+        if policy_extra:
+            dataset_ids = set(self.datasets.keys())
+            unknown = set(policy_extra.keys()) - dataset_ids
+            if unknown:
+                raise ValueError(
+                    f"missing_dataset policy references unknown dataset(s): "
+                    f"{sorted(unknown)}. Available: {sorted(dataset_ids)}"
+                )
+        return self
+
+    @model_validator(mode="after")
     def _validate_cohort_selectors(self) -> "RecipeV1":
         """Validate that cohort reference_year falls within the recipe universe."""
         universe_years = set(expand_year_spec(self.universe))
