@@ -384,3 +384,94 @@ class TestPepNaming:
 
         result = coc_pep_filename("2025", "2020", "pop", 2018, 2024)
         assert result == "coc_pep__B2025xC2020__wpop__2018_2024.parquet"
+
+
+# ---------------------------------------------------------------------------
+# migrate curated-layout --json tests
+# ---------------------------------------------------------------------------
+
+import json
+
+from coclab.cli.main import app
+
+_runner = CliRunner()
+
+
+class TestMigrateCuratedJson:
+    """Tests for --json output on `migrate curated-layout`."""
+
+    def test_dry_run_json_schema(self, tmp_path: Path) -> None:
+        """Dry-run JSON includes renames, duplicates, unknown, summary, no applied."""
+        (tmp_path / "measures").mkdir()
+        (tmp_path / "measures" / "coc_measures__2025__2023.parquet").touch()
+
+        result = _runner.invoke(
+            app, ["migrate", "curated-layout", "--dir", str(tmp_path), "--json"]
+        )
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["status"] == "ok"
+        assert len(payload["renames"]) == 1
+        assert "from" in payload["renames"][0]
+        assert "to" in payload["renames"][0]
+        assert isinstance(payload["duplicates"], list)
+        assert isinstance(payload["unknown"], list)
+        assert payload["summary"]["renames"] == 1
+        assert payload["summary"]["total"] == 1
+        # dry-run: applied is False
+        assert payload["applied"] is False
+        # Source file should still exist (not actually renamed)
+        assert (tmp_path / "measures" / "coc_measures__2025__2023.parquet").exists()
+
+    def test_apply_json_schema(self, tmp_path: Path) -> None:
+        """Apply mode JSON includes applied=True and renames are executed."""
+        (tmp_path / "measures").mkdir()
+        src = tmp_path / "measures" / "coc_measures__2025__2023.parquet"
+        src.touch()
+
+        result = _runner.invoke(
+            app,
+            ["migrate", "curated-layout", "--dir", str(tmp_path), "--apply", "--json"],
+        )
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["status"] == "ok"
+        assert payload["applied"] is True
+        assert len(payload["renames"]) == 1
+        assert payload["summary"]["renames"] == 1
+        # Source should have been renamed
+        assert not src.exists()
+        assert (tmp_path / "measures" / "measures__A2023@B2025.parquet").exists()
+
+    def test_empty_plan_json(self, tmp_path: Path) -> None:
+        """No migration candidates produces empty lists and no applied field."""
+        curated = tmp_path / "curated"
+        _build_clean_curated(curated)
+
+        result = _runner.invoke(
+            app, ["migrate", "curated-layout", "--dir", str(curated), "--json"]
+        )
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["status"] == "ok"
+        assert payload["renames"] == []
+        assert payload["duplicates"] == []
+        assert payload["unknown"] == []
+        assert payload["summary"]["total"] == 0
+        # No work to do, so applied field is absent
+        assert "applied" not in payload
+
+    def test_duplicates_in_json(self, tmp_path: Path) -> None:
+        """Duplicates appear in JSON output."""
+        (tmp_path / "measures").mkdir()
+        (tmp_path / "measures" / "coc_measures__2025__2023.parquet").touch()
+        (tmp_path / "measures" / "measures__A2023@B2025.parquet").touch()
+
+        result = _runner.invoke(
+            app, ["migrate", "curated-layout", "--dir", str(tmp_path), "--json"]
+        )
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert len(payload["duplicates"]) == 1
+        assert "message" in payload["duplicates"][0]
+        assert payload["summary"]["duplicates"] == 1

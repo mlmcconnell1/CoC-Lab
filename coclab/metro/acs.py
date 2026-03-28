@@ -63,6 +63,17 @@ def build_metro_tract_crosswalk(
     # Join tracts with metro-county membership
     xwalk = membership.merge(tracts, on="county_fips", how="inner")
 
+    # Warn about tracts dropped due to no county match
+    n_total = len(tracts)
+    n_matched = tracts["county_fips"].isin(membership["county_fips"]).sum()
+    n_dropped = n_total - n_matched
+    if n_dropped > 0:
+        dropout_pct = n_dropped / n_total * 100
+        logger.warning(
+            f"build_metro_tract_crosswalk: {n_dropped} of {n_total} tracts "
+            f"({dropout_pct:.1f}%) dropped — county_fips not in metro membership"
+        )
+
     # All tracts are fully contained (area_share = 1.0)
     xwalk["area_share"] = 1.0
 

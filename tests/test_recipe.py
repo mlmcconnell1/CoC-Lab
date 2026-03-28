@@ -27,6 +27,7 @@ from coclab.recipe.executor import (
     _apply_temporal_filter,
     _execute_materialize,
     _execute_resample,
+    _persist_diagnostics,
     _resolve_transform_path,
     execute_recipe,
 )
@@ -1634,6 +1635,103 @@ class TestTargetOutputsEnforcement:
         assert len(diag_files) == 1
 
 
+class TestPersistDiagnostics:
+    """Dedicated tests for _persist_diagnostics output generation (coclab-yorw)."""
+
+    def _run_with_diagnostics(self, tmp_path: Path, *, outputs=None):
+        """Helper: execute a recipe requesting diagnostics and return results."""
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        if outputs is not None:
+            data["targets"][0]["outputs"] = outputs
+        recipe = load_recipe(data)
+        return execute_recipe(recipe, project_root=tmp_path)
+
+    def test_diagnostics_file_written_to_expected_path(self, tmp_path: Path):
+        """Diagnostics JSON is written to data/curated/panel/ with correct stem."""
+        self._run_with_diagnostics(tmp_path, outputs=["diagnostics"])
+        expected = (
+            tmp_path / "data" / "curated" / "panel"
+            / "panel__Y2020-2021@B2025__diagnostics.json"
+        )
+        assert expected.exists(), f"Expected diagnostics file at {expected}"
+
+    def test_diagnostics_file_is_valid_json_with_expected_keys(self, tmp_path: Path):
+        """Diagnostics file must be valid JSON containing the DiagnosticsReport keys."""
+        self._run_with_diagnostics(tmp_path, outputs=["diagnostics"])
+        diag_path = (
+            tmp_path / "data" / "curated" / "panel"
+            / "panel__Y2020-2021@B2025__diagnostics.json"
+        )
+        data = json.loads(diag_path.read_text())
+        expected_keys = {"coverage", "boundary_changes", "missingness", "weighting", "panel_info"}
+        assert set(data.keys()) == expected_keys
+
+    def test_diagnostics_panel_info_reflects_fixture_data(self, tmp_path: Path):
+        """panel_info section should contain row_count, year range, and geo info."""
+        self._run_with_diagnostics(tmp_path, outputs=["diagnostics"])
+        diag_path = (
+            tmp_path / "data" / "curated" / "panel"
+            / "panel__Y2020-2021@B2025__diagnostics.json"
+        )
+        info = json.loads(diag_path.read_text())["panel_info"]
+        assert info["row_count"] > 0
+        assert info["year_min"] == 2020
+        assert info["year_max"] == 2021
+
+    def test_diagnostics_coverage_and_missingness_are_lists(self, tmp_path: Path):
+        """coverage and missingness should serialize as list-of-dicts (records)."""
+        self._run_with_diagnostics(tmp_path, outputs=["diagnostics"])
+        diag_path = (
+            tmp_path / "data" / "curated" / "panel"
+            / "panel__Y2020-2021@B2025__diagnostics.json"
+        )
+        data = json.loads(diag_path.read_text())
+        assert isinstance(data["coverage"], list)
+        assert isinstance(data["missingness"], list)
+
+    def test_diagnostics_step_result_on_success(self, tmp_path: Path):
+        """persist_diagnostics step should report success with file path detail."""
+        results = self._run_with_diagnostics(tmp_path, outputs=["diagnostics"])
+        diag_steps = [s for s in results[0].steps if s.step_kind == "persist_diagnostics"]
+        assert len(diag_steps) == 1
+        step = diag_steps[0]
+        assert step.success
+        assert "__diagnostics.json" in step.detail
+
+    def test_diagnostics_no_joined_outputs_fails(self, tmp_path: Path):
+        """When no joined intermediates exist, persist_diagnostics returns failure."""
+        from coclab.recipe.executor import _persist_diagnostics
+
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        recipe = load_recipe(data)
+        plan = resolve_plan(recipe, "main")
+        # Build context with empty intermediates (no joined data)
+        ctx = ExecutionContext(
+            project_root=tmp_path,
+            recipe=recipe,
+            quiet=True,
+        )
+        result = _persist_diagnostics(plan, ctx)
+        assert not result.success
+        assert result.step_kind == "persist_diagnostics"
+        assert "No joined outputs" in result.error
+
+    def test_diagnostics_alongside_panel(self, tmp_path: Path):
+        """When outputs=['panel', 'diagnostics'], both artifacts are produced."""
+        self._run_with_diagnostics(tmp_path, outputs=["panel", "diagnostics"])
+        panel_dir = tmp_path / "data" / "curated" / "panel"
+        parquet_files = list(panel_dir.glob("*.parquet"))
+        diag_files = list(panel_dir.glob("*__diagnostics.json"))
+        assert len(parquet_files) >= 1, "Panel parquet should be written"
+        assert len(diag_files) == 1, "Diagnostics JSON should be written"
+
+
 class TestPipelineResult:
 
     def test_success_all_ok(self):
@@ -2466,6 +2564,266 @@ class TestResampleAggregate:
 
 
 # ===========================================================================
+# _attach_dynamic_pop_share failure-mode tests (coclab-0tyg)
+# ===========================================================================
+
+
+class TestAttachDynamicPopShareFailures:
+    """Tests for failure branches in _attach_dynamic_pop_share."""
+
+    @staticmethod
+    def _pop_weighted_recipe(
+        *,
+        population_field: str = "total_population",
+        from_type: str = "county",
+    ) -> dict:
+        """Recipe with a population-weighted transform."""
+        data = _recipe_with_pipeline()
+        data["datasets"]["weights"] = {
+            "provider": "census",
+            "product": "acs5",
+            "version": 1,
+            "native_geometry": {"type": from_type, "vintage": 2020},
+            "years": "2020-2021",
+            "path": "data/county_weights.parquet",
+            "geo_column": "county_fips",
+        }
+        data["transforms"] = [{
+            "id": "county_to_coc",
+            "type": "crosswalk",
+            "from": {"type": from_type, "vintage": 2020},
+            "to": {"type": "coc", "vintage": 2025},
+            "spec": {
+                "weighting": {
+                    "scheme": "population",
+                    "population_source": "weights",
+                    "population_field": population_field,
+                }
+            },
+        }]
+        data["pipelines"][0]["steps"] = [
+            {"materialize": {"transforms": ["county_to_coc"]}},
+            {"resample": {
+                "dataset": "acs",
+                "to_geometry": {"type": "coc", "vintage": 2025},
+                "method": "aggregate",
+                "via": "county_to_coc",
+                "measures": ["pop"],
+                "aggregation": "sum",
+            }},
+        ]
+        return data
+
+    def _write_fixtures(
+        self,
+        tmp_path: Path,
+        *,
+        population_field: str = "total_population",
+        pop_values: list | None = None,
+    ) -> tuple:
+        """Create dataset, weights, and crosswalk files; return (recipe, xwalk_path)."""
+        # Source dataset
+        ds_path = tmp_path / "data" / "acs.parquet"
+        ds_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame({
+            "county_fips": ["36061", "06037"],
+            "year": [2020, 2020],
+            "pop": [100.0, 200.0],
+        }).to_parquet(ds_path)
+
+        # Weights (support) dataset
+        weights_path = tmp_path / "data" / "county_weights.parquet"
+        weights_data: dict = {
+            "county_fips": ["36061", "06037"],
+            "year": [2020, 2020],
+        }
+        if pop_values is not None:
+            weights_data[population_field] = pop_values
+        else:
+            weights_data[population_field] = [1.0, 3.0]
+        pd.DataFrame(weights_data).to_parquet(weights_path)
+
+        # Crosswalk (no pop_share — forces dynamic attachment)
+        xwalk_path = tmp_path / "xwalk.parquet"
+        pd.DataFrame({
+            "coc_id": ["COC1", "COC1"],
+            "county_fips": ["36061", "06037"],
+            "area_share": [1.0, 1.0],
+        }).to_parquet(xwalk_path)
+
+        return xwalk_path
+
+    # ---- Test 1: geometry type not in _XWALK_JOIN_KEYS ----------------------
+
+    def test_unknown_geometry_type_raises(self, tmp_path: Path):
+        """effective_geometry.type not in _XWALK_JOIN_KEYS → ExecutorError."""
+        xwalk_path = self._write_fixtures(tmp_path)
+        data = self._pop_weighted_recipe()
+        recipe = load_recipe(data)
+        ctx = ExecutionContext(project_root=tmp_path, recipe=recipe)
+        ctx.transform_paths["county_to_coc"] = xwalk_path
+
+        task = ResampleTask(
+            dataset_id="acs",
+            year=2020,
+            input_path="data/acs.parquet",
+            # "zipcode" is not a recognised geometry type in _XWALK_JOIN_KEYS
+            effective_geometry=GeometryRef(type="zipcode"),
+            method="aggregate",
+            transform_id="county_to_coc",
+            to_geometry=GeometryRef(type="coc", vintage=2025),
+            measures=["pop"],
+            measure_aggregations={"pop": "sum"},
+            geo_column="county_fips",
+        )
+        result = _execute_resample(task, ctx)
+        assert not result.success
+        assert "cannot derive pop_share" in result.error
+        assert "zipcode" in result.error
+
+    # ---- Test 2: join key present in map but absent from xwalk columns ------
+
+    def test_join_key_not_in_xwalk_columns_raises(self, tmp_path: Path):
+        """source_key exists in _XWALK_JOIN_KEYS but is missing from the
+        crosswalk DataFrame → ExecutorError."""
+        # Dataset keyed on tract_geoid, but crosswalk only has county_fips
+        ds_path = tmp_path / "data" / "acs.parquet"
+        ds_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame({
+            "tract_geoid": ["T1", "T2"],
+            "year": [2020, 2020],
+            "pop": [100.0, 200.0],
+        }).to_parquet(ds_path)
+
+        weights_path = tmp_path / "data" / "county_weights.parquet"
+        pd.DataFrame({
+            "county_fips": ["36061", "06037"],
+            "year": [2020, 2020],
+            "total_population": [1.0, 3.0],
+        }).to_parquet(weights_path)
+
+        # Crosswalk has county_fips + coc_id but NOT tract_geoid
+        xwalk_path = tmp_path / "xwalk.parquet"
+        pd.DataFrame({
+            "coc_id": ["COC1", "COC1"],
+            "county_fips": ["36061", "06037"],
+            "area_share": [1.0, 1.0],
+        }).to_parquet(xwalk_path)
+
+        data = self._pop_weighted_recipe(from_type="tract")
+        # Override the weights geo_column to match what the dataset actually has
+        data["datasets"]["weights"]["geo_column"] = "county_fips"
+        recipe = load_recipe(data)
+        ctx = ExecutionContext(project_root=tmp_path, recipe=recipe)
+        ctx.transform_paths["county_to_coc"] = xwalk_path
+
+        task = ResampleTask(
+            dataset_id="acs",
+            year=2020,
+            input_path="data/acs.parquet",
+            # effective_geometry is "tract" → source_key = "tract_geoid"
+            # but xwalk only has county_fips
+            effective_geometry=GeometryRef(type="tract", vintage=2020),
+            method="aggregate",
+            transform_id="county_to_coc",
+            to_geometry=GeometryRef(type="coc", vintage=2025),
+            measures=["pop"],
+            measure_aggregations={"pop": "sum"},
+            geo_column="tract_geoid",
+        )
+        result = _execute_resample(task, ctx)
+        assert not result.success
+        assert "cannot derive pop_share" in result.error
+
+    # ---- Test 3: population_field missing from weights DataFrame ------------
+
+    def test_population_field_missing_from_weights(self, tmp_path: Path):
+        """population_field declared in transform but absent from the weights
+        dataset → ExecutorError listing available columns."""
+        # Write weights WITHOUT the expected population_field
+        ds_path = tmp_path / "data" / "acs.parquet"
+        ds_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame({
+            "county_fips": ["36061", "06037"],
+            "year": [2020, 2020],
+            "pop": [100.0, 200.0],
+        }).to_parquet(ds_path)
+
+        weights_path = tmp_path / "data" / "county_weights.parquet"
+        pd.DataFrame({
+            "county_fips": ["36061", "06037"],
+            "year": [2020, 2020],
+            "unrelated_col": [99, 88],
+        }).to_parquet(weights_path)
+
+        xwalk_path = tmp_path / "xwalk.parquet"
+        pd.DataFrame({
+            "coc_id": ["COC1", "COC1"],
+            "county_fips": ["36061", "06037"],
+            "area_share": [1.0, 1.0],
+        }).to_parquet(xwalk_path)
+
+        data = self._pop_weighted_recipe(population_field="total_population")
+        recipe = load_recipe(data)
+        ctx = ExecutionContext(project_root=tmp_path, recipe=recipe)
+        ctx.transform_paths["county_to_coc"] = xwalk_path
+
+        task = ResampleTask(
+            dataset_id="acs",
+            year=2020,
+            input_path="data/acs.parquet",
+            effective_geometry=GeometryRef(type="county", vintage=2020),
+            method="aggregate",
+            transform_id="county_to_coc",
+            to_geometry=GeometryRef(type="coc", vintage=2025),
+            measures=["pop"],
+            measure_aggregations={"pop": "sum"},
+            geo_column="county_fips",
+        )
+        result = _execute_resample(task, ctx)
+        assert not result.success
+        assert "missing population field" in result.error
+        assert "total_population" in result.error
+
+    # ---- Test 4: all-NaN population → zero group_sum → NaN pop_share --------
+
+    def test_all_nan_population_produces_nan_pop_share(self, tmp_path: Path):
+        """When every population value is NaN the group_sum is zero and
+        pop_share should be NaN (not Inf or an error).  The downstream
+        aggregate falls back to area_share for weighted_mean because
+        has_pop_share is False when all pop_share values are NaN."""
+        xwalk_path = self._write_fixtures(
+            tmp_path,
+            pop_values=[float("nan"), float("nan")],
+        )
+        data = self._pop_weighted_recipe()
+        recipe = load_recipe(data)
+        ctx = ExecutionContext(project_root=tmp_path, recipe=recipe)
+        ctx.transform_paths["county_to_coc"] = xwalk_path
+
+        task = ResampleTask(
+            dataset_id="acs",
+            year=2020,
+            input_path="data/acs.parquet",
+            effective_geometry=GeometryRef(type="county", vintage=2020),
+            method="aggregate",
+            transform_id="county_to_coc",
+            to_geometry=GeometryRef(type="coc", vintage=2025),
+            measures=["pop"],
+            measure_aggregations={"pop": "weighted_mean"},
+            geo_column="county_fips",
+        )
+        result = _execute_resample(task, ctx)
+        # The resample succeeds: all-NaN pop_share causes has_pop_share=False,
+        # so weighted_mean falls back to area_share.  With area_share=1.0 for
+        # both source rows, the weighted mean of (100, 200) is 150.
+        assert result.success
+        df = ctx.intermediates[("acs", 2020)]
+        assert not df.empty
+        assert df["pop"].iloc[0] == pytest.approx(150.0)
+
+
+# ===========================================================================
 # Allocate resample tests (coclab-8t3f)
 # ===========================================================================
 
@@ -2666,6 +3024,65 @@ class TestTemporalFilters:
         val_2021 = out.loc[out["pit_year"] == 2021, "value"].iloc[0]
         assert val_2020 == pytest.approx(20.0)
         assert val_2021 == pytest.approx(50.0)
+
+    def test_declared_year_column_missing_raises(self):
+        """Declared year_column absent from DataFrame should raise ExecutorError."""
+        df = pd.DataFrame({
+            "geo_id": ["A", "A"],
+            "month": [1, 2],
+            "value": [10.0, 20.0],
+        })
+
+        with pytest.raises(ExecutorError, match="declared year column.*'pit_year'.*not found"):
+            _apply_temporal_filter(
+                df,
+                filt=TemporalFilter(type="temporal", column="month", method="calendar_mean"),
+                year=2020,
+                dataset_id="demo",
+                year_column="pit_year",
+            )
+
+    def test_empty_group_cols_raises(self):
+        """When temporal column is the only non-numeric column, group_cols is empty."""
+        # All columns except 'month' are numeric; no year column present.
+        df = pd.DataFrame({
+            "month": [1, 2, 3],
+            "value_a": [10.0, 20.0, 30.0],
+            "value_b": [1.0, 2.0, 3.0],
+        })
+
+        with pytest.raises(ExecutorError, match="no grouping columns found"):
+            _apply_temporal_filter(
+                df,
+                filt=TemporalFilter(type="temporal", column="month", method="calendar_mean"),
+                year=2020,
+                dataset_id="demo",
+            )
+
+    def test_all_numeric_except_temporal_with_year_fallback(self):
+        """Numeric 'year' column is auto-added as group key even when all others are numeric."""
+        # Every column except 'month' is numeric, but 'year' exists so the
+        # fallback on line 545-546 rescues group_cols from being empty.
+        df = pd.DataFrame({
+            "year": [2020, 2020, 2021, 2021],
+            "month": [1, 2, 1, 2],
+            "value": [10.0, 30.0, 50.0, 70.0],
+        })
+
+        out = _apply_temporal_filter(
+            df,
+            filt=TemporalFilter(type="temporal", column="month", method="calendar_mean"),
+            year=2020,
+            dataset_id="demo",
+        )
+
+        # year should be preserved as a group key
+        assert "year" in out.columns
+        assert set(out["year"]) == {2020, 2021}
+        val_2020 = out.loc[out["year"] == 2020, "value"].iloc[0]
+        val_2021 = out.loc[out["year"] == 2021, "value"].iloc[0]
+        assert val_2020 == pytest.approx(20.0)
+        assert val_2021 == pytest.approx(60.0)
 
 
 # ===========================================================================
@@ -2982,6 +3399,62 @@ class TestRecipeCache:
         assert len(h) == 64
         assert h == _sha256_file(f)  # deterministic
 
+    def test_same_object_on_repeated_read(self, tmp_path: Path):
+        """read_parquet() returns the *same* internal object (identity) for
+        the cached DataFrame, though returned copies differ."""
+        f = tmp_path / "data.parquet"
+        pd.DataFrame({"a": [10, 20]}).to_parquet(f)
+        cache = RecipeCache(enabled=True)
+        df1 = cache.read_parquet(f)
+        df2 = cache.read_parquet(f)
+        # Returned copies are equal but not the same Python object
+        assert df1.equals(df2)
+        assert df1 is not df2
+        # Underlying cached frame is the single stored object
+        key = str(f.resolve())
+        assert cache._frames[key] is cache._frames[key]
+
+    def test_stale_read_after_file_changes(self, tmp_path: Path):
+        """Cache returns the *original* content when the underlying file
+        changes on disk — documenting the lack of TTL / invalidation."""
+        f = tmp_path / "data.parquet"
+        pd.DataFrame({"v": [1]}).to_parquet(f)
+        cache = RecipeCache(enabled=True)
+        df_original = cache.read_parquet(f)
+
+        # Overwrite with new content
+        pd.DataFrame({"v": [999]}).to_parquet(f)
+        df_after = cache.read_parquet(f)
+
+        # Cache still returns the stale (original) data
+        assert list(df_after["v"]) == [1]
+        assert df_original.equals(df_after)
+        # A fresh, uncached read would see the new data
+        assert list(pd.read_parquet(f)["v"]) == [999]
+
+    def test_cross_pipeline_cache_sharing(self, tmp_path: Path):
+        """A single RecipeCache shared across two pipeline executions serves
+        cached frames to the second pipeline without re-reading disk."""
+        f = tmp_path / "shared.parquet"
+        pd.DataFrame({"z": [5, 6, 7]}).to_parquet(f)
+
+        cache = RecipeCache(enabled=True)
+
+        # Simulate pipeline-1 reading the file
+        df_p1 = cache.read_parquet(f)
+        assert cache.cached_count == 1
+
+        # Simulate pipeline-2 reading the same file through the same cache
+        df_p2 = cache.read_parquet(f)
+        assert cache.cached_count == 1  # no new entry — same file reused
+
+        # Both pipelines see identical data
+        assert df_p1.equals(df_p2)
+        # But they received independent copies (mutation-safe)
+        df_p1["z"] = 0
+        df_p3 = cache.read_parquet(f)
+        assert list(df_p3["z"]) == [5, 6, 7]
+
 
 # ===========================================================================
 # Manifest tests
@@ -3068,6 +3541,91 @@ class TestRecipeManifest:
             export_bundle(m, tmp_path, out)
         assert (out / "manifest.json").exists()
         assert "skipping missing asset" in caplog.text
+
+    def test_export_bundle_deleted_asset_skipped(self, tmp_path: Path, caplog):
+        """Asset present during execution then deleted before export is skipped."""
+        (tmp_path / "data").mkdir()
+        src = tmp_path / "data" / "pit.parquet"
+        pd.DataFrame({"x": [1]}).to_parquet(src)
+
+        m = RecipeManifest(
+            recipe_name="test",
+            recipe_version=1,
+            pipeline_id="main",
+            assets=[
+                AssetRecord(
+                    role="dataset",
+                    path="data/pit.parquet",
+                    sha256="abc",
+                    size=100,
+                ),
+            ],
+        )
+
+        # Delete the source file after manifest was built
+        src.unlink()
+
+        out = tmp_path / "bundle"
+        import logging
+        with caplog.at_level(logging.WARNING, logger="coclab.recipe.manifest"):
+            result = export_bundle(m, tmp_path, out)
+
+        assert result == out
+        assert (out / "manifest.json").exists()
+        assert not (out / "assets" / "data" / "pit.parquet").exists()
+        assert "skipping missing asset" in caplog.text
+
+    def test_export_bundle_completeness_with_partial_missing(
+        self, tmp_path: Path, caplog,
+    ):
+        """Bundle copies present assets and skips deleted ones."""
+        (tmp_path / "data").mkdir()
+        present = tmp_path / "data" / "acs.parquet"
+        pd.DataFrame({"y": [2]}).to_parquet(present)
+        deleted = tmp_path / "data" / "pit.parquet"
+        pd.DataFrame({"x": [1]}).to_parquet(deleted)
+
+        m = RecipeManifest(
+            recipe_name="test",
+            recipe_version=1,
+            pipeline_id="main",
+            assets=[
+                AssetRecord(
+                    role="dataset",
+                    path="data/acs.parquet",
+                    sha256="def",
+                    size=200,
+                ),
+                AssetRecord(
+                    role="dataset",
+                    path="data/pit.parquet",
+                    sha256="abc",
+                    size=100,
+                ),
+            ],
+        )
+
+        # Remove one file to simulate post-execution deletion
+        deleted.unlink()
+
+        out = tmp_path / "bundle"
+        import logging
+        with caplog.at_level(logging.WARNING, logger="coclab.recipe.manifest"):
+            export_bundle(m, tmp_path, out)
+
+        # Present asset copied
+        assert (out / "assets" / "data" / "acs.parquet").exists()
+        # Deleted asset silently skipped
+        assert not (out / "assets" / "data" / "pit.parquet").exists()
+        # Manifest still records both assets (provenance is preserved)
+        manifest = read_manifest(out / "manifest.json")
+        assert len(manifest.assets) == 2
+        assert {a.path for a in manifest.assets} == {
+            "data/acs.parquet",
+            "data/pit.parquet",
+        }
+        # Warning emitted only for the missing file
+        assert caplog.text.count("skipping missing asset") == 1
 
     def test_export_rejects_absolute_path(self, tmp_path: Path):
         m = RecipeManifest(

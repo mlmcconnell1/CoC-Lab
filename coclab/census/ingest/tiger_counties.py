@@ -111,7 +111,7 @@ def download_tiger_counties(
     result = gpd.GeoDataFrame(
         {
             "geo_vintage": str(year),
-            "geoid": gdf["GEOID"],
+            "geoid": gdf["GEOID"].astype(str).str.zfill(5),
             "geometry": gdf["geometry"],
             "source": "tiger_line",
             "ingested_at": ingested_at,

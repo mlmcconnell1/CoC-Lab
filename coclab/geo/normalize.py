@@ -10,6 +10,7 @@ This module provides functions to:
 from __future__ import annotations
 
 import hashlib
+import logging
 from typing import TYPE_CHECKING
 
 import shapely
@@ -20,6 +21,7 @@ from shapely.wkb import dumps as wkb_dumps
 if TYPE_CHECKING:
     import geopandas as gpd
 
+logger = logging.getLogger(__name__)
 
 TARGET_CRS = "EPSG:4326"
 
@@ -152,13 +154,11 @@ def normalize_boundaries(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     # Filter out rows where geometry became None
     valid_mask = result["geometry"].notna() & ~result["geometry"].is_empty
     if not valid_mask.all():
-        dropped_count = (~valid_mask).sum()
-        # Log warning about dropped geometries (future: proper logging)
-        import warnings
-
-        warnings.warn(
-            f"Dropped {dropped_count} rows with invalid/non-polygon geometries",
-            stacklevel=2,
+        dropped_idx = result.index[~valid_mask].tolist()
+        logger.warning(
+            "Dropped %d rows with invalid/non-polygon geometries: indices %s",
+            len(dropped_idx),
+            dropped_idx,
         )
         result = result[valid_mask].copy()
 

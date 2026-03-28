@@ -250,13 +250,13 @@ def aggregate_pep_counties(
                 f"Available: {list(xwalk_df.columns)}"
             )
 
-    # Get unique years
+    # Log scope
     years = sorted(pep_df["year"].unique())
     logger.info(f"Aggregating {len(years)} years of PEP data")
 
-    # Get all unique geography units from crosswalk
-    all_geos = xwalk_df[geo_id_col].unique()
-    logger.info(f"Crosswalk contains {len(all_geos)} geography units")
+    # Pre-compute total weight per geography (constant across years)
+    total_weight_per_geo = xwalk_df.groupby(geo_id_col)[weight_col].sum()
+    logger.info(f"Crosswalk contains {len(total_weight_per_geo)} geography units")
 
     # Check for missing counties in PEP data
     xwalk_counties = set(xwalk_df["county_fips"].unique())
@@ -269,73 +269,68 @@ def aggregate_pep_counties(
             f"{list(missing_counties)[:5]}..."
         )
 
-    # Aggregate for each year
-    results = []
-
-    for year in years:
-        year_pep = pep_df[pep_df["year"] == year][["county_fips", "population"]].copy()
-
-        # Merge with crosswalk
-        merged = xwalk_df.merge(
-            year_pep,
-            on="county_fips",
-            how="left",
+    # Check for orphan PEP counties absent from crosswalk
+    orphan_counties = pep_counties - xwalk_counties
+    if orphan_counties:
+        logger.warning(
+            f"{len(orphan_counties)} PEP counties absent from crosswalk "
+            f"(these will not contribute to any geography): "
+            f"{sorted(orphan_counties)[:10]}"
+            f"{'...' if len(orphan_counties) > 10 else ''}"
         )
 
-        # For each geography unit, compute weighted population
-        geo_results = []
+    # Single merge: crosswalk x PEP (one row per county-year-geo combo).
+    # Inner join drops crosswalk rows whose county has no PEP data for a
+    # given year, which is equivalent to the old "filter to notna" step.
+    merged = xwalk_df.merge(
+        pep_df[["county_fips", "year", "population"]],
+        on="county_fips",
+        how="inner",
+    )
 
-        for geo_id in all_geos:
-            geo_data = merged[merged[geo_id_col] == geo_id].copy()
+    # Weighted population per row
+    merged["weighted_pop"] = merged[weight_col] * merged["population"]
 
-            if len(geo_data) == 0:
-                continue
+    # Vectorised groupby aggregation (replaces the O(G*Y) Python loop)
+    grouped = merged.groupby([geo_id_col, "year"])
+    agg_df = grouped.agg(
+        population=("weighted_pop", "sum"),
+        covered_weight=(weight_col, "sum"),
+        county_count=("county_fips", "size"),
+        max_weighted_pop=("weighted_pop", "max"),
+    ).reset_index()
 
-            # Total weight for this unit
-            total_weight = geo_data[weight_col].sum()
+    # Build scaffold of all geo-year combinations so zero-coverage rows
+    # are preserved (the inner join drops geos with no matching counties).
+    all_geos = xwalk_df[geo_id_col].unique()
+    scaffold = pd.DataFrame(
+        [(g, y) for g in all_geos for y in years],
+        columns=[geo_id_col, "year"],
+    )
+    agg_df = scaffold.merge(agg_df, on=[geo_id_col, "year"], how="left")
+    agg_df["population"] = agg_df["population"].fillna(0.0)
+    agg_df["covered_weight"] = agg_df["covered_weight"].fillna(0.0)
+    agg_df["county_count"] = agg_df["county_count"].fillna(0).astype(int)
+    agg_df["max_weighted_pop"] = agg_df["max_weighted_pop"].fillna(0.0)
 
-            # Filter to counties with population data
-            geo_with_pop = geo_data[geo_data["population"].notna()].copy()
+    # Coverage ratio: covered weight / total weight for the geography
+    agg_df["total_weight"] = agg_df[geo_id_col].map(total_weight_per_geo)
+    agg_df["coverage_ratio"] = agg_df["covered_weight"] / agg_df["total_weight"]
+    agg_df.loc[agg_df["total_weight"] == 0, "coverage_ratio"] = 0.0
 
-            if len(geo_with_pop) == 0:
-                geo_results.append({
-                    geo_id_col: geo_id,
-                    "year": year,
-                    "population": None,
-                    "coverage_ratio": 0.0,
-                    "county_count": 0,
-                    "max_county_contribution": 0.0,
-                })
-                continue
+    # Max county contribution: largest weighted_pop / total population
+    agg_df["max_county_contribution"] = (
+        agg_df["max_weighted_pop"] / agg_df["population"]
+    ).fillna(0.0)
+    agg_df.loc[agg_df["population"] == 0, "max_county_contribution"] = 0.0
 
-            # Coverage ratio
-            covered_weight = geo_with_pop[weight_col].sum()
-            coverage_ratio = covered_weight / total_weight if total_weight > 0 else 0.0
+    # Null population when no covered weight (matches old behaviour)
+    agg_df.loc[agg_df["covered_weight"] == 0, "population"] = None
 
-            # Weighted population (no renormalization for missing counties)
-            if covered_weight > 0:
-                weighted_pop = geo_with_pop[weight_col] * geo_with_pop["population"]
-                population = weighted_pop.sum()
-                max_contribution = (
-                    (weighted_pop / population).max() if population and population > 0 else 0.0
-                )
-            else:
-                population = None
-                max_contribution = 0.0
-
-            geo_results.append({
-                geo_id_col: geo_id,
-                "year": year,
-                "population": population,
-                "coverage_ratio": coverage_ratio,
-                "county_count": len(geo_with_pop),
-                "max_county_contribution": max_contribution,
-            })
-
-        results.extend(geo_results)
-
-    # Build result DataFrame
-    result_df = pd.DataFrame(results)
+    # Drop helper columns
+    result_df = agg_df.drop(
+        columns=["covered_weight", "total_weight", "max_weighted_pop"],
+    )
 
     # Add reference date
     result_df["reference_date"] = pd.to_datetime(

@@ -10,7 +10,7 @@ import logging
 import pandas as pd
 import pytest
 
-from coclab.geo.ct_planning_regions import CtPlanningRegionCrosswalk
+from coclab.geo.ct_planning_regions import CT_STATE_FIPS, CtPlanningRegionCrosswalk
 from coclab.rents.aggregate import _align_ct_geographies
 
 
@@ -127,7 +127,7 @@ class TestAlignCtGeographies:
         )
 
         # Legacy CT geo_ids should be replaced with planning-region codes
-        ct_result = result_zori[result_zori["geo_id"].str.startswith("09")]
+        ct_result = result_zori[result_zori["geo_id"].str.startswith(CT_STATE_FIPS)]
         legacy_remaining = result_zori[
             result_zori["geo_id"].isin(["09001", "09003"])
         ]

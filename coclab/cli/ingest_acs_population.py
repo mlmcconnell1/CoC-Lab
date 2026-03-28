@@ -76,13 +76,8 @@ def ingest_acs_population(
     import pandas as pd
 
     from coclab.acs.ingest.tract_population import ingest_tract_data
-    from coclab.acs.translate import (
-        get_source_tract_vintage,
-        needs_translation,
-        translate_acs_to_target_vintage,
-    )
+    from coclab.acs.translate import get_source_tract_vintage, needs_translation
     from coclab.acs.variables import ACS_TABLES
-    from coclab.census.ingest.tract_relationship import TractRelationshipNotFoundError
 
     # Check if cached file exists
     output_path = get_output_path(acs, tracts)
@@ -103,23 +98,11 @@ def ingest_acs_population(
     typer.echo(f"  Tables:          {', '.join(ACS_TABLES)}")
     typer.echo(f"  Source tracts:   {source_tract_vintage} (Census API geography)")
     typer.echo(f"  Target tracts:   {tracts}")
-    if translation_needed and translate:
-        typer.echo(f"  Translation:     {source_tract_vintage} → 2020 (auto)")
-    elif translation_needed and not translate:
+    if translation_needed:
         typer.echo("  Translation:     disabled (--no-translate)")
     else:
         typer.echo("  Translation:     not needed")
     typer.echo("")
-
-    # Check if translation is needed but relationship file is missing
-    if translation_needed and translate:
-        try:
-            from coclab.census.ingest.tract_relationship import get_tract_relationship_path
-
-            get_tract_relationship_path()
-        except TractRelationshipNotFoundError as e:
-            typer.echo(f"Error: {e}", err=True)
-            raise typer.Exit(1) from e
 
     try:
         path = ingest_tract_data(
@@ -145,45 +128,6 @@ def ingest_acs_population(
         )
         raise typer.Exit(1)
 
-    # Apply translation if needed
-    translation_stats = None
-    if translation_needed and translate:
-        typer.echo("Translating tract geography...")
-        try:
-            df, translation_stats = translate_acs_to_target_vintage(
-                df,
-                acs_vintage=acs,
-                target_tract_vintage=tracts,
-            )
-
-            # Update tract_vintage in the data to reflect translation
-            df["tract_vintage"] = tracts
-
-            # Save translated data back (overwrite)
-            from datetime import UTC, datetime
-
-            from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
-
-            provenance = ProvenanceBlock(
-                acs_vintage=acs,
-                tract_vintage=tracts,
-                extra={
-                    "dataset": "acs5_tract_data",
-                    "tables": ACS_TABLES,
-                    "source_tract_vintage": str(source_tract_vintage),
-                    "translated": True,
-                    "translation_match_rate": translation_stats.match_rate,
-                    "translation_population_delta_pct": translation_stats.population_delta_pct,
-                    "retrieved_at": datetime.now(UTC).isoformat(),
-                    "row_count": len(df),
-                },
-            )
-            write_parquet_with_provenance(df, path, provenance)
-            typer.echo(f"Saved translated data to {path}")
-        except TractRelationshipNotFoundError as e:
-            typer.echo(f"Error: {e}", err=True)
-            raise typer.Exit(1) from e
-
     if output_json:
         import json
 
@@ -201,13 +145,6 @@ def ingest_acs_population(
             result["median_household_income"] = float(df["median_household_income"].median())
         if "median_gross_rent" in df.columns:
             result["median_gross_rent"] = float(df["median_gross_rent"].median())
-        if translation_stats:
-            result["translation"] = {
-                "input_tracts": translation_stats.input_tracts,
-                "output_tracts": translation_stats.output_tracts,
-                "match_rate": translation_stats.match_rate,
-                "population_delta_pct": translation_stats.population_delta_pct,
-            }
         typer.echo(json.dumps(result, indent=2))
         return
 
@@ -225,14 +162,6 @@ def ingest_acs_population(
     if "median_gross_rent" in df.columns:
         typer.echo(f"Median rent:       ${df['median_gross_rent'].median():,.0f}")
 
-    # Show translation stats if applicable
-    if translation_stats:
-        typer.echo("")
-        typer.echo("TRANSLATION STATS")
-        typer.echo(f"  Source tracts:   {translation_stats.input_tracts:,}")
-        typer.echo(f"  Output tracts:   {translation_stats.output_tracts:,}")
-        typer.echo(f"  Match rate:      {translation_stats.match_rate:.1%}")
-        typer.echo(f"  Pop delta:       {translation_stats.population_delta_pct:+.2f}%")
     typer.echo("")
 
     # Show state coverage

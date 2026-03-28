@@ -311,35 +311,30 @@ def _read_file(
         if sheet_name is not None:
             return pd.read_excel(file_path, sheet_name=sheet_name, engine=engine)
 
-        try:
-            xl = pd.ExcelFile(file_path, engine=engine)
-            sheet_names = xl.sheet_names
+        xl = pd.ExcelFile(file_path, engine=engine)
+        sheet_names = xl.sheet_names
 
-            # For new HUD User format, look for year-named sheet first
-            if year is not None:
-                year_str = str(year)
-                if year_str in sheet_names:
-                    logger.info(f"Using year sheet: {year_str}")
-                    return pd.read_excel(file_path, sheet_name=year_str, engine=engine)
+        # For new HUD User format, look for year-named sheet first
+        if year is not None:
+            year_str = str(year)
+            if year_str in sheet_names:
+                logger.info(f"Using year sheet: {year_str}")
+                return pd.read_excel(file_path, sheet_name=year_str, engine=engine)
 
-            # Look for PIT-specific sheets (but avoid template/chart sheets)
-            for name in sheet_names:
-                name_lower = name.lower()
-                if (
-                    ("pit" in name_lower or "count" in name_lower)
-                    and "template" not in name_lower
-                    and "chart" not in name_lower
-                ):
-                    logger.info(f"Using sheet: {name}")
-                    return pd.read_excel(file_path, sheet_name=name, engine=engine)
+        # Look for PIT-specific sheets (but avoid template/chart sheets)
+        for name in sheet_names:
+            name_lower = name.lower()
+            if (
+                ("pit" in name_lower or "count" in name_lower)
+                and "template" not in name_lower
+                and "chart" not in name_lower
+            ):
+                logger.info(f"Using sheet: {name}")
+                return pd.read_excel(file_path, sheet_name=name, engine=engine)
 
-            # Fall back to first sheet
-            logger.info(f"Using first sheet: {sheet_names[0]}")
-            return pd.read_excel(file_path, sheet_name=0, engine=engine)
-
-        except Exception as e:
-            logger.warning(f"Error reading Excel file: {e}")
-            return pd.read_excel(file_path, sheet_name=0, engine=engine)
+        # Fall back to first sheet
+        logger.info(f"Using first sheet: {sheet_names[0]}")
+        return pd.read_excel(file_path, sheet_name=0, engine=engine)
     else:
         raise ValueError(f"Unsupported file format: {suffix}")
 

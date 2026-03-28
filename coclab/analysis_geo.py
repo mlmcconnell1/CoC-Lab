@@ -154,7 +154,13 @@ def infer_geo_type(df: pd.DataFrame) -> str:
     if GEO_TYPE_COL in df.columns:
         types = df[GEO_TYPE_COL].dropna().unique()
         if len(types) == 1:
-            return str(types[0])
+            value = str(types[0])
+            if value not in VALID_GEO_TYPES:
+                raise ValueError(
+                    f"Unsupported geo_type '{value}' in data; "
+                    f"expected one of {VALID_GEO_TYPES}"
+                )
+            return value
         if len(types) > 1:
             raise ValueError(
                 f"DataFrame contains multiple geo_type values: {list(types)}"

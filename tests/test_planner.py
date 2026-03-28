@@ -351,3 +351,279 @@ class TestPlanStructure:
         acs_tasks = [t for t in plan.resample_tasks if t.dataset_id == "acs"]
         for t in acs_tasks:
             assert t.measures == ["total_population", "median_household_income"]
+
+
+# ===========================================================================
+# Planner: vintage sets in file_set paths (integration)
+# ===========================================================================
+
+
+def _vintage_set_recipe() -> dict:
+    """Recipe with vintage_sets driving file_set segment constants/year_offsets.
+
+    The vintage set ``acs_measures`` defines four dimensions across two
+    year bands (2017-2019 using tract@2010, 2020-2022 using tract@2020).
+    The file_set segments mirror these values so the planner resolves
+    paths like ``data/curated/measures__A2016@B2017xT2010.parquet``.
+    """
+    return {
+        "version": 1,
+        "name": "vintage-set-integration",
+        "universe": {"range": "2017-2022"},
+        "targets": [
+            {"id": "coc_panel", "geometry": {"type": "coc", "vintage": 2025}},
+        ],
+        "vintage_sets": {
+            "acs_measures": {
+                "dimensions": ["analysis_year", "acs_end", "boundary", "tract"],
+                "rules": [
+                    {
+                        "years": "2015-2019",
+                        "constants": {"tract": 2010},
+                        "year_offsets": {
+                            "analysis_year": 0,
+                            "acs_end": -1,
+                            "boundary": 0,
+                        },
+                    },
+                    {
+                        "years": "2020-2024",
+                        "constants": {"tract": 2020},
+                        "year_offsets": {
+                            "analysis_year": 0,
+                            "acs_end": -1,
+                            "boundary": 0,
+                        },
+                    },
+                ],
+            },
+        },
+        "datasets": {
+            "acs": {
+                "provider": "census",
+                "product": "acs",
+                "version": 1,
+                "native_geometry": {"type": "tract"},
+                "file_set": {
+                    "path_template": (
+                        "data/curated/measures__A{acs_end}@B{boundary}xT{tract}.parquet"
+                    ),
+                    "segments": [
+                        {
+                            "years": {"range": "2015-2019"},
+                            "geometry": {"type": "tract", "vintage": 2010},
+                            "constants": {"tract": 2010},
+                            "year_offsets": {
+                                "acs_end": -1,
+                                "boundary": 0,
+                            },
+                        },
+                        {
+                            "years": {"range": "2020-2024"},
+                            "geometry": {"type": "tract", "vintage": 2020},
+                            "constants": {"tract": 2020},
+                            "year_offsets": {
+                                "acs_end": -1,
+                                "boundary": 0,
+                            },
+                        },
+                    ],
+                },
+            },
+            "pit": {
+                "provider": "hud",
+                "product": "pit",
+                "version": 1,
+                "native_geometry": {"type": "coc"},
+                "years": "2017-2022",
+                "path": "data/pit/pit.parquet",
+            },
+        },
+        "transforms": [
+            {
+                "id": "coc_to_tract_2010",
+                "type": "crosswalk",
+                "from": {"type": "coc", "vintage": 2025},
+                "to": {"type": "tract", "vintage": 2010},
+                "spec": {"weighting": {"scheme": "area"}},
+            },
+            {
+                "id": "coc_to_tract_2020",
+                "type": "crosswalk",
+                "from": {"type": "coc", "vintage": 2025},
+                "to": {"type": "tract", "vintage": 2020},
+                "spec": {"weighting": {"scheme": "area"}},
+            },
+        ],
+        "pipelines": [
+            {
+                "id": "main",
+                "target": "coc_panel",
+                "steps": [
+                    {
+                        "materialize": {
+                            "transforms": [
+                                "coc_to_tract_2010",
+                                "coc_to_tract_2020",
+                            ],
+                        },
+                    },
+                    {
+                        "resample": {
+                            "dataset": "acs",
+                            "to_geometry": {"type": "coc", "vintage": 2025},
+                            "method": "aggregate",
+                            "via": "auto",
+                            "measures": ["total_population"],
+                        },
+                    },
+                    {
+                        "resample": {
+                            "dataset": "pit",
+                            "to_geometry": {"type": "coc", "vintage": 2025},
+                            "method": "identity",
+                            "measures": ["pit_total"],
+                        },
+                    },
+                    {
+                        "join": {
+                            "datasets": ["acs", "pit"],
+                            "join_on": ["geo_id", "year"],
+                        },
+                    },
+                ],
+            },
+        ],
+    }
+
+
+class TestPlannerVintageSetIntegration:
+    """Integration tests: full pipeline plan with vintage-set-derived file_set paths."""
+
+    def test_full_plan_resolves_all_years(self):
+        """Plan resolves one resample task per dataset per universe year."""
+        recipe = load_recipe(_vintage_set_recipe())
+        plan = resolve_plan(recipe, "main")
+        assert isinstance(plan, ExecutionPlan)
+
+        acs_tasks = [t for t in plan.resample_tasks if t.dataset_id == "acs"]
+        pit_tasks = [t for t in plan.resample_tasks if t.dataset_id == "pit"]
+        assert len(acs_tasks) == 6  # 2017-2022
+        assert len(pit_tasks) == 6
+
+    def test_vintage_set_constants_produce_correct_paths(self):
+        """Segment constants from vintage set yield correctly rendered paths."""
+        recipe = load_recipe(_vintage_set_recipe())
+        plan = resolve_plan(recipe, "main")
+        acs_tasks = {
+            t.year: t
+            for t in plan.resample_tasks
+            if t.dataset_id == "acs"
+        }
+
+        # Pre-2020 band: tract=2010, acs_end=year-1, boundary=year
+        assert (
+            acs_tasks[2017].input_path
+            == "data/curated/measures__A2016@B2017xT2010.parquet"
+        )
+        assert (
+            acs_tasks[2018].input_path
+            == "data/curated/measures__A2017@B2018xT2010.parquet"
+        )
+        assert (
+            acs_tasks[2019].input_path
+            == "data/curated/measures__A2018@B2019xT2010.parquet"
+        )
+
+        # Post-2020 band: tract=2020, acs_end=year-1, boundary=year
+        assert (
+            acs_tasks[2020].input_path
+            == "data/curated/measures__A2019@B2020xT2020.parquet"
+        )
+        assert (
+            acs_tasks[2021].input_path
+            == "data/curated/measures__A2020@B2021xT2020.parquet"
+        )
+        assert (
+            acs_tasks[2022].input_path
+            == "data/curated/measures__A2021@B2022xT2020.parquet"
+        )
+
+    def test_vintage_set_geometry_drives_transform_selection(self):
+        """Auto-selected transform matches the segment geometry vintage."""
+        recipe = load_recipe(_vintage_set_recipe())
+        plan = resolve_plan(recipe, "main")
+        acs_tasks = {
+            t.year: t
+            for t in plan.resample_tasks
+            if t.dataset_id == "acs"
+        }
+
+        # 2017-2019 -> tract@2010 -> coc_to_tract_2010
+        for yr in (2017, 2018, 2019):
+            assert acs_tasks[yr].effective_geometry.vintage == 2010
+            assert acs_tasks[yr].transform_id == "coc_to_tract_2010"
+
+        # 2020-2022 -> tract@2020 -> coc_to_tract_2020
+        for yr in (2020, 2021, 2022):
+            assert acs_tasks[yr].effective_geometry.vintage == 2020
+            assert acs_tasks[yr].transform_id == "coc_to_tract_2020"
+
+    def test_plan_to_dict_includes_all_tasks(self):
+        """Serialized plan has correct task count and structure."""
+        recipe = load_recipe(_vintage_set_recipe())
+        plan = resolve_plan(recipe, "main")
+        d = plan.to_dict()
+
+        assert d["pipeline_id"] == "main"
+        # 1 materialize + 12 resample (6 acs + 6 pit) + 6 join = 19
+        assert d["task_count"] == 19
+        assert len(d["materialize_tasks"]) == 1
+        assert len(d["resample_tasks"]) == 12
+        assert len(d["join_tasks"]) == 6
+
+    def test_join_tasks_span_full_universe(self):
+        """A join task is emitted for every universe year."""
+        recipe = load_recipe(_vintage_set_recipe())
+        plan = resolve_plan(recipe, "main")
+        join_years = sorted(t.year for t in plan.join_tasks)
+        assert join_years == [2017, 2018, 2019, 2020, 2021, 2022]
+
+    def test_vintage_set_declared_but_not_referenced_still_valid(self):
+        """A vintage_set that exists in the recipe but is not wired into any
+        file_set does not cause errors; the plan resolves normally."""
+        data = _vintage_set_recipe()
+        data["vintage_sets"]["unused_set"] = {
+            "dimensions": ["x"],
+            "rules": [{"years": "2020-2024", "year_offsets": {"x": 0}}],
+        }
+        recipe = load_recipe(data)
+        plan = resolve_plan(recipe, "main")
+        acs_tasks = [t for t in plan.resample_tasks if t.dataset_id == "acs"]
+        assert len(acs_tasks) == 6
+
+    def test_segment_with_override_bypasses_vintage_set_path(self):
+        """A per-year override in a segment takes precedence even when
+        vintage-set-derived constants are present."""
+        data = _vintage_set_recipe()
+        data["datasets"]["acs"]["file_set"]["segments"][0]["overrides"] = {
+            2018: "data/acs/special_2018.parquet",
+        }
+        recipe = load_recipe(data)
+        plan = resolve_plan(recipe, "main")
+        acs_tasks = {
+            t.year: t
+            for t in plan.resample_tasks
+            if t.dataset_id == "acs"
+        }
+        # Override year gets the literal path
+        assert acs_tasks[2018].input_path == "data/acs/special_2018.parquet"
+        # Adjacent years still render via template
+        assert (
+            acs_tasks[2017].input_path
+            == "data/curated/measures__A2016@B2017xT2010.parquet"
+        )
+        assert (
+            acs_tasks[2019].input_path
+            == "data/curated/measures__A2018@B2019xT2010.parquet"
+        )

@@ -235,7 +235,7 @@ def download_tiger_tracts(
     result = gpd.GeoDataFrame(
         {
             "geo_vintage": str(year),
-            "geoid": combined[geoid_column],
+            "geoid": combined[geoid_column].astype(str).str.zfill(11),
             "geometry": combined["geometry"],
             "source": "tiger_line",
             "ingested_at": ingested_at,

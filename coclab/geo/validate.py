@@ -261,24 +261,26 @@ def _validate_anomalies(gdf: "gpd.GeoDataFrame", result: ValidationResult) -> No
     if gdf.geometry is None:
         return
 
+    is_geographic = gdf.crs is not None and gdf.crs.is_geographic
+
     for idx, geom in gdf.geometry.items():
         if geom is None or geom.is_empty:
             continue  # Already flagged
 
-        # Check for tiny polygons
-        try:
-            area = geom.area
-            if area < MIN_AREA_SQ_DEG:
-                result.add_warning(
-                    "SMALL_AREA",
-                    f"Polygon area ({area:.2e} sq deg) is below threshold",
-                    row_index=idx,
-                )
-        except Exception:
-            pass  # Area calculation failed, skip this check
+        # Check for tiny polygons (only meaningful for geographic CRS)
+        if is_geographic:
+            try:
+                area = geom.area
+                if area < MIN_AREA_SQ_DEG:
+                    result.add_warning(
+                        "SMALL_AREA",
+                        f"Polygon area ({area:.2e} sq deg) is below threshold",
+                        row_index=idx,
+                    )
+            except Exception:
+                pass  # Area calculation failed, skip this check
 
         # Check bounding box for valid coordinate ranges (EPSG:4326 only)
-        is_geographic = gdf.crs is not None and gdf.crs.is_geographic
         if is_geographic:
             try:
                 minx, miny, maxx, maxy = geom.bounds

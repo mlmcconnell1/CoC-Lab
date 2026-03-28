@@ -117,15 +117,23 @@ def parse_acs_vintage(acs_vintage: str) -> int:
                 f"Invalid ACS vintage range: {acs_vintage!r}. "
                 f"5-year estimates should span exactly 4 years (e.g., 2019-2023)"
             )
-        return end_year
+    else:
+        try:
+            end_year = int(acs_vintage)
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid ACS vintage format: {acs_vintage!r}. "
+                f"Expected format like '2019-2023' or '2023'"
+            ) from e
 
-    try:
-        return int(acs_vintage)
-    except ValueError as e:
+    if end_year < 2009:
         raise ValueError(
-            f"Invalid ACS vintage format: {acs_vintage!r}. "
-            f"Expected format like '2019-2023' or '2023'"
-        ) from e
+            f"ACS 5-year estimates are not available before vintage 2009 "
+            f"(covering 2005-2009). Got vintage end year {end_year} "
+            f"from {acs_vintage!r}"
+        )
+
+    return end_year
 
 
 def normalize_geoid(state: str, county: str, tract: str) -> str:

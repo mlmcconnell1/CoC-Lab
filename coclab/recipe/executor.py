@@ -55,7 +55,22 @@ from coclab.recipe.recipe_schema import (
 
 
 class ExecutorError(Exception):
-    """Raised when recipe execution fails at runtime."""
+    """Raised when recipe execution fails at runtime.
+
+    Attributes
+    ----------
+    partial_results : list[PipelineResult]
+        Results collected before (and including) the failure.  When
+        ``execute_recipe`` encounters pipeline errors it continues
+        through all remaining pipelines so callers can inspect what
+        succeeded and what failed.
+    """
+
+    partial_results: list["PipelineResult"]
+
+    def __init__(self, message: str, *, partial_results: list["PipelineResult"] | None = None):
+        super().__init__(message)
+        self.partial_results = partial_results or []
 
 
 @dataclass
@@ -102,6 +117,10 @@ class ExecutionContext:
     consumed_assets: list[AssetRecord] = field(default_factory=list)
     # Suppress progress output (for --json mode)
     quiet: bool = False
+    # Cache: dataset_id → number of distinct resolved paths (for broadcast check)
+    _distinct_paths_cache: dict[str, int | None] = field(
+        default_factory=dict,
+    )
 
 
 def _echo(ctx: ExecutionContext, message: str) -> None:
@@ -473,13 +492,17 @@ def _reject_implicit_static_broadcast(
     if ds is None:
         return None
 
-    distinct_paths: int | None = None
-    if ds.file_set is not None:
-        resolved_paths = {
-            _resolve_dataset_year(task.dataset_id, year, ctx.recipe).path
-            for year in universe_years
-        }
-        distinct_paths = len(resolved_paths)
+    if task.dataset_id in ctx._distinct_paths_cache:
+        distinct_paths = ctx._distinct_paths_cache[task.dataset_id]
+    else:
+        distinct_paths: int | None = None
+        if ds.file_set is not None:
+            resolved_paths = {
+                _resolve_dataset_year(task.dataset_id, year, ctx.recipe).path
+                for year in universe_years
+            }
+            distinct_paths = len(resolved_paths)
+        ctx._distinct_paths_cache[task.dataset_id] = distinct_paths
 
     result = probe_static_broadcast(
         ds,
@@ -1738,7 +1761,10 @@ def execute_recipe(
     ------
     ExecutorError
         If a planner or runtime error occurs.  The message includes
-        pipeline and step context for actionable diagnostics.
+        pipeline and step context for actionable diagnostics.  The
+        exception's ``partial_results`` attribute contains results for
+        all pipelines (including the failed ones), so callers can
+        inspect what succeeded.
     """
     if project_root is None:
         project_root = Path.cwd()
@@ -1746,6 +1772,7 @@ def execute_recipe(
         cache = RecipeCache()
 
     results: list[PipelineResult] = []
+    errors: list[str] = []
 
     def _log(msg: str) -> None:
         if not quiet:
@@ -1758,9 +1785,20 @@ def execute_recipe(
         try:
             plan = resolve_plan(recipe, pipeline.id)
         except PlannerError as exc:
-            raise ExecutorError(
-                f"Pipeline '{pipeline.id}': planning failed: {exc}"
-            ) from exc
+            msg = f"Pipeline '{pipeline.id}': planning failed: {exc}"
+            errors.append(msg)
+            _log(f"  {msg}")
+            # Record a failed result so partial_results is complete
+            results.append(PipelineResult(
+                pipeline_id=pipeline.id,
+                steps=[StepResult(
+                    step_kind="plan",
+                    detail=f"planning failed: {exc}",
+                    success=False,
+                    error=str(exc),
+                )],
+            ))
+            continue
 
         task_count = (
             len(plan.materialize_tasks)
@@ -1782,10 +1820,17 @@ def execute_recipe(
             )
         else:
             failed = next(s for s in result.steps if not s.success)
-            raise ExecutorError(
+            msg = (
                 f"Pipeline '{pipeline.id}': step failed: "
                 f"[{failed.step_kind}] {failed.detail}"
                 + (f" — {failed.error}" if failed.error else "")
             )
+            errors.append(msg)
+
+    if errors:
+        raise ExecutorError(
+            "; ".join(errors),
+            partial_results=results,
+        )
 
     return results

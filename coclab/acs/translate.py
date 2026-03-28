@@ -117,7 +117,21 @@ def needs_translation(acs_vintage: str, target_tract_vintage: int | str) -> bool
         raise ValueError(msg)
 
     # Need translation if source is 2010-based and target is 2020-based
-    return source_vintage == 2010 and target_is_2020_based
+    if source_vintage == 2010 and target_is_2020_based:
+        return True
+
+    # Same-era: no translation needed
+    target_vintage = (target_year // 10) * 10
+    if source_vintage == target_vintage:
+        return False
+
+    # Cross-era translation not yet supported (e.g., 2020→2030)
+    msg = (
+        f"ACS vintage '{acs_vintage}' uses {source_vintage}-era tracts. "
+        f"Translation to {target_year} geography ({target_vintage}-era) "
+        f"is not yet supported. Only 2010→2020 translation is available."
+    )
+    raise ValueError(msg)
 
 
 @dataclass

@@ -118,6 +118,7 @@ def _features_to_geodataframe(features: list[dict[str, Any]]) -> gpd.GeoDataFram
 
     records = []
     geometries = []
+    null_count = 0
 
     for feature in features:
         props = feature.get("properties", {})
@@ -126,6 +127,13 @@ def _features_to_geodataframe(features: list[dict[str, Any]]) -> gpd.GeoDataFram
         if geom:
             geometries.append(shape(geom))
             records.append(props)
+        else:
+            null_count += 1
+
+    if null_count:
+        logger.warning(
+            f"Dropped {null_count} of {len(features)} features with null geometry"
+        )
 
     gdf = gpd.GeoDataFrame(records, geometry=geometries, crs="EPSG:4326")
     return gdf
@@ -146,6 +154,15 @@ def _map_to_canonical_schema(
     Returns:
         GeoDataFrame with canonical column names
     """
+    required_columns = {"COCNUM", "COCNAME", "STUSAB"}
+    available_columns = set(gdf.columns)
+    missing = required_columns - available_columns
+    if missing:
+        raise ValueError(
+            f"Missing required columns: {sorted(missing)}. "
+            f"Available columns: {sorted(available_columns)}"
+        )
+
     result = gpd.GeoDataFrame(
         {
             "boundary_vintage": boundary_vintage,

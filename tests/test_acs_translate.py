@@ -330,6 +330,186 @@ class TestTranslateTracts2010To2020:
         )
 
 
+    @pytest.mark.parametrize(
+        ("median_values", "weights", "populations", "expected_medians"),
+        [
+            pytest.param(
+                # Two 2020 tracts from split: 60/40 weight
+                [50_000.0, 50_000.0],
+                [0.6, 0.4],
+                [1000, 1000],
+                # Same median on both halves → same result in both targets
+                {"01001020201": 50_000.0, "01001020202": 50_000.0},
+                id="split-equal-medians",
+            ),
+            pytest.param(
+                # Single tract splits 60/40; both children inherit same source
+                # median via pop-weighted average (only one source, so trivial)
+                [80_000.0, 80_000.0],
+                [0.6, 0.4],
+                [2000, 2000],
+                {"01001020201": 80_000.0, "01001020202": 80_000.0},
+                id="split-high-median",
+            ),
+        ],
+    )
+    def test_median_translation_split(
+        self,
+        mock_relationship_file,
+        median_values,
+        weights,
+        populations,
+        expected_medians,
+    ):
+        """Median columns use population-weighted average when a tract splits.
+
+        A single 2010 tract splitting into multiple 2020 tracts produces
+        the same median in each child (since there is one source value).
+        """
+        df = pd.DataFrame(
+            {
+                "tract_geoid": ["01001020200"],
+                "total_population": [1000],
+                "median_household_income": [80_000.0],
+            }
+        )
+
+        result, _ = translate_tracts_2010_to_2020(df)
+
+        result = result.sort_values("tract_geoid").reset_index(drop=True)
+        assert len(result) == 2
+        for _, row in result.iterrows():
+            assert row["median_household_income"] == pytest.approx(
+                80_000.0, rel=0.01
+            )
+
+    @pytest.mark.parametrize(
+        ("incomes", "populations", "expected_income"),
+        [
+            pytest.param(
+                [60_000.0, 40_000.0],
+                [1000, 500],
+                # weighted pop: 1000*0.7=700, 500*0.3=150
+                # weighted income: 60000*700 + 40000*150 = 42_000_000 + 6_000_000
+                # result: 48_000_000 / 850 ≈ 56_470.59
+                48_000_000 / 850,
+                id="merge-different-medians",
+            ),
+            pytest.param(
+                [50_000.0, 50_000.0],
+                [1000, 500],
+                50_000.0,
+                id="merge-equal-medians",
+            ),
+            pytest.param(
+                [100_000.0, 20_000.0],
+                [2000, 1000],
+                # weighted pop: 2000*0.7=1400, 1000*0.3=300
+                # weighted income: 100000*1400 + 20000*300
+                # result: 146_000_000 / 1700 ≈ 85_882.35
+                146_000_000 / 1700,
+                id="merge-large-gap-medians",
+            ),
+        ],
+    )
+    def test_median_translation_merge(
+        self,
+        mock_relationship_file,
+        incomes,
+        populations,
+        expected_income,
+    ):
+        """Merging tracts produce population-weighted average of medians.
+
+        Two 2010 tracts (01001020300, 01001020400) merge into one 2020
+        tract (01001020301) with area weights 0.7 and 0.3 respectively.
+        """
+        df = pd.DataFrame(
+            {
+                "tract_geoid": ["01001020300", "01001020400"],
+                "total_population": populations,
+                "median_household_income": incomes,
+            }
+        )
+
+        result, _ = translate_tracts_2010_to_2020(df)
+
+        merged = result[result["tract_geoid"] == "01001020301"]
+        assert len(merged) == 1
+        assert merged.iloc[0]["median_household_income"] == pytest.approx(
+            expected_income, rel=0.001
+        )
+
+    def test_median_translation_unmatched_passthrough(self, mock_relationship_file):
+        """Unmatched tracts are dropped (not passed through unchanged).
+
+        Tracts with no mapping in the relationship file are excluded from
+        the output entirely, so their median values do not appear.
+        """
+        df = pd.DataFrame(
+            {
+                "tract_geoid": ["99999999999"],
+                "total_population": [500],
+                "median_household_income": [75_000.0],
+            }
+        )
+
+        result, stats = translate_tracts_2010_to_2020(df)
+
+        assert stats.unmatched_tracts == 1
+        assert stats.matched_tracts == 0
+        assert len(result) == 0
+
+    def test_median_translation_mixed_matched_unmatched(self, mock_relationship_file):
+        """Matched tracts translate medians; unmatched tracts are dropped."""
+        df = pd.DataFrame(
+            {
+                "tract_geoid": ["01001020100", "99999999999"],
+                "total_population": [1000, 500],
+                "median_household_income": [60_000.0, 90_000.0],
+            }
+        )
+
+        result, stats = translate_tracts_2010_to_2020(df)
+
+        assert stats.matched_tracts == 1
+        assert stats.unmatched_tracts == 1
+        # Only the matched tract should appear
+        assert len(result) == 1
+        assert result.iloc[0]["tract_geoid"] == "01001020101"
+        assert result.iloc[0]["median_household_income"] == pytest.approx(
+            60_000.0, rel=0.01
+        )
+
+    def test_median_translation_multiple_median_columns(self, mock_relationship_file):
+        """Both median_household_income and median_gross_rent are translated."""
+        df = pd.DataFrame(
+            {
+                "tract_geoid": ["01001020300", "01001020400"],
+                "total_population": [1000, 500],
+                "median_household_income": [60_000.0, 40_000.0],
+                "median_gross_rent": [1200.0, 800.0],
+            }
+        )
+
+        result, _ = translate_tracts_2010_to_2020(df)
+
+        merged = result[result["tract_geoid"] == "01001020301"]
+        assert len(merged) == 1
+
+        # weighted pop: 1000*0.7=700, 500*0.3=150
+        # income: (60000*700 + 40000*150) / 850
+        expected_income = (60_000 * 700 + 40_000 * 150) / 850
+        assert merged.iloc[0]["median_household_income"] == pytest.approx(
+            expected_income, rel=0.001
+        )
+
+        # rent: (1200*700 + 800*150) / 850
+        expected_rent = (1200 * 700 + 800 * 150) / 850
+        assert merged.iloc[0]["median_gross_rent"] == pytest.approx(
+            expected_rent, rel=0.001
+        )
+
     def test_pre_2010_acs_to_2020_target_raises(self):
         """Regression test for coclab-i2fj.5.21: pre-2010 ACS vintages must
         not silently pass when targeting 2020+ geography."""

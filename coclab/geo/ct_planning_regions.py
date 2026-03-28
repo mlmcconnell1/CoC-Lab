@@ -26,10 +26,29 @@ import pandas as pd
 
 from coclab.naming import county_path, tract_path
 
+# ---------------------------------------------------------------------------
+# Connecticut FIPS code constants
+#
+# Connecticut transitioned from eight legacy counties to nine planning
+# regions effective with the 2022 ACS release (Census Bureau, June 2022).
+# These are the *only* authoritative sets of CT sub-state FIPS codes used
+# throughout the codebase.  All other modules must import from here.
+#
+# Update these sets if the Census Bureau redefines Connecticut planning
+# regions or if additional legacy/planning-region county-equivalent codes
+# are published.  As of 2024 the nine planning regions are stable, but
+# Census has noted they may revisit boundaries after the 2030 Census.
+# ---------------------------------------------------------------------------
+
 CT_STATE_FIPS = "09"
+
+# Eight legacy Connecticut counties (pre-2022 ACS, FIPS 09001-09015).
 CT_LEGACY_COUNTY_CODES = {"001", "003", "005", "007", "009", "011", "013", "015"}
+
+# Nine planning-region county equivalents (2022+ ACS, FIPS 09110-09190).
 CT_PLANNING_REGION_CODES = {"110", "120", "130", "140", "150", "160", "170", "180", "190"}
 
+# Vintage years for the geometry shapefiles used to build crosswalks.
 CT_LEGACY_COUNTY_VINTAGE = 2020
 CT_PLANNING_REGION_VINTAGE = 2023
 
@@ -105,11 +124,12 @@ def build_ct_tract_planning_region_map(
         predicate="within",
     ).rename(columns={"GEOID_left": "legacy_geoid", "GEOID_right": "planning_region_geoid"})
 
-    unmatched = joined["planning_region_geoid"].isna().sum()
-    if unmatched:
+    unmatched_mask = joined["planning_region_geoid"].isna()
+    if unmatched_mask.any():
+        unmatched_geoids = joined.loc[unmatched_mask, "legacy_geoid"].tolist()
         raise ValueError(
             "Unable to map some CT tracts to planning regions. "
-            f"Unmatched tracts: {unmatched}"
+            f"Unmatched tracts ({len(unmatched_geoids)}): {unmatched_geoids}"
         )
 
     tract_code = joined["legacy_geoid"].astype(str).str[-6:]

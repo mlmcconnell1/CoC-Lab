@@ -246,8 +246,7 @@ class TestNormalizeBoundaries:
             ],
             crs="EPSG:4326",
         )
-        with pytest.warns(UserWarning, match="Dropped 1 rows"):
-            result = normalize_boundaries(gdf)
+        result = normalize_boundaries(gdf)
 
         assert len(result) == 1
         assert result.iloc[0]["coc_id"] == "CO-500"

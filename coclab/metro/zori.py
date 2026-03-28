@@ -175,6 +175,18 @@ def aggregate_yearly_zori_to_metro(
     else:
         membership = build_county_membership_df()[["metro_id", "county_fips"]]
 
+    # Detect orphan ZORI counties absent from metro membership
+    zori_counties = set(zori_yearly["county_fips"].unique())
+    membership_counties = set(membership["county_fips"].unique())
+    orphan_counties = zori_counties - membership_counties
+    if orphan_counties:
+        logger.warning(
+            f"{len(orphan_counties)} ZORI counties absent from metro membership "
+            f"(these will not contribute to any metro): "
+            f"{sorted(orphan_counties)[:10]}"
+            f"{'...' if len(orphan_counties) > 10 else ''}"
+        )
+
     # Count expected member counties per metro before the inner join so we
     # can detect metros where some counties are absent from the ZORI data.
     expected_n = membership.groupby("metro_id")["county_fips"].nunique()

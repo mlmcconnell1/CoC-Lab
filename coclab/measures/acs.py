@@ -56,11 +56,11 @@ Known Limitations vs True Pooled Microdata
    (median $30k), equally weighted, yields $65k—which may not represent the
    true median if tract populations differ substantially.
 
-2. **MOE propagation not implemented**: ACS estimates include margins of error
-   (MOE). Proper error propagation for aggregated estimates requires variance
-   formulas that account for covariance structure. This module does not yet
-   compute aggregated MOEs. Users should treat CoC estimates as point estimates
-   only.
+2. **MOE propagation partially implemented**: ACS estimates include margins of
+   error (MOE). For count variables (e.g., total_population), MOEs are
+   propagated to the CoC level using ``sqrt(sum(area_share² × moe²))``.
+   Median variable MOEs are not yet propagated. Proper error propagation for
+   medians requires variance formulas that account for covariance structure.
 
 3. **Ecological inference risk**: Tract-level rates (e.g., poverty rate) may
    not reflect within-CoC variation. Using aggregated rates for individual-level
@@ -96,7 +96,8 @@ from typing import Literal
 
 import pandas as pd
 
-from coclab.acs.variables import COUNT_COLUMNS, MEDIAN_COLUMNS
+from coclab.acs.variables import COUNT_COLUMNS, MEDIAN_COLUMNS, MOE_COLUMNS
+from coclab.geo.ct_planning_regions import CT_STATE_FIPS
 
 
 def _maybe_remap_ct_planning_regions(
@@ -110,11 +111,11 @@ def _maybe_remap_ct_planning_regions(
     if "GEOID" not in acs_data.columns:
         return acs_data
 
-    ct_in_acs = acs_data["GEOID"].astype(str).str.startswith("09").any()
+    ct_in_acs = acs_data["GEOID"].astype(str).str.startswith(CT_STATE_FIPS).any()
     ct_in_xwalk = (
-        crosswalk["tract_geoid"].astype(str).str.startswith("09").any()
+        crosswalk["tract_geoid"].astype(str).str.startswith(CT_STATE_FIPS).any()
         if "tract_geoid" in crosswalk.columns
-        else crosswalk["GEOID"].astype(str).str.startswith("09").any()
+        else crosswalk["GEOID"].astype(str).str.startswith(CT_STATE_FIPS).any()
     )
     if not ct_in_acs or not ct_in_xwalk:
         return acs_data
@@ -172,10 +173,6 @@ def _maybe_remap_ct_planning_regions(
             stacklevel=2,
         )
     return remapped
-
-    # ACS variable mappings and adult-population derivation are defined
-    # canonically in coclab.acs.variables — see that module for Census
-    # variable codes (B01003, B19013, B25064, C17002, B01001).
 
 
 def _validate_geoid_overlap(
@@ -341,6 +338,7 @@ def aggregate_to_geo(
     # Columns to aggregate — derived from canonical definitions in variables.py
     sum_cols = [c for c in COUNT_COLUMNS if c in acs_data.columns]
     avg_cols = [c for c in MEDIAN_COLUMNS if c in acs_data.columns]
+    moe_cols = [c for c in MOE_COLUMNS if c in acs_data.columns]
 
     # Apply weights and aggregate
     results = []
@@ -390,6 +388,13 @@ def aggregate_to_geo(
                     row[f"coverage_{col}"] = col_covered / total_area
                 else:
                     row[f"coverage_{col}"] = col_has_data.mean()
+
+        # MOE propagation for count-type margins of error
+        # Formula: moe_coc = sqrt(sum(area_share^2 * moe_tract^2))
+        for col in moe_cols:
+            if col in group.columns:
+                moe_vals = pd.to_numeric(group[col], errors="coerce").fillna(0)
+                row[col] = (area_share**2 * moe_vals**2).sum() ** 0.5
 
         results.append(row)
 

@@ -110,6 +110,31 @@ class TestInferGeoType:
         with pytest.raises(ValueError, match="multiple geo_type"):
             infer_geo_type(df)
 
+    def test_fallback_to_metro_id_column(self):
+        """No geo_type col, no coc_id col, but metro_id → should return 'metro'."""
+        df = pd.DataFrame({"metro_id": ["GF01", "GF02"], "year": [2020, 2021]})
+        assert infer_geo_type(df) == "metro"
+
+    def test_unsupported_geo_type_value_raises(self):
+        """geo_type column contains an unsupported value → ValueError."""
+        df = pd.DataFrame({"geo_type": ["county", "county"], "geo_id": ["A", "B"]})
+        with pytest.raises(ValueError, match="Unsupported geo_type 'county'"):
+            infer_geo_type(df)
+
+    def test_no_identifiable_columns_raises(self):
+        """No geo_type, coc_id, or metro_id columns → ValueError."""
+        df = pd.DataFrame({"year": [2020], "value": [42]})
+        with pytest.raises(ValueError, match="Cannot infer geo_type"):
+            infer_geo_type(df)
+
+    def test_all_null_geo_type_falls_back_to_heuristic(self):
+        """geo_type column present but all-null → fall back to column heuristic."""
+        df = pd.DataFrame({
+            "geo_type": [None, None],
+            "coc_id": ["NY-600", "CA-600"],
+        })
+        assert infer_geo_type(df) == "coc"
+
 
 # ---------------------------------------------------------------------------
 # ensure_canonical_geo_columns

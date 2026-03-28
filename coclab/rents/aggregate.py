@@ -441,6 +441,18 @@ def aggregate_monthly(
     # Compute combined geo-county weights
     geo_weights = compute_geo_county_weights(xwalk_df, weights_df, geo_id_col=geo_id_col)
 
+    # Detect orphan ZORI counties absent from crosswalk
+    zori_counties = set(zori_df["geo_id"].unique())
+    xwalk_counties = set(xwalk_df["county_fips"].unique())
+    orphan_counties = zori_counties - xwalk_counties
+    if orphan_counties:
+        logger.warning(
+            f"{len(orphan_counties)} ZORI counties absent from crosswalk "
+            f"(these will not contribute to any geography): "
+            f"{sorted(orphan_counties)[:10]}"
+            f"{'...' if len(orphan_counties) > 10 else ''}"
+        )
+
     # Rename zori columns for merge
     zori = zori_df[["geo_id", "date", "zori"]].copy()
     zori = zori.rename(columns={"geo_id": "county_fips"})
@@ -559,11 +571,7 @@ def collapse_to_yearly(
 
     if method == "pit_january":
         january = df[df["date"].dt.month == 1].copy()
-        result = january.drop(columns=["date"]).rename(
-            columns={
-                "zori_coc": "zori_coc",
-            }
-        )
+        result = january.drop(columns=["date"])
 
     elif method == "calendar_mean":
         agg_funcs = {

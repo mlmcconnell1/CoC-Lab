@@ -41,6 +41,7 @@ import pandas as pd
 
 from coclab import naming
 from coclab.acs.variables_acs1 import (
+    ACS1_FIRST_RELIABLE_YEAR,
     ACS1_METRO_OUTPUT_COLUMNS,
     ACS1_TABLES,
     ACS1_UNEMPLOYMENT_VARIABLES,
@@ -89,6 +90,14 @@ def fetch_acs1_cbsa_data(
     ValueError
         If the API response cannot be parsed.
     """
+    if vintage < ACS1_FIRST_RELIABLE_YEAR:
+        logger.warning(
+            "ACS 1-year vintage %d is before the first reliable year (%d); "
+            "data may have limited coverage or reliability",
+            vintage,
+            ACS1_FIRST_RELIABLE_YEAR,
+        )
+
     url = CENSUS_API_ACS1.format(year=vintage)
     variables = ",".join(ACS1_UNEMPLOYMENT_VARIABLES)
 
