@@ -175,16 +175,25 @@ def aggregate_yearly_zori_to_metro(
     else:
         membership = build_county_membership_df()[["metro_id", "county_fips"]]
 
+    # Count expected member counties per metro before the inner join so we
+    # can detect metros where some counties are absent from the ZORI data.
+    expected_n = membership.groupby("metro_id")["county_fips"].nunique()
+
     merged = membership.merge(zori_yearly, on="county_fips", how="inner")
     merged = merged.merge(county_population, on=["county_fips", "year"], how="left")
 
     # Compute per-metro-year normalised weights.
-    # Null out metro-years where any county population is missing to avoid
-    # silently renormalizing weights over a subset of counties.
-    any_missing = merged.groupby(["metro_id", "year"])["population"].transform(
+    # Null out metro-years where county ZORI coverage is incomplete (fewer
+    # counties survived the inner join than are in the membership).
+    actual_n = merged.groupby(["metro_id", "year"])["county_fips"].transform("nunique")
+    incomplete_zori = actual_n < merged["metro_id"].map(expected_n)
+
+    # Also null out metro-years where any county population is missing to
+    # avoid silently renormalizing weights over a subset of counties.
+    any_missing_pop = merged.groupby(["metro_id", "year"])["population"].transform(
         lambda s: s.isna().any()
     )
-    pop_for_weight = merged["population"].where(~any_missing)
+    pop_for_weight = merged["population"].where(~incomplete_zori & ~any_missing_pop)
     pop_sum = merged.groupby(["metro_id", "year"])["population"].transform("sum")
     merged["weight"] = pop_for_weight / pop_sum
     merged["weighted_zori"] = merged["zori"] * merged["weight"]

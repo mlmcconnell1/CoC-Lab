@@ -139,6 +139,38 @@ class TestParseZoriCounty:
         )
 
 
+class TestParseZoriMonthOnlyHeaders:
+    """Regression tests for coclab-gwfa: YYYY-MM column headers."""
+
+    MONTH_ONLY_CSV = (
+        "RegionID,SizeRank,RegionName,RegionType,StateName,"
+        "StateCodeFIPS,MunicipalCodeFIPS,Metro,2023-01,2023-02\n"
+        "1234,1,Adams County,county,Colorado,08,001,Denver,"
+        "1500.00,1520.00\n"
+    )
+
+    def test_county_parses_month_only_headers(self, tmp_path):
+        """Month-only column headers like 2023-01 must parse, not be dropped."""
+        csv_path = tmp_path / "test.csv"
+        csv_path.write_text(self.MONTH_ONLY_CSV)
+        df = parse_zori_county(csv_path)
+        assert len(df) == 2
+        assert pd.api.types.is_datetime64_any_dtype(df["date"])
+
+    def test_zip_parses_month_only_headers(self, tmp_path):
+        """Month-only headers must work for ZIP ZORI too."""
+        csv = (
+            "RegionID,SizeRank,RegionName,RegionType,StateName,"
+            "Metro,2023-01,2023-02\n"
+            "12345,1,80001,zip,Colorado,Denver,"
+            "1400.00,1420.00\n"
+        )
+        csv_path = tmp_path / "test.csv"
+        csv_path.write_text(csv)
+        df = parse_zori_zip(csv_path)
+        assert len(df) == 2
+
+
 class TestValidateMonthyContinuity:
     """Tests for _validate_monthly_continuity function."""
 

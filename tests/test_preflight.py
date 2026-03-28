@@ -1735,3 +1735,47 @@ class TestGetWeightedTransformRequirements:
         )
         result = get_weighted_transform_requirements(t)
         assert result is None
+
+
+# ===========================================================================
+# Preflight validation coverage tests (coclab-51le)
+# ===========================================================================
+
+
+class TestPreflightPlannerErrors:
+    """Test that preflight surfaces planner errors properly."""
+
+    def test_planner_error_for_missing_segment(self, tmp_path: Path):
+        """A recipe with years outside segment coverage raises PLANNER_ERROR."""
+        data = _preflight_recipe(with_path=True)
+        # Narrow ACS segments so 2022 is uncovered
+        data["datasets"]["acs"]["years"] = "2020-2021"
+        recipe = load_recipe(data)
+        report = run_preflight(recipe, project_root=tmp_path)
+        planner_findings = [
+            f for f in report.findings if f.kind == FindingKind.PLANNER_ERROR
+        ]
+        assert planner_findings
+        assert "2022" in planner_findings[0].message
+
+    def test_join_referencing_unresampled_dataset_still_preflights(self, tmp_path: Path):
+        """A join step that references a dataset not resampled in this pipeline
+        should not crash preflight — the planner proceeds, and path/schema
+        probes catch the issue downstream."""
+        data = _preflight_recipe(with_path=True, identity_only=True)
+        _setup_preflight_fixtures(tmp_path, include_xwalk=False, include_acs=False)
+        # Add second dataset NOT in the pipeline steps
+        data["datasets"]["extra"] = {
+            "provider": "test",
+            "product": "test",
+            "version": 1,
+            "native_geometry": {"type": "coc"},
+            "years": "2020-2022",
+        }
+        # Reference it in the join
+        data["pipelines"][0]["steps"][-1]["join"]["datasets"] = ["pit", "extra"]
+        recipe = load_recipe(data)
+        report = run_preflight(recipe, project_root=tmp_path)
+        # Should not crash — preflight produces a report even if the join
+        # references something that wasn't resampled
+        assert report is not None

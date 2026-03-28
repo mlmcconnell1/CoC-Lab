@@ -1222,37 +1222,20 @@ def _build_provenance(
     pipeline_id: str,
     ctx: ExecutionContext,
 ) -> dict[str, object]:
-    """Build provenance metadata for the output artifact."""
-    deduped = _deduplicate_assets(ctx.consumed_assets)
-    return {
-        "recipe_name": recipe.name,
-        "recipe_version": recipe.version,
-        "pipeline_id": pipeline_id,
-        "datasets": {
-            ds_id: {
-                "provider": ds.provider,
-                "product": ds.product,
-                "version": ds.version,
-                "path": ds.path,
-            }
-            for ds_id, ds in recipe.datasets.items()
-        },
-        "transforms": {
-            tid: str(path.relative_to(ctx.project_root))
-            for tid, path in ctx.transform_paths.items()
-        },
-        "consumed_assets": [
-            {
-                "role": a.role,
-                "path": a.path,
-                "sha256": a.sha256,
-                "size": a.size,
-                "dataset_id": a.dataset_id,
-                "transform_id": a.transform_id,
-            }
-            for a in deduped
-        ],
-    }
+    """Build provenance metadata for the output artifact.
+
+    Derives from :func:`_build_manifest` so that both the Parquet-embedded
+    provenance and the sidecar JSON share a single code path for asset
+    deduplication and dataset/transform extraction.
+    """
+    manifest = _build_manifest(recipe, pipeline_id, ctx)
+    d = manifest.to_dict()
+    # Rename for backward-compatible Parquet metadata key
+    d["consumed_assets"] = d.pop("assets")
+    # Remove manifest-only fields not needed in Parquet provenance
+    d.pop("executed_at", None)
+    d.pop("output_path", None)
+    return d
 
 
 def _build_manifest(
@@ -1462,6 +1445,20 @@ def _persist_outputs(
         definition_version=definition_version,
     )
 
+    # Detect output filename collision from a prior pipeline in this run.
+    if output_file.exists() and output_file in getattr(ctx, "_written_outputs", set()):
+        return StepResult(
+            step_kind="persist",
+            detail="persist outputs",
+            success=False,
+            error=(
+                f"Output collision: pipeline '{plan.pipeline_id}' resolves to "
+                f"'{output_file.relative_to(ctx.project_root)}' which was "
+                f"already written by another pipeline in this recipe. "
+                f"Namespace targets or use distinct geometry vintages."
+            ),
+        )
+
     # Run conformance checks on the assembled panel
     from coclab.panel.conformance import (
         ACS_MEASURE_COLUMNS,
@@ -1513,6 +1510,11 @@ def _persist_outputs(
     metadata[b"coclab_provenance"] = json.dumps(provenance).encode()
     table = table.replace_schema_metadata(metadata)
     pq.write_table(table, output_file)
+
+    # Track written outputs for collision detection across pipelines.
+    if not hasattr(ctx, "_written_outputs"):
+        ctx._written_outputs = set()  # type: ignore[attr-defined]
+    ctx._written_outputs.add(output_file)  # type: ignore[attr-defined]
 
     # Write manifest sidecar JSON
     manifest = _build_manifest(

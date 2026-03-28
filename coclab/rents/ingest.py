@@ -211,8 +211,9 @@ def _parse_zori_long(
         value_name="zori",
     )
 
-    # Parse dates - Zillow uses YYYY-MM-DD format (end-of-month dates)
-    long_df["date"] = pd.to_datetime(long_df["date_str"], format="%Y-%m-%d", errors="coerce")
+    # Parse dates - Zillow uses YYYY-MM-DD or YYYY-MM column headers.
+    # Try ISO8601 mixed format to handle both forms.
+    long_df["date"] = pd.to_datetime(long_df["date_str"], format="mixed", errors="coerce")
     long_df = long_df.dropna(subset=["date"])
 
     # Rename columns

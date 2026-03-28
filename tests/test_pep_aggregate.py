@@ -267,3 +267,26 @@ class TestAggregationUnit:
         assert row["coverage_ratio"] == pytest.approx(0.5)
         assert row["population"] == pytest.approx(40000)
         assert row["county_count"] == 1
+
+
+class TestPepDiagnosticsProvenance:
+    """Regression test for coclab-8t4l: diagnostics parquet must embed provenance."""
+
+    def test_run_pep_diagnostics_embeds_provenance(self, tmp_path):
+        """Output parquet from run_pep_diagnostics must have provenance."""
+        from coclab.pep.diagnostics import run_pep_diagnostics
+        from coclab.provenance import has_provenance
+
+        # Create a minimal PEP CoC parquet as input.
+        pep_df = pd.DataFrame({
+            "coc_id": ["A", "A"],
+            "year": [2020, 2021],
+            "population": [1000, 1010],
+            "coverage_ratio": [1.0, 0.98],
+        })
+        src = tmp_path / "pep_coc.parquet"
+        pep_df.to_parquet(src, index=False)
+
+        out = tmp_path / "diag.parquet"
+        run_pep_diagnostics(src, output_path=out)
+        assert has_provenance(out)

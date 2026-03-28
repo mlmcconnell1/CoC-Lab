@@ -2649,6 +2649,156 @@ class TestResampleAggregate:
 
 
 # ===========================================================================
+# Allocate resample tests (coclab-8t3f)
+# ===========================================================================
+
+
+class TestResampleAllocate:
+    """Dedicated tests for _resample_allocate (coclab-8t3f)."""
+
+    @staticmethod
+    def _allocate_recipe() -> dict:
+        """Recipe with a coc_to_tract crosswalk for allocate tests."""
+        data = _recipe_with_pipeline()
+        data["transforms"].append({
+            "id": "coc_to_tract",
+            "type": "crosswalk",
+            "from": {"type": "coc", "vintage": 2025},
+            "to": {"type": "tract", "vintage": 2020},
+            "spec": {"weighting": {"scheme": "area"}},
+        })
+        return data
+
+    def _setup(self, tmp_path: Path) -> ExecutionContext:
+        # Dataset: coarse CoC-level data
+        ds_path = tmp_path / "data" / "coc_data.parquet"
+        ds_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame({
+            "coc_id": ["COC1", "COC2"],
+            "pop": [1000.0, 2000.0],
+            "income": [50000.0, 60000.0],
+        }).to_parquet(ds_path)
+
+        # Crosswalk: CoC → tract with area_share weights
+        xwalk_path = tmp_path / "data" / "curated" / "xwalks" / "xwalk_alloc.parquet"
+        xwalk_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame({
+            "coc_id": ["COC1", "COC1", "COC2"],
+            "tract_geoid": ["T1", "T2", "T3"],
+            "area_share": [0.6, 0.4, 1.0],
+        }).to_parquet(xwalk_path)
+
+        recipe = load_recipe(self._allocate_recipe())
+        ctx = ExecutionContext(project_root=tmp_path, recipe=recipe)
+        ctx.transform_paths["coc_to_tract"] = xwalk_path
+        return ctx
+
+    def test_basic_allocate(self, tmp_path: Path):
+        """Allocate distributes coarse values to fine geometry by weight."""
+        ctx = self._setup(tmp_path)
+        task = ResampleTask(
+            dataset_id="coc_data",
+            year=2020,
+            input_path="data/coc_data.parquet",
+            effective_geometry=GeometryRef(type="coc", vintage=2025),
+            method="allocate",
+            transform_id="coc_to_tract",
+            to_geometry=GeometryRef(type="tract", vintage=2020),
+            measures=["pop"],
+        )
+        result = _execute_resample(task, ctx)
+        assert result.success
+        df = ctx.intermediates[("coc_data", 2020)]
+        # COC1(1000) × 0.6 = 600, COC1(1000) × 0.4 = 400, COC2(2000) × 1.0 = 2000
+        t1 = df[df.geo_id == "T1"]["pop"].iloc[0]
+        t2 = df[df.geo_id == "T2"]["pop"].iloc[0]
+        t3 = df[df.geo_id == "T3"]["pop"].iloc[0]
+        assert t1 == pytest.approx(600.0)
+        assert t2 == pytest.approx(400.0)
+        assert t3 == pytest.approx(2000.0)
+
+    def test_allocate_missing_target_key_fails(self, tmp_path: Path):
+        """Allocate must fail when crosswalk lacks the target geo key."""
+        ctx = self._setup(tmp_path)
+        task = ResampleTask(
+            dataset_id="coc_data",
+            year=2020,
+            input_path="data/coc_data.parquet",
+            effective_geometry=GeometryRef(type="coc", vintage=2025),
+            method="allocate",
+            transform_id="coc_to_tract",
+            # county geometry won't find county_fips in the crosswalk
+            to_geometry=GeometryRef(type="county"),
+            measures=["pop"],
+        )
+        result = _execute_resample(task, ctx)
+        assert not result.success
+        assert "target key" in result.error
+
+    def test_allocate_empty_join_fails(self, tmp_path: Path):
+        """Allocate must fail when no rows match between data and crosswalk."""
+        ctx = self._setup(tmp_path)
+        # Overwrite with geo_ids that don't match the crosswalk
+        ds_path = tmp_path / "data" / "coc_data.parquet"
+        pd.DataFrame({
+            "coc_id": ["ZZZ1"],
+            "pop": [999.0],
+        }).to_parquet(ds_path)
+        task = ResampleTask(
+            dataset_id="coc_data",
+            year=2020,
+            input_path="data/coc_data.parquet",
+            effective_geometry=GeometryRef(type="coc", vintage=2025),
+            method="allocate",
+            transform_id="coc_to_tract",
+            to_geometry=GeometryRef(type="tract", vintage=2020),
+            measures=["pop"],
+        )
+        result = _execute_resample(task, ctx)
+        assert not result.success
+        assert "zero rows" in result.error
+
+    def test_allocate_nan_weight_propagates(self, tmp_path: Path):
+        """NaN area_share produces NaN allocated values (not silently dropped)."""
+        ds_path = tmp_path / "data" / "coc_data.parquet"
+        ds_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame({
+            "coc_id": ["COC1"],
+            "pop": [1000.0],
+        }).to_parquet(ds_path)
+
+        xwalk_path = tmp_path / "data" / "curated" / "xwalks" / "xwalk_alloc.parquet"
+        xwalk_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame({
+            "coc_id": ["COC1", "COC1"],
+            "tract_geoid": ["T1", "T2"],
+            "area_share": [0.6, float("nan")],
+        }).to_parquet(xwalk_path)
+
+        recipe = load_recipe(self._allocate_recipe())
+        ctx = ExecutionContext(project_root=tmp_path, recipe=recipe)
+        ctx.transform_paths["coc_to_tract"] = xwalk_path
+
+        task = ResampleTask(
+            dataset_id="coc_data",
+            year=2020,
+            input_path="data/coc_data.parquet",
+            effective_geometry=GeometryRef(type="coc", vintage=2025),
+            method="allocate",
+            transform_id="coc_to_tract",
+            to_geometry=GeometryRef(type="tract", vintage=2020),
+            measures=["pop"],
+        )
+        result = _execute_resample(task, ctx)
+        assert result.success
+        df = ctx.intermediates[("coc_data", 2020)]
+        t1 = df[df.geo_id == "T1"]["pop"].iloc[0]
+        t2 = df[df.geo_id == "T2"]["pop"].iloc[0]
+        assert t1 == pytest.approx(600.0)
+        assert pd.isna(t2)
+
+
+# ===========================================================================
 # Temporal filter behavior tests
 # ===========================================================================
 
@@ -3080,8 +3230,8 @@ class TestRecipeManifest:
         assert (out / "manifest.json").exists()
         assert (out / "assets" / "data" / "pit.parquet").exists()
 
-    def test_export_skips_missing_files(self, tmp_path: Path):
-        """Non-existent assets are skipped without error."""
+    def test_export_skips_missing_files_with_warning(self, tmp_path: Path, caplog):
+        """Regression coclab-kbk1: missing assets emit a warning."""
         m = RecipeManifest(
             recipe_name="test",
             recipe_version=1,
@@ -3096,8 +3246,11 @@ class TestRecipeManifest:
             ],
         )
         out = tmp_path / "bundle"
-        export_bundle(m, tmp_path, out)
+        import logging
+        with caplog.at_level(logging.WARNING, logger="coclab.recipe.manifest"):
+            export_bundle(m, tmp_path, out)
         assert (out / "manifest.json").exists()
+        assert "skipping missing asset" in caplog.text
 
     def test_export_rejects_absolute_path(self, tmp_path: Path):
         m = RecipeManifest(

@@ -491,3 +491,28 @@ class TestYearlyPopulationWeighted:
         result = aggregate_yearly_zori_to_metro(zori, pop)
         assert result["metro_id"].nunique() == METRO_COUNT
         assert result["zori"].tolist() == pytest.approx([1500.0] * METRO_COUNT)
+
+    def test_incomplete_county_zori_coverage_yields_null(self):
+        """Regression test for coclab-n1bp: when a member county has no ZORI
+        row at all, the metro-year result must be null — not renormalized
+        over the remaining counties."""
+        membership = pd.DataFrame({
+            "metro_id": ["M1", "M1"],
+            "county_fips": ["99001", "99002"],
+        })
+        # Only county 99001 has ZORI data; 99002 is entirely absent.
+        zori = pd.DataFrame({
+            "county_fips": ["99001"],
+            "year": [2020],
+            "zori": [1000.0],
+        })
+        pop = pd.DataFrame({
+            "county_fips": ["99001", "99002"],
+            "year": [2020, 2020],
+            "population": [100, 300],
+        })
+        result = aggregate_yearly_zori_to_metro(
+            zori, pop, county_membership_df=membership,
+        )
+        assert len(result) == 1
+        assert pd.isna(result.loc[0, "zori"])

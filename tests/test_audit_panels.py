@@ -138,6 +138,43 @@ def test_validation_detects_missing_leading_trailing_years():
     assert 2015 in year_issue[0]["missing_years"]
 
 
+def test_validation_detects_per_geo_year_gaps():
+    """Regression test for coclab-5nbw: a panel where all years are present
+    globally but different geos are missing different years must NOT pass
+    as structurally valid."""
+    df = pd.DataFrame({
+        "geo_id": ["A", "A", "B", "B"],
+        "year": [2015, 2017, 2015, 2016],
+        "pit_total": [10, 12, 8, 9],
+        "pit_sheltered": [6, 7, 5, 5],
+        "pit_unsheltered": [4, 5, 3, 4],
+        "total_population": [1000, 1010, 800, 810],
+        "median_household_income": [50000.0, 51000.0, 45000.0, 45500.0],
+        "zori": [1000.0, 1050.0, 900.0, 918.0],
+    })
+    spec = AuditPanelSpec(
+        panel_name="test_panel",
+        workload_id="T",
+        unit_type="coc",
+        source_panel_path="",
+        selection_rule="",
+        missing_policy="drop",
+        rent_proxy="zori_january",
+        notes="",
+        start_year=2015,
+        end_year=2017,
+    )
+    validation = _validate_raw_panel(df, spec=spec, drop_reasons={})
+    assert not validation["structurally_valid"]
+    coverage_issue = [
+        i for i in validation["issues"] if i["check"] == "per_geo_year_coverage"
+    ]
+    assert coverage_issue
+    gaps = coverage_issue[0]["geos_missing_years"]
+    assert 2016 in gaps["A"]
+    assert 2017 in gaps["B"]
+
+
 def test_validation_reports_balanced_panel():
     raw_df = _raw_fixture()
     # Use a spec whose year window matches the fixture (2020-2021).

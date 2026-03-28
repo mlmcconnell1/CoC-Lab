@@ -9,10 +9,13 @@ replicator can use to reproduce the build.
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -130,6 +133,7 @@ def export_bundle(
             msg = f"Asset path escapes project root: {asset.path}"
             raise ValueError(msg)
         if not src.exists():
+            logger.warning("export_bundle: skipping missing asset %s", asset.path)
             continue
         dst = (assets_dir / rel).resolve()
         if not dst.is_relative_to(assets_dir.resolve()):

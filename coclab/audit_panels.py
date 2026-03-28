@@ -361,7 +361,8 @@ def _validate_raw_panel(
     # Check for missing years against the spec's declared audit window.
     all_years = sorted(raw_df["year"].unique())
     expected_years = list(range(spec.start_year, spec.end_year + 1))
-    missing_years = sorted(set(expected_years) - set(all_years))
+    expected_set = set(expected_years)
+    missing_years = sorted(expected_set - set(all_years))
     if missing_years:
         issues.append({
             "check": "year_contiguity",
@@ -372,6 +373,23 @@ def _validate_raw_panel(
         })
     else:
         passed_checks.append("year_contiguity")
+
+    # Check that every geo_id individually covers the full declared window,
+    # not just the global union of years across all geos.
+    per_geo_years = raw_df.groupby("geo_id")["year"].apply(set)
+    geos_missing = {
+        geo: sorted(expected_set - years)
+        for geo, years in per_geo_years.items()
+        if years != expected_set
+    }
+    if geos_missing:
+        issues.append({
+            "check": "per_geo_year_coverage",
+            "message": "some units are missing years from the declared window",
+            "geos_missing_years": geos_missing,
+        })
+    else:
+        passed_checks.append("per_geo_year_coverage")
 
     numeric_cols = [
         "pit_total",

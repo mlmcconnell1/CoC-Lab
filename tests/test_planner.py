@@ -222,6 +222,25 @@ class TestPlannerAutoTransform:
         for t in pit_tasks:
             assert t.transform_id is None
 
+    def test_method_parameter_forwarded(self):
+        """Regression coclab-im99: method parameter is forwarded to
+        _resolve_auto_transform for future direction validation."""
+        data = _segmented_recipe()
+        # Changing method to allocate should still resolve because
+        # crosswalks are symmetric — both directions match.
+        for step in data["pipelines"][0]["steps"]:
+            if "resample" in step and step["resample"].get("dataset") == "acs":
+                step["resample"]["method"] = "allocate"
+                break
+        recipe = load_recipe(data)
+        plan = resolve_plan(recipe, "main")
+        alloc_tasks = [
+            t for t in plan.resample_tasks
+            if t.dataset_id == "acs" and t.method == "allocate"
+        ]
+        assert len(alloc_tasks) > 0
+        assert alloc_tasks[0].transform_id is not None
+
 
 # ===========================================================================
 # Planner: error cases

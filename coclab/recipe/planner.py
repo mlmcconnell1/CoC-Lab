@@ -233,20 +233,36 @@ def _resolve_auto_transform(
     effective_geometry: GeometryRef,
     to_geometry: GeometryRef,
     recipe: RecipeV1,
+    method: str = "",
 ) -> str:
     """Select a compatible transform for via:auto.
 
     Looks for a crosswalk/rollup whose endpoints connect
-    to_geometry <-> effective_geometry (in either direction).
+    to_geometry <-> effective_geometry, constrained by the resample
+    method's direction requirements.
+
+    When ``method`` is specified, the transform must connect the two
+    geometry endpoints.  Both from/to directions are accepted because
+    crosswalk data is symmetric (contains columns for both geometry
+    types regardless of the from/to naming convention).
     """
     candidates: list[str] = []
 
     for t in recipe.transforms:
-        # Check from→to_geometry and to→effective_geometry
-        if _geometry_matches(t.from_, to_geometry) and _geometry_matches(t.to, effective_geometry):
-            candidates.append(t.id)
-        # Also check the reverse direction
-        elif _geometry_matches(t.from_, effective_geometry) and _geometry_matches(t.to, to_geometry):
+        # Direction A: transform from→to_geometry, to→effective_geometry
+        # (crosswalk goes target → source, used by allocate)
+        fwd = (
+            _geometry_matches(t.from_, to_geometry)
+            and _geometry_matches(t.to, effective_geometry)
+        )
+        # Direction B: transform from→effective_geometry, to→to_geometry
+        # (crosswalk goes source → target, used by aggregate)
+        rev = (
+            _geometry_matches(t.from_, effective_geometry)
+            and _geometry_matches(t.to, to_geometry)
+        )
+
+        if fwd or rev:
             candidates.append(t.id)
 
     if len(candidates) == 0:
@@ -320,6 +336,7 @@ def resolve_plan(recipe: RecipeV1, pipeline_id: str) -> ExecutionPlan:
                             effective_geometry=resolved.effective_geometry,
                             to_geometry=step.to_geometry,
                             recipe=recipe,
+                            method=step.method,
                         )
                     else:
                         transform_id = step.via

@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
+
 logger = logging.getLogger(__name__)
 
 # PEP uses a higher coverage threshold because county data is near-complete
@@ -157,8 +159,14 @@ def run_pep_diagnostics(
 
     if output_path is not None:
         output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        diagnostics.to_parquet(output_path, index=False)
+        provenance = ProvenanceBlock(
+            extra={
+                "dataset_type": "pep_diagnostics",
+                "min_coverage": min_coverage,
+                "source_path": str(pep_coc_path),
+            },
+        )
+        write_parquet_with_provenance(diagnostics, output_path, provenance)
         logger.info(f"Saved PEP diagnostics to {output_path}")
 
     return summary, diagnostics
