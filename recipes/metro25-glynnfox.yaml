@@ -41,6 +41,7 @@ datasets:
     params:
       series: postcensal
       vintage: 2020
+      align: point_in_time_jan
     path: data/curated/pep/pep_county__v2020.parquet
 
   zori_county:
@@ -110,6 +111,11 @@ pipelines:
           join_on: [geo_id, year]
 
 filters:
+  pep_county:
+    type: temporal
+    column: reference_date
+    method: interpolate_to_month
+    month: 1
   zori_county:
     type: temporal
     column: date

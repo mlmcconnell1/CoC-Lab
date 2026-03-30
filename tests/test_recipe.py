@@ -3449,6 +3449,145 @@ class TestTemporalFilters:
         assert val_2021 == pytest.approx(60.0)
 
 
+    # --- interpolate_to_month tests ----------------------------------------
+
+    def test_interpolate_to_month_basic_january(self):
+        """PEP July→January: jan(Y) = 0.5 * jul(Y-1) + 0.5 * jul(Y)."""
+        df = pd.DataFrame({
+            "county_fips": ["01001"] * 3,
+            "year": [2018, 2019, 2020],
+            "reference_date": pd.to_datetime(
+                ["2018-07-01", "2019-07-01", "2020-07-01"]
+            ),
+            "population": [1000.0, 1100.0, 1200.0],
+        })
+
+        out = _apply_temporal_filter(
+            df,
+            filt=TemporalFilter(
+                type="temporal",
+                column="reference_date",
+                method="interpolate_to_month",
+                month=1,
+            ),
+            year=2019,
+            dataset_id="pep",
+            year_column="year",
+        )
+
+        assert "reference_date" not in out.columns
+        assert set(out["year"]) == {2018, 2019, 2020}
+        # 2018: no prior year → raw value 1000
+        assert out.loc[out["year"] == 2018, "population"].iloc[0] == pytest.approx(1000.0)
+        # 2019: 0.5 * 1000 + 0.5 * 1100 = 1050
+        assert out.loc[out["year"] == 2019, "population"].iloc[0] == pytest.approx(1050.0)
+        # 2020: 0.5 * 1100 + 0.5 * 1200 = 1150
+        assert out.loc[out["year"] == 2020, "population"].iloc[0] == pytest.approx(1150.0)
+
+    def test_interpolate_to_month_multiple_geos(self):
+        """Interpolation groups by geography independently."""
+        df = pd.DataFrame({
+            "county_fips": ["A", "A", "B", "B"],
+            "year": [2019, 2020, 2019, 2020],
+            "reference_date": pd.to_datetime(
+                ["2019-07-01", "2020-07-01", "2019-07-01", "2020-07-01"]
+            ),
+            "population": [100.0, 200.0, 500.0, 600.0],
+        })
+
+        out = _apply_temporal_filter(
+            df,
+            filt=TemporalFilter(
+                type="temporal",
+                column="reference_date",
+                method="interpolate_to_month",
+                month=1,
+            ),
+            year=2020,
+            dataset_id="pep",
+            year_column="year",
+        )
+
+        a_2020 = out.loc[
+            (out["county_fips"] == "A") & (out["year"] == 2020), "population"
+        ].iloc[0]
+        b_2020 = out.loc[
+            (out["county_fips"] == "B") & (out["year"] == 2020), "population"
+        ].iloc[0]
+        assert a_2020 == pytest.approx(150.0)  # 0.5*100 + 0.5*200
+        assert b_2020 == pytest.approx(550.0)  # 0.5*500 + 0.5*600
+
+    def test_interpolate_to_month_same_source_target(self):
+        """When source month == target month, no interpolation needed."""
+        df = pd.DataFrame({
+            "geo_id": ["A", "A"],
+            "year": [2019, 2020],
+            "reference_date": pd.to_datetime(["2019-07-01", "2020-07-01"]),
+            "value": [10.0, 20.0],
+        })
+
+        out = _apply_temporal_filter(
+            df,
+            filt=TemporalFilter(
+                type="temporal",
+                column="reference_date",
+                method="interpolate_to_month",
+                month=7,
+            ),
+            year=2020,
+            dataset_id="demo",
+            year_column="year",
+        )
+
+        assert "reference_date" not in out.columns
+        assert set(out["year"]) == {2019, 2020}
+        assert out.loc[out["year"] == 2020, "value"].iloc[0] == pytest.approx(20.0)
+
+    def test_interpolate_to_month_no_year_col_raises(self):
+        """Missing year column raises ExecutorError."""
+        df = pd.DataFrame({
+            "geo_id": ["A"],
+            "reference_date": pd.to_datetime(["2020-07-01"]),
+            "value": [10.0],
+        })
+
+        with pytest.raises(ExecutorError, match="requires a year column"):
+            _apply_temporal_filter(
+                df,
+                filt=TemporalFilter(
+                    type="temporal",
+                    column="reference_date",
+                    method="interpolate_to_month",
+                    month=1,
+                ),
+                year=2020,
+                dataset_id="demo",
+            )
+
+    def test_interpolate_to_month_non_datetime_raises(self):
+        """Non-datetime column raises ExecutorError."""
+        df = pd.DataFrame({
+            "geo_id": ["A"],
+            "year": [2020],
+            "reference_date": [7],
+            "value": [10.0],
+        })
+
+        with pytest.raises(ExecutorError, match="requires a datetime column"):
+            _apply_temporal_filter(
+                df,
+                filt=TemporalFilter(
+                    type="temporal",
+                    column="reference_date",
+                    method="interpolate_to_month",
+                    month=1,
+                ),
+                year=2020,
+                dataset_id="demo",
+                year_column="year",
+            )
+
+
 # ===========================================================================
 # Column resolution safety tests
 # ===========================================================================

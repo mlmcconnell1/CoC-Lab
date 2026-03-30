@@ -246,7 +246,12 @@ class DatasetSpec(BaseModel):
 # Filters (temporal)
 # -----------------------------
 
-TemporalMethod = Literal["point_in_time", "calendar_mean", "calendar_median"]
+TemporalMethod = Literal[
+    "point_in_time",
+    "calendar_mean",
+    "calendar_median",
+    "interpolate_to_month",
+]
 
 
 class TemporalFilter(BaseModel):
@@ -263,9 +268,9 @@ class TemporalFilter(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _validate_point_in_time_requires_month(self) -> "TemporalFilter":
-        if self.method == "point_in_time" and self.month is None:
-            raise ValueError("Temporal filter method 'point_in_time' requires 'month'.")
+    def _validate_method_requires_month(self) -> "TemporalFilter":
+        if self.method in ("point_in_time", "interpolate_to_month") and self.month is None:
+            raise ValueError(f"Temporal filter method '{self.method}' requires 'month'.")
         return self
 
 

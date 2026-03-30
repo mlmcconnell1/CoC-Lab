@@ -166,6 +166,16 @@ def _validate_census_pep(spec: DatasetSpec) -> list[ValidationDiagnostic]:
                 f"census/pep: unrecognized params {sorted(unknown)}.",
             )
         )
+    if "align" in spec.params:
+        valid_aligns = ("point_in_time_jan",)
+        if spec.params["align"] not in valid_aligns:
+            diags.append(
+                ValidationDiagnostic(
+                    "warning",
+                    f"census/pep: unknown align mode '{spec.params['align']}'; "
+                    f"expected one of {valid_aligns}.",
+                )
+            )
     return diags
 
 

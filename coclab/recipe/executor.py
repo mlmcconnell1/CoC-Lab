@@ -681,6 +681,102 @@ def _apply_temporal_filter(
             )
         agg_func = "mean" if filt.method == "calendar_mean" else "median"
         return df.groupby(group_cols, as_index=False)[measure_cols].agg(agg_func)
+    elif filt.method == "interpolate_to_month":
+        # Linear interpolation between adjacent annual observations to estimate
+        # a value at a target month.  E.g. PEP July→January: for year Y,
+        # jan(Y) = 0.5 * jul(Y-1) + 0.5 * jul(Y).
+        if filt.month is None:
+            raise ExecutorError(
+                f"Temporal filter for '{dataset_id}': "
+                "interpolate_to_month requires 'month'."
+            )
+        target_month = filt.month
+        series = df[col]
+        if not (hasattr(series, "dt") and hasattr(series.dt, "month")):
+            raise ExecutorError(
+                f"Temporal filter for '{dataset_id}': interpolate_to_month "
+                f"requires a datetime column '{col}'."
+            )
+        source_months = series.dt.month.unique()
+        if len(source_months) != 1:
+            raise ExecutorError(
+                f"Temporal filter for '{dataset_id}': interpolate_to_month "
+                f"expects a single source month but found {sorted(source_months)}."
+            )
+        source_month = int(source_months[0])
+        if source_month == target_month:
+            # No interpolation needed — fall through to point_in_time semantics.
+            if "year" not in df.columns:
+                df = df.copy()
+                df["year"] = df[col].dt.year
+            return df.drop(columns=[col])
+
+        # Determine the interpolation fraction and direction.
+        # months_forward = distance (in months) from the prior source observation
+        # to the target month.
+        months_forward = (target_month - source_month) % 12
+        fraction = months_forward / 12.0
+
+        # Identify grouping and measure columns.
+        yr_col = year_column if year_column else (
+            "year" if "year" in df.columns else None
+        )
+        if yr_col is None or yr_col not in df.columns:
+            raise ExecutorError(
+                f"Temporal filter for '{dataset_id}': interpolate_to_month "
+                "requires a year column. Set year_column on the dataset spec."
+            )
+        numeric_cols = set(df.select_dtypes("number").columns)
+        geo_cols = [
+            c for c in df.columns
+            if c != col and c != yr_col and c not in numeric_cols
+        ]
+        measure_cols = [
+            c for c in df.select_dtypes("number").columns
+            if c != yr_col
+        ]
+
+        # Build a current-year and previous-year copy for the merge.
+        keep = geo_cols + [yr_col] + measure_cols
+        df_curr = df[keep].copy()
+
+        if target_month < source_month:
+            # Target is before source in the calendar year.
+            # January(Y) sits between Jul(Y-1) and Jul(Y).
+            df_prev = df_curr.copy()
+            df_prev[yr_col] = df_prev[yr_col] + 1  # align Y-1 row to year Y
+        else:
+            # Target is after source in the calendar year.
+            # e.g. Oct(Y) sits between Jul(Y) and Jul(Y+1).
+            df_prev = df_curr.rename(columns={yr_col: yr_col})
+            df_prev = df_curr.copy()
+            df_curr_shifted = df_curr.copy()
+            df_curr_shifted[yr_col] = df_curr_shifted[yr_col] - 1
+            # prev = same year's source, curr = next year's source
+            df_prev, df_curr = df_curr, df_curr_shifted
+            df_prev[yr_col] = df_prev[yr_col]  # year Y has source from Y
+            df_curr[yr_col] = df_curr[yr_col] + 1  # next year's source → year Y
+
+        merged = df_curr.merge(
+            df_prev,
+            on=geo_cols + [yr_col],
+            suffixes=("", "_prev"),
+            how="left",
+        )
+
+        for mcol in measure_cols:
+            curr_vals = merged[mcol]
+            prev_col = f"{mcol}_prev"
+            if prev_col in merged.columns:
+                prev_vals = merged[prev_col]
+                merged[mcol] = np.where(
+                    prev_vals.notna(),
+                    (1 - fraction) * prev_vals + fraction * curr_vals,
+                    curr_vals,
+                )
+        # Drop the _prev helper columns.
+        prev_drop = [c for c in merged.columns if c.endswith("_prev")]
+        return merged.drop(columns=prev_drop)
     else:
         raise ExecutorError(f"Unknown temporal filter method '{filt.method}'.")
 
