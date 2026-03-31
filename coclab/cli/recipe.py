@@ -15,7 +15,11 @@ from coclab.recipe.adapters import (
 )
 from coclab.recipe.cache import RecipeCache
 from coclab.recipe.default_adapters import register_defaults
-from coclab.recipe.executor import ExecutorError, execute_recipe
+from coclab.recipe.executor import (
+    ExecutorError,
+    execute_recipe,
+    resolve_pipeline_artifacts,
+)
 from coclab.recipe.loader import RecipeLoadError, load_recipe
 from coclab.recipe.manifest import export_bundle as do_export_bundle
 from coclab.recipe.manifest import read_manifest
@@ -283,7 +287,25 @@ def recipe_cmd(
         raise typer.Exit(code=1) from exc
 
     if use_json:
-        _json_out({
+        pipeline_items = [
+            {
+                "pipeline_id": r.pipeline_id,
+                "success": r.success,
+                "artifacts": resolve_pipeline_artifacts(parsed, r.pipeline_id),
+                "steps": [
+                    {
+                        "step_kind": s.step_kind,
+                        "detail": s.detail,
+                        "success": s.success,
+                        "error": s.error,
+                        "notes": s.notes,
+                    }
+                    for s in r.steps
+                ],
+            }
+            for r in results
+        ]
+        payload = {
             "status": "ok",
             "recipe_name": parsed.name,
             "recipe_version": parsed.version,
@@ -291,24 +313,11 @@ def recipe_cmd(
                 "warnings": all_warnings,
                 "errors": [],
             },
-            "pipelines": [
-                {
-                    "pipeline_id": r.pipeline_id,
-                    "success": r.success,
-                    "steps": [
-                        {
-                            "step_kind": s.step_kind,
-                            "detail": s.detail,
-                            "success": s.success,
-                            "error": s.error,
-                            "notes": s.notes,
-                        }
-                        for s in r.steps
-                    ],
-                }
-                for r in results
-            ],
-        })
+            "pipelines": pipeline_items,
+        }
+        if len(pipeline_items) == 1:
+            payload["artifacts"] = pipeline_items[0]["artifacts"]
+        _json_out(payload)
         return
 
     total_steps = sum(len(r.steps) for r in results)

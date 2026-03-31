@@ -1594,6 +1594,85 @@ def _target_geometry_metadata(
     return geo_type, boundary_vintage, definition_version
 
 
+def _resolve_pipeline_target(
+    recipe: RecipeV1,
+    pipeline_id: str,
+):
+    """Return the pipeline and target referenced by *pipeline_id*."""
+    pipeline = next((p for p in recipe.pipelines if p.id == pipeline_id), None)
+    if pipeline is None:
+        raise ExecutorError(f"Pipeline '{pipeline_id}' not found in recipe.")
+
+    target = next((t for t in recipe.targets if t.id == pipeline.target), None)
+    if target is None:
+        raise ExecutorError(f"Target '{pipeline.target}' not found in recipe.")
+
+    return pipeline, target
+
+
+def _resolve_panel_output_file(
+    recipe: RecipeV1,
+    pipeline_id: str,
+    project_root: Path,
+) -> Path:
+    """Return the canonical panel parquet path for a pipeline."""
+    _, target = _resolve_pipeline_target(recipe, pipeline_id)
+    target_geo_type, boundary_vintage, definition_version = _target_geometry_metadata(
+        target.geometry,
+    )
+
+    if target_geo_type == "metro" and definition_version is None:
+        raise ExecutorError(
+            "Metro recipe targets must set geometry.source to the "
+            "metro definition version so panel outputs can be named."
+        )
+
+    universe_years = expand_year_spec(recipe.universe)
+    start_year = min(universe_years)
+    end_year = max(universe_years)
+
+    return (
+        project_root / "data" / "curated" / "panel" / geo_panel_filename(
+            start_year,
+            end_year,
+            geo_type=target_geo_type,
+            boundary_vintage=boundary_vintage if target_geo_type == "coc" else None,
+            definition_version=definition_version,
+        )
+    )
+
+
+def resolve_pipeline_artifacts(
+    recipe: RecipeV1,
+    pipeline_id: str,
+    *,
+    project_root: Path | None = None,
+) -> dict[str, str]:
+    """Return canonical relative output paths for a pipeline's declared outputs."""
+    if project_root is None:
+        project_root = Path.cwd()
+
+    _, target = _resolve_pipeline_target(recipe, pipeline_id)
+    panel_file = _resolve_panel_output_file(recipe, pipeline_id, project_root)
+    artifacts: dict[str, str] = {}
+
+    if "panel" in target.outputs:
+        artifacts["panel_path"] = str(panel_file.relative_to(project_root))
+        artifacts["manifest_path"] = str(
+            panel_file.with_suffix(".manifest.json").relative_to(project_root),
+        )
+
+    if "diagnostics" in target.outputs:
+        diagnostics_file = panel_file.with_name(
+            f"{panel_file.stem}__diagnostics.json",
+        )
+        artifacts["diagnostics_path"] = str(
+            diagnostics_file.relative_to(project_root),
+        )
+
+    return artifacts
+
+
 def _apply_cohort_selector(
     panel: pd.DataFrame,
     cohort: "CohortSelector",
@@ -1687,26 +1766,14 @@ def _assemble_panel(
     :class:`StepResult` on error.  Shared by ``_persist_outputs`` and
     ``_persist_diagnostics`` to avoid duplicating panel assembly logic.
     """
-    pipeline = next(
-        (p for p in ctx.recipe.pipelines if p.id == plan.pipeline_id), None,
-    )
-    if pipeline is None:
+    try:
+        _, target = _resolve_pipeline_target(ctx.recipe, plan.pipeline_id)
+    except ExecutorError as exc:
         return StepResult(
             step_kind=step_kind,
             detail=f"{step_kind}",
             success=False,
-            error=f"Pipeline '{plan.pipeline_id}' not found in recipe.",
-        )
-
-    target = next(
-        (t for t in ctx.recipe.targets if t.id == pipeline.target), None,
-    )
-    if target is None:
-        return StepResult(
-            step_kind=step_kind,
-            detail=f"{step_kind}",
-            success=False,
-            error=f"Target '{pipeline.target}' not found in recipe.",
+            error=str(exc),
         )
 
     universe_years = expand_year_spec(ctx.recipe.universe)
@@ -1773,29 +1840,22 @@ def _persist_outputs(
     definition_version = assembled.definition_version
 
     universe_years = expand_year_spec(ctx.recipe.universe)
-
-    if target_geo_type == "metro":
-        if definition_version is None:
-            return StepResult(
-                step_kind="persist",
-                detail="persist outputs",
-                success=False,
-                error=(
-                    "Metro recipe targets must set geometry.source to the "
-                    "metro definition version so panel outputs can be named."
-                ),
-            )
     start_year = min(universe_years)
     end_year = max(universe_years)
-    output_dir = ctx.project_root / "data" / "curated" / "panel"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_file = output_dir / geo_panel_filename(
-        start_year,
-        end_year,
-        geo_type=target_geo_type,
-        boundary_vintage=boundary_vintage if target_geo_type == "coc" else None,
-        definition_version=definition_version,
-    )
+
+    try:
+        output_file = _resolve_panel_output_file(
+            ctx.recipe, plan.pipeline_id, ctx.project_root,
+        )
+    except ExecutorError as exc:
+        return StepResult(
+            step_kind="persist",
+            detail="persist outputs",
+            success=False,
+            error=str(exc),
+        )
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
 
     # Detect output filename collision from a prior pipeline in this run.
     if output_file.exists() and output_file in getattr(ctx, "_written_outputs", set()):
@@ -1901,23 +1961,33 @@ def _persist_diagnostics(
         return assembled
 
     panel = assembled.panel
-    target_geo_type = assembled.target_geo_type
-    boundary_vintage = assembled.boundary_vintage
-    definition_version = assembled.definition_version
 
-    universe_years = expand_year_spec(ctx.recipe.universe)
-    start_year = min(universe_years)
-    end_year = max(universe_years)
-    output_dir = ctx.project_root / "data" / "curated" / "panel"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    panel_stem = geo_panel_filename(
-        start_year,
-        end_year,
-        geo_type=target_geo_type,
-        boundary_vintage=boundary_vintage if target_geo_type == "coc" else None,
-        definition_version=definition_version,
-    ).replace(".parquet", "")
-    diagnostics_file = output_dir / f"{panel_stem}__diagnostics.json"
+    try:
+        artifacts = resolve_pipeline_artifacts(
+            ctx.recipe,
+            plan.pipeline_id,
+            project_root=ctx.project_root,
+        )
+    except ExecutorError as exc:
+        return StepResult(
+            step_kind="persist_diagnostics",
+            detail="persist_diagnostics",
+            success=False,
+            error=str(exc),
+        )
+    diagnostics_path = artifacts.get("diagnostics_path")
+    if diagnostics_path is None:
+        return StepResult(
+            step_kind="persist_diagnostics",
+            detail="persist_diagnostics",
+            success=False,
+            error=(
+                f"Pipeline '{plan.pipeline_id}' does not declare a diagnostics "
+                "output path."
+            ),
+        )
+    diagnostics_file = ctx.project_root / diagnostics_path
+    diagnostics_file.parent.mkdir(parents=True, exist_ok=True)
 
     # Generate diagnostics
     report = generate_diagnostics_report(panel)

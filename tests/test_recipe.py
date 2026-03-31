@@ -4497,6 +4497,34 @@ class TestRecipeJsonMode:
         assert "resample" in kinds
         assert "join" in kinds
 
+    def test_json_full_execution_reports_written_artifact_paths(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ):
+        _make_project_root(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _setup_pipeline_fixtures(tmp_path)
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["path"] = "data/pit.parquet"
+        data["datasets"]["acs"]["path"] = "data/acs.parquet"
+        data["targets"][0]["outputs"] = ["panel", "diagnostics"]
+        rf = self._write_recipe(tmp_path, data)
+        result = runner.invoke(app, [
+            "build", "recipe",
+            "--recipe", str(rf),
+            "--json",
+        ])
+        assert result.exit_code == 0
+        out = json.loads(result.output)
+        expected_artifacts = {
+            "panel_path": "data/curated/panel/panel__Y2020-2021@B2025.parquet",
+            "manifest_path": "data/curated/panel/panel__Y2020-2021@B2025.manifest.json",
+            "diagnostics_path": "data/curated/panel/panel__Y2020-2021@B2025__diagnostics.json",
+        }
+        assert out["artifacts"] == expected_artifacts
+        assert out["pipelines"][0]["artifacts"] == expected_artifacts
+        for rel_path in expected_artifacts.values():
+            assert (tmp_path / rel_path).exists()
+
     def test_json_suppresses_progress(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ):
