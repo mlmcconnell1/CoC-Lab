@@ -48,6 +48,20 @@ DEFAULT_DOMINANCE_THRESHOLD = 0.80
 DEFAULT_TOP_N = 10
 
 
+def _format_stat(value: object, *, digits: int = 3) -> str:
+    """Format a numeric summary value, using ``n/a`` for empty inputs."""
+    if pd.isna(value):
+        return "n/a"
+    return f"{float(value):.{digits}f}"
+
+
+def _format_count_share(count: int, total: int) -> str:
+    """Format ``count`` with its share of ``total`` or ``n/a`` when empty."""
+    if total == 0:
+        return f"{count} (n/a)"
+    return f"{count} ({100 * count / total:.1f}%)"
+
+
 # =============================================================================
 # Per-CoC Diagnostic Computation
 # =============================================================================
@@ -223,28 +237,31 @@ def generate_text_summary(
     lines.append("-" * 50)
 
     cov_mean = diagnostics_df["coverage_ratio_mean"]
-    lines.append(f"  Mean coverage (across all CoCs):   {cov_mean.mean():.3f}")
-    lines.append(f"  Median coverage:                   {cov_mean.median():.3f}")
-    lines.append(f"  Min coverage:                      {cov_mean.min():.3f}")
-    lines.append(f"  Max coverage:                      {cov_mean.max():.3f}")
+    lines.append(
+        "  Mean coverage (across all CoCs):   "
+        f"{_format_stat(cov_mean.mean())}"
+    )
+    lines.append(f"  Median coverage:                   {_format_stat(cov_mean.median())}")
+    lines.append(f"  Min coverage:                      {_format_stat(cov_mean.min())}")
+    lines.append(f"  Max coverage:                      {_format_stat(cov_mean.max())}")
     lines.append("")
 
     # Count CoCs by coverage level
     full_coverage = (cov_mean >= 0.99).sum()
     lines.append(
-        f"  CoCs with >= 99% coverage:   {full_coverage} ({100 * full_coverage / n_cocs:.1f}%)"
+        f"  CoCs with >= 99% coverage:   {_format_count_share(full_coverage, n_cocs)}"
     )
 
     good_coverage = (cov_mean >= min_coverage).sum()
     lines.append(
-        f"  CoCs with >= {min_coverage:.0%} coverage:  {good_coverage} "
-        f"({100 * good_coverage / n_cocs:.1f}%)"
+        f"  CoCs with >= {min_coverage:.0%} coverage:  "
+        f"{_format_count_share(good_coverage, n_cocs)}"
     )
 
     low_coverage = (cov_mean < min_coverage).sum()
     lines.append(
-        f"  CoCs with < {min_coverage:.0%} coverage:   {low_coverage} "
-        f"({100 * low_coverage / n_cocs:.1f}%)"
+        f"  CoCs with < {min_coverage:.0%} coverage:   "
+        f"{_format_count_share(low_coverage, n_cocs)}"
     )
     lines.append("")
 
@@ -255,13 +272,21 @@ def generate_text_summary(
 
     periods_covered = diagnostics_df["periods_covered"]
     lines.append(
-        f"  Mean {period_label_lower} covered:   {periods_covered.mean():.1f} / {n_periods}"
+        f"  Mean {period_label_lower} covered:   "
+        f"{_format_stat(periods_covered.mean(), digits=1)} / {n_periods}"
     )
     lines.append(
-        f"  Median {period_label_lower} covered: {periods_covered.median():.1f} / {n_periods}"
+        f"  Median {period_label_lower} covered: "
+        f"{_format_stat(periods_covered.median(), digits=1)} / {n_periods}"
     )
-    lines.append(f"  Min {period_label_lower} covered:    {periods_covered.min()} / {n_periods}")
-    lines.append(f"  Max {period_label_lower} covered:    {periods_covered.max()} / {n_periods}")
+    lines.append(
+        f"  Min {period_label_lower} covered:    "
+        f"{_format_stat(periods_covered.min(), digits=1)} / {n_periods}"
+    )
+    lines.append(
+        f"  Max {period_label_lower} covered:    "
+        f"{_format_stat(periods_covered.max(), digits=1)} / {n_periods}"
+    )
 
     # CoCs with no valid periods
     no_valid_periods = (periods_covered == 0).sum()
@@ -281,8 +306,8 @@ def generate_text_summary(
 
             high_dominance = (max_geo > dominance_threshold).sum()
             lines.append(
-                f"  CoCs with > {dominance_threshold:.0%} dominance:  {high_dominance} "
-                f"({100 * high_dominance / n_cocs:.1f}%)"
+                f"  CoCs with > {dominance_threshold:.0%} dominance:  "
+                f"{_format_count_share(high_dominance, n_cocs)}"
             )
             lines.append("")
 

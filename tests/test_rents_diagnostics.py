@@ -8,6 +8,8 @@ Tests cover:
 - run_zori_diagnostics: saves CSV and parquet correctly
 """
 
+import warnings
+
 import pandas as pd
 import pytest
 
@@ -253,7 +255,7 @@ class TestGenerateTextSummary:
         assert "HIGH_DOM" in text
 
     def test_zero_cocs_edge_case(self):
-        """Should handle empty diagnostics without crashing."""
+        """Should handle empty diagnostics without runtime warnings."""
         empty_input = pd.DataFrame(
             columns=["coc_id", "date", "zori_coc", "coverage_ratio", "max_geo_contribution"]
         )
@@ -272,9 +274,18 @@ class TestGenerateTextSummary:
                 "flag_high_dominance": pd.Series([], dtype="bool"),
             }
         )
-        text = generate_text_summary(empty_input, empty_diag)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            text = generate_text_summary(empty_input, empty_diag)
+        runtime_warnings = [
+            warning for warning in caught
+            if issubclass(warning.category, RuntimeWarning)
+        ]
+        assert not runtime_warnings
         assert "Total CoCs:" in text
         assert "0" in text
+        assert "Mean coverage (across all CoCs):   n/a" in text
+        assert "CoCs with >= 99% coverage:   0 (n/a)" in text
 
     def test_all_flagged_cocs(self):
         """When all CoCs are flagged, counts should match total CoCs."""
