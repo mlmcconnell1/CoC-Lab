@@ -18,6 +18,7 @@ dependencies = [
     "pyxlsb>=1.0.10",
     "ipumspy>=0.5.0",
     "pydantic>=2.0.0",
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]

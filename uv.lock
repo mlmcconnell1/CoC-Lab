@@ -139,6 +139,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyproj" },
     { name = "pyxlsb" },
+    { name = "pyyaml" },
     { name = "shapely" },
     { name = "typer" },
 ]
@@ -165,6 +166,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-httpx", marker = "extra == 'dev'", specifier = ">=0.30.0" },
     { name = "pyxlsb", specifier = ">=1.0.10" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4.0" },
     { name = "shapely", specifier = ">=2.0.0" },
     { name = "typer", specifier = ">=0.12.0" },
