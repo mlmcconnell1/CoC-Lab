@@ -9,6 +9,8 @@ from typing import Annotated
 import pyarrow.parquet as pq
 import typer
 
+from coclab.paths import curated_dir
+
 
 def _format_size(size_bytes: int) -> str:
     """Format file size in human-readable format."""
@@ -66,13 +68,13 @@ def list_census(
         ),
     ] = None,
     directory: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--dir",
             "-d",
             help="Directory to scan for census files.",
         ),
-    ] = Path("data/curated/tiger"),
+    ] = None,
     json_output: Annotated[
         bool,
         typer.Option(
@@ -97,6 +99,9 @@ def list_census(
 
         coclab list census --dir /path/to/census
     """
+    if directory is None:
+        directory = curated_dir("tiger")
+
     # Validate type option
     valid_types = ("tracts", "counties")
     if census_type is not None and census_type not in valid_types:

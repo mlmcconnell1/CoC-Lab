@@ -8,8 +8,8 @@ from typing import Annotated
 import pandas as pd
 import typer
 
+from coclab.paths import curated_root
 from coclab.source_registry import (
-    DEFAULT_REGISTRY_PATH,
     REGISTRY_COLUMNS,
 )
 
@@ -63,13 +63,13 @@ def registry_rebuild(
         ),
     ] = "prompt",
     registry_path: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--registry",
             "-r",
             help="Path to source registry file.",
         ),
-    ] = DEFAULT_REGISTRY_PATH,
+    ] = None,
 ) -> None:
     """Rebuild the source registry by validating local files.
 
@@ -87,6 +87,8 @@ def registry_rebuild(
 
         coclab registry rebuild --dry-run
     """
+    if registry_path is None:
+        registry_path = curated_root() / "source_registry.parquet"
     if not registry_path.exists():
         typer.echo(f"Registry not found at {registry_path}")
         return

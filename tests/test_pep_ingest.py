@@ -222,10 +222,8 @@ class TestDownloadPepIntercensal:
     """Tests for download_pep_intercensal helper."""
 
     def test_defaults_to_canonical_year_dir(self, tmp_path, httpx_mock, monkeypatch):
-        """raw_dir=None should use data/raw/pep/<intercensal_year>/."""
-        import coclab.raw_snapshot as raw_snapshot_mod
-
-        monkeypatch.setattr(raw_snapshot_mod, "RAW_DATA_ROOT", tmp_path / "raw")
+        """raw_dir=None should resolve from storage config defaults."""
+        monkeypatch.chdir(tmp_path)
 
         url = "https://example.com/intercensal.csv"
         content = b"SUMLEV,STATE,COUNTY,POPESTIMATE2020\n50,01,001,58239\n"
@@ -234,7 +232,7 @@ class TestDownloadPepIntercensal:
         path, sha256 = download_pep_intercensal(url, raw_dir=None, force=True)
 
         assert path.exists()
-        assert path.parent == tmp_path / "raw" / "pep" / str(INTERCENSAL_YEAR_RANGE[1])
+        assert path.parent == tmp_path / "data" / "raw" / "pep" / str(INTERCENSAL_YEAR_RANGE[1])
         assert path.name.startswith("pep_county__intercensal_2010_2020__")
         assert len(sha256) == 64
 

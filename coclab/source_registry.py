@@ -53,6 +53,8 @@ from typing import Literal
 
 import pandas as pd
 
+from coclab.paths import curated_root
+
 logger = logging.getLogger(__name__)
 
 # Supported source types
@@ -71,8 +73,6 @@ SourceType = Literal[
     "other",  # Other external sources
 ]
 
-# Default registry path
-DEFAULT_REGISTRY_PATH = Path("data/curated/source_registry.parquet")
 
 # Registry columns
 REGISTRY_COLUMNS = [
@@ -146,7 +146,7 @@ def _load_registry(registry_path: Path | None = None) -> pd.DataFrame:
     Returns empty DataFrame with correct schema if file doesn't exist.
     """
     if registry_path is None:
-        registry_path = DEFAULT_REGISTRY_PATH
+        registry_path = curated_root() / "source_registry.parquet"
 
     if not registry_path.exists():
         return pd.DataFrame(columns=REGISTRY_COLUMNS)
@@ -159,7 +159,7 @@ def _save_registry(df: pd.DataFrame, registry_path: Path | None = None) -> None:
     from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
 
     if registry_path is None:
-        registry_path = DEFAULT_REGISTRY_PATH
+        registry_path = curated_root() / "source_registry.parquet"
 
     registry_path.parent.mkdir(parents=True, exist_ok=True)
 

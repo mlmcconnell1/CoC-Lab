@@ -12,9 +12,7 @@ from typing import Annotated
 import httpx
 import typer
 
-# Default directories
-DEFAULT_OUTPUT_DIR = Path("data/curated/pep")
-DEFAULT_RAW_DIR = Path("data/raw/pep")
+from coclab.paths import curated_dir, raw_root
 
 
 def ingest_pep(
@@ -50,20 +48,20 @@ def ingest_pep(
         ),
     ] = False,
     output_dir: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--output-dir",
             "-o",
             help="Output directory for curated parquet.",
         ),
-    ] = DEFAULT_OUTPUT_DIR,
+    ] = None,
     raw_dir: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--raw-dir",
             help="Directory for raw downloads.",
         ),
-    ] = DEFAULT_RAW_DIR,
+    ] = None,
     prefer_postcensal_2020: Annotated[
         bool,
         typer.Option(
@@ -113,6 +111,11 @@ def ingest_pep(
 
         coclab ingest pep --series postcensal --vintage 2024 --start 2015 --end 2020
     """
+    if output_dir is None:
+        output_dir = curated_dir("pep")
+    if raw_dir is None:
+        raw_dir = raw_root() / "pep"
+
     from coclab.pep.ingest import (
         ALL_SERIES,
         AUTO_SERIES,

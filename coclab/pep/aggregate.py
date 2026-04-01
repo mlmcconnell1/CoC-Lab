@@ -34,13 +34,11 @@ from pathlib import Path
 import pandas as pd
 
 from coclab.naming import coc_pep_filename, county_xwalk_path
+from coclab.paths import curated_dir
 from coclab.provenance import ProvenanceBlock, read_provenance, write_parquet_with_provenance
 
 logger = logging.getLogger(__name__)
 
-# Default directories
-DEFAULT_PEP_DIR = Path("data/curated/pep")
-DEFAULT_OUTPUT_DIR = Path("data/curated/pep")
 
 # PEP uses a higher coverage threshold than ZORI (0.95 vs 0.90) because
 # county-level population estimates have near-complete coverage -- almost
@@ -122,7 +120,7 @@ def load_pep_county(
         pep_path = Path(pep_path)
     else:
         if pep_dir is None:
-            pep_dir = DEFAULT_PEP_DIR
+            pep_dir = curated_dir("pep")
         else:
             pep_dir = Path(pep_dir)
 
@@ -177,7 +175,7 @@ def get_output_path(
         Output path.
     """
     if output_dir is None:
-        output_dir = DEFAULT_OUTPUT_DIR
+        output_dir = curated_dir("pep")
     else:
         output_dir = Path(output_dir)
 

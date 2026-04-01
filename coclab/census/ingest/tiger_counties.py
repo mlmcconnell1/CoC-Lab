@@ -9,6 +9,7 @@ from pathlib import Path
 import geopandas as gpd
 import httpx
 
+from coclab.paths import curated_dir
 from coclab.raw_snapshot import persist_file_snapshot
 from coclab.source_registry import check_source_changed, register_source
 from coclab.sources import CENSUS_TIGER_BASE
@@ -16,7 +17,6 @@ from coclab.sources import CENSUS_TIGER_BASE
 logger = logging.getLogger(__name__)
 
 TIGER_BASE = CENSUS_TIGER_BASE
-OUTPUT_DIR = Path("data/curated/tiger")
 
 
 def download_tiger_counties(
@@ -134,8 +134,8 @@ def save_counties(gdf: gpd.GeoDataFrame, year: int = 2023) -> Path:
     """
     from coclab.naming import county_filename
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = OUTPUT_DIR / county_filename(year)
+    curated_dir("tiger").mkdir(parents=True, exist_ok=True)
+    output_path = curated_dir("tiger") / county_filename(year)
     gdf.to_parquet(output_path, index=False)
     return output_path
 

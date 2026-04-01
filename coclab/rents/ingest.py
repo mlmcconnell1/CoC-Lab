@@ -38,6 +38,7 @@ from typing import Literal
 import httpx
 import pandas as pd
 
+from coclab.paths import curated_dir
 from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
 
 # Pattern for ZORI date columns (YYYY-MM-DD or YYYY-MM)
@@ -65,9 +66,6 @@ ZILLOW_ATTRIBUTION = (
     "academics and policymakers, consistent with our published Terms of Use. "
     "Proper and clear attribution of all data to Zillow is required."
 )
-
-# Default directories
-DEFAULT_OUTPUT_DIR = Path("data/curated/zori")
 
 
 def download_zori(
@@ -368,7 +366,7 @@ def get_output_path(
         Output path like 'data/curated/zori/zori__county__Z2026.parquet'.
     """
     if output_dir is None:
-        output_dir = DEFAULT_OUTPUT_DIR
+        output_dir = curated_dir("zori")
     else:
         output_dir = Path(output_dir)
     if max_year is not None:
@@ -421,7 +419,7 @@ def ingest_zori(
     """
     from coclab.naming import discover_zori_ingest
 
-    resolved_output_dir = Path(output_dir) if output_dir is not None else DEFAULT_OUTPUT_DIR
+    resolved_output_dir = Path(output_dir) if output_dir is not None else curated_dir("zori")
 
     # Check cache via discovery (max_year unknown until after parse)
     existing = discover_zori_ingest(geography, resolved_output_dir)

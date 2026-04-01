@@ -9,6 +9,8 @@ from typing import Annotated
 import pyarrow.parquet as pq
 import typer
 
+from coclab.paths import curated_dir
+
 
 def _format_size(size_bytes: int) -> str:
     """Format file size in human-readable format."""
@@ -93,13 +95,13 @@ def list_xwalks(
         ),
     ] = "all",
     directory: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--dir",
             "-d",
             help="Directory to scan for crosswalk files.",
         ),
-    ] = Path("data/curated/xwalks"),
+    ] = None,
     json_output: Annotated[
         bool,
         typer.Option(
@@ -122,6 +124,9 @@ def list_xwalks(
 
         coclab list xwalks --dir /path/to/xwalks
     """
+    if directory is None:
+        directory = curated_dir("xwalks")
+
     # Validate type option
     valid_types = ("all", "tract", "county")
     if xwalk_type not in valid_types:

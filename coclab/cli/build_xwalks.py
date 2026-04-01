@@ -9,6 +9,7 @@ import typer
 
 from coclab.builds import build_curated_dir, require_build_dir, resolve_build_dir
 from coclab.measures.diagnostics import compute_crosswalk_diagnostics, summarize_diagnostics
+from coclab.paths import curated_dir
 from coclab.registry.registry import latest_vintage, list_boundaries
 from coclab.xwalks.county import build_coc_county_crosswalk, save_county_crosswalk
 from coclab.xwalks.tract import (
@@ -22,7 +23,6 @@ if TYPE_CHECKING:
     import pandas as pd
 
 XwalkType = Literal["tracts", "counties", "all"]
-DEFAULT_OUTPUT_DIR = Path("data/curated/xwalks")
 
 
 def build_xwalks(
@@ -132,7 +132,7 @@ def build_xwalks(
         build_curated = build_curated_dir(build_dir)
         output_dir = build_curated / "xwalks"
     else:
-        output_dir = DEFAULT_OUTPUT_DIR
+        output_dir = curated_dir("xwalks")
 
     # Resolve county vintage (defaults to tracts vintage if not specified)
     county_vintage = counties if counties is not None else tracts
@@ -208,8 +208,8 @@ def build_xwalks(
         # Load tract geometries (try new naming, then legacy)
         from coclab.naming import tract_filename
 
-        tract_path = Path("data/curated/tiger") / tract_filename(tracts)
-        legacy_tract_path = Path(f"data/curated/tiger/tracts__{tracts}.parquet")
+        tract_path = curated_dir("tiger") / tract_filename(tracts)
+        legacy_tract_path = curated_dir("tiger") / f"tracts__{tracts}.parquet"
 
         if not tract_path.exists():
             if legacy_tract_path.exists():
@@ -288,8 +288,8 @@ def build_xwalks(
     # Load county geometries (try new naming, then legacy)
     from coclab.naming import county_filename
 
-    county_path = Path("data/curated/tiger") / county_filename(county_vintage)
-    legacy_county_path = Path(f"data/curated/tiger/counties__{county_vintage}.parquet")
+    county_path = curated_dir("tiger") / county_filename(county_vintage)
+    legacy_county_path = curated_dir("tiger") / f"counties__{county_vintage}.parquet"
 
     if not county_path.exists():
         if legacy_county_path.exists():

@@ -5,10 +5,8 @@ from pathlib import Path
 import folium
 import geopandas as gpd
 
+from coclab.paths import curated_dir
 from coclab.registry import latest_vintage
-
-# Default output directory for map files
-DEFAULT_MAPS_DIR = Path("data/curated/maps")
 
 
 def _normalize_coc_id(coc_id: str) -> str:
@@ -105,8 +103,8 @@ def render_coc_map(
 
     # Determine output path
     if out_html is None:
-        DEFAULT_MAPS_DIR.mkdir(parents=True, exist_ok=True)
-        out_html = DEFAULT_MAPS_DIR / f"{row['coc_id']}__{vintage}.html"
+        curated_dir("maps").mkdir(parents=True, exist_ok=True)
+        out_html = curated_dir("maps") / f"{row['coc_id']}__{vintage}.html"
     else:
         out_html = Path(out_html)
         out_html.parent.mkdir(parents=True, exist_ok=True)

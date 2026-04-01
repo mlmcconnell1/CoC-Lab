@@ -512,7 +512,8 @@ def discover_zori_ingest(
         Path to the most recent file, or None if no file exists.
     """
     if output_dir is None:
-        output_dir = Path("data/curated/zori")
+        from coclab.paths import curated_dir
+        output_dir = curated_dir("zori")
     else:
         output_dir = Path(output_dir)
 

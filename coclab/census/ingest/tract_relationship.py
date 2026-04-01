@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 
 from coclab.naming import tract_relationship_filename
+from coclab.paths import curated_dir
 from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
 from coclab.raw_snapshot import persist_file_snapshot
 from coclab.source_registry import check_source_changed, register_source
@@ -55,8 +56,6 @@ class TractRelationshipNotFoundError(FileNotFoundError):
 # Census Bureau relationship file URL
 RELATIONSHIP_URL = CENSUS_TRACT_RELATIONSHIP_URL
 
-# Output directory
-OUTPUT_DIR = Path("data/curated/tiger")
 
 
 def download_tract_relationship() -> tuple[pd.DataFrame, str, int, Path]:
@@ -150,8 +149,8 @@ def save_tract_relationship(df: pd.DataFrame) -> Path:
     Returns:
         Path to saved parquet file.
     """
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = OUTPUT_DIR / tract_relationship_filename(2010, 2020)
+    curated_dir("tiger").mkdir(parents=True, exist_ok=True)
+    output_path = curated_dir("tiger") / tract_relationship_filename(2010, 2020)
 
     provenance = ProvenanceBlock(
         extra={
@@ -177,7 +176,7 @@ def ingest_tract_relationship(force: bool = False) -> Path:
     Returns:
         Path to saved parquet file.
     """
-    output_path = OUTPUT_DIR / tract_relationship_filename(2010, 2020)
+    output_path = curated_dir("tiger") / tract_relationship_filename(2010, 2020)
 
     # Check for existing file
     if output_path.exists() and not force:
@@ -237,7 +236,7 @@ def get_tract_relationship_path() -> Path:
     Raises:
         TractRelationshipNotFoundError: If the file does not exist.
     """
-    path = OUTPUT_DIR / tract_relationship_filename(2010, 2020)
+    path = curated_dir("tiger") / tract_relationship_filename(2010, 2020)
     if not path.exists():
         raise TractRelationshipNotFoundError(path)
     return path

@@ -12,6 +12,7 @@ import geopandas as gpd
 import httpx
 import pandas as pd
 
+from coclab.paths import curated_dir
 from coclab.raw_snapshot import hash_zip_contents, persist_file_snapshot
 from coclab.source_registry import check_source_changed, register_source
 from coclab.sources import CENSUS_TIGER_BASE
@@ -19,7 +20,6 @@ from coclab.sources import CENSUS_TIGER_BASE
 logger = logging.getLogger(__name__)
 
 TIGER_BASE = CENSUS_TIGER_BASE
-OUTPUT_DIR = Path("data/curated/tiger")
 
 # State and territory FIPS codes for downloading per-state tract files
 STATE_FIPS_CODES = [
@@ -271,8 +271,8 @@ def save_tracts(gdf: gpd.GeoDataFrame, year: int = 2023) -> Path:
     """
     from coclab.naming import tract_filename
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = OUTPUT_DIR / tract_filename(year)
+    curated_dir("tiger").mkdir(parents=True, exist_ok=True)
+    output_path = curated_dir("tiger") / tract_filename(year)
     gdf.to_parquet(output_path, index=False)
     return output_path
 

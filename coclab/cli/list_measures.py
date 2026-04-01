@@ -9,6 +9,7 @@ import pandas as pd
 import typer
 
 from coclab.naming import expand_acs_vintage
+from coclab.paths import curated_dir
 
 
 def format_file_size(size_bytes: int) -> str:
@@ -67,13 +68,13 @@ def parse_measures_filename(filename: str) -> tuple[str, str] | None:
 
 def list_measures(
     dir: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--dir",
             "-d",
             help="Directory to scan for measure files.",
         ),
-    ] = Path("data/curated/measures"),
+    ] = None,
     json_output: Annotated[
         bool,
         typer.Option(
@@ -95,6 +96,8 @@ def list_measures(
 
         coclab list measures --dir /path/to/measures
     """
+    if dir is None:
+        dir = curated_dir("measures")
     measures_dir = Path(dir)
 
     if not measures_dir.exists():

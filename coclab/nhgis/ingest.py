@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 import geopandas as gpd
 
+from coclab.paths import curated_dir
 from coclab.raw_snapshot import persist_file_snapshot
 from coclab.source_registry import register_source
 
@@ -24,8 +25,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Output directory for curated tract files
-OUTPUT_DIR = Path("data/curated/tiger")
 
 # Known NHGIS shapefile names for census tracts
 # Format: us_tract_{census_year}_tl{tiger_year}
@@ -375,10 +374,10 @@ def ingest_nhgis_tracts(
     )
 
     # Save to output
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    curated_dir("tiger").mkdir(parents=True, exist_ok=True)
     from coclab.naming import tract_filename
 
-    output_path = OUTPUT_DIR / tract_filename(year)
+    output_path = curated_dir("tiger") / tract_filename(year)
     gdf.to_parquet(output_path, index=False)
 
     if progress_callback:
@@ -564,8 +563,8 @@ def ingest_nhgis_counties(
     )
 
     # Save to output
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = OUTPUT_DIR / county_filename(year)
+    curated_dir("tiger").mkdir(parents=True, exist_ok=True)
+    output_path = curated_dir("tiger") / county_filename(year)
     gdf.to_parquet(output_path, index=False)
 
     if progress_callback:

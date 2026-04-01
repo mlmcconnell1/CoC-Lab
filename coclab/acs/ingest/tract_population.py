@@ -51,6 +51,7 @@ from coclab.acs.variables import (
     ALL_API_VARS,
     TRACT_OUTPUT_COLUMNS,
 )
+from coclab.paths import curated_dir
 from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
 from coclab.raw_snapshot import write_api_snapshot
 from coclab.source_registry import check_source_changed, register_source
@@ -72,8 +73,6 @@ STATE_FIPS_CODES = [
     "72",  # Puerto Rico
 ]
 
-# Default data directory
-DEFAULT_DATA_DIR = Path("data/curated/acs")
 
 # Source ref string listing all tables fetched
 _TABLES_REF = "+".join(ACS_TABLES)
@@ -388,7 +387,7 @@ def get_output_path(
         Output path like 'data/curated/acs/acs5_tracts__A2023xT2023.parquet'.
     """
     if base_dir is None:
-        base_dir = DEFAULT_DATA_DIR
+        base_dir = curated_dir("acs")
     else:
         base_dir = Path(base_dir)
     return base_dir / naming.acs5_tracts_filename(acs_vintage, tract_vintage)

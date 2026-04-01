@@ -24,9 +24,11 @@ import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 
+from coclab.paths import raw_root as _raw_root
+
 logger = logging.getLogger(__name__)
 
-RAW_DATA_ROOT = Path("data/raw")
+RAW_DATA_ROOT = Path("data/raw")  # deprecated; prefer _raw_root()
 
 
 def make_run_id() -> str:
@@ -65,7 +67,7 @@ def raw_dir(
     raw_root : Path, optional
         Override the default ``data/raw`` root.
     """
-    root = raw_root or RAW_DATA_ROOT
+    root = raw_root or _raw_root()
     d = root / ingest_type / str(year)
     if variant is not None:
         d = d / variant
@@ -168,7 +170,7 @@ def persist_file_snapshot(
     tuple[Path, str, int]
         ``(persisted_path, sha256_hex, byte_size)``
     """
-    root = raw_root or RAW_DATA_ROOT
+    root = raw_root or _raw_root()
     dest_dir = root / source_type
     for seg in subdirs:
         dest_dir = dest_dir / seg
@@ -270,7 +272,7 @@ def write_api_snapshot(
             "Provide either (year + variant) or snapshot_id, not both/neither."
         )
 
-    root = raw_root or RAW_DATA_ROOT
+    root = raw_root or _raw_root()
 
     if has_year_variant:
         if variant is None:

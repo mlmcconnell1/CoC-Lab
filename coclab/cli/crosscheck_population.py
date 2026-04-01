@@ -5,6 +5,8 @@ from typing import Annotated
 
 import typer
 
+from coclab.paths import curated_dir
+
 
 def _run_population_validation(
     boundary: Annotated[
@@ -32,19 +34,19 @@ def _run_population_validation(
         ),
     ] = None,
     xwalk_dir: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--xwalk-dir",
             help="Directory containing crosswalk files.",
         ),
-    ] = Path("data/curated/xwalks"),
+    ] = None,
     acs_dir: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--acs-dir",
             help="Directory containing ACS tract population files.",
         ),
-    ] = Path("data/curated/acs"),
+    ] = None,
     by_state: Annotated[
         bool,
         typer.Option(
@@ -85,6 +87,11 @@ def _run_population_validation(
 
         coclab validate population --warn-threshold 0.10
     """
+    if xwalk_dir is None:
+        xwalk_dir = curated_dir("xwalks")
+    if acs_dir is None:
+        acs_dir = curated_dir("acs")
+
     import pandas as pd
 
     # Find crosswalk file
@@ -316,19 +323,19 @@ def validate_population(
         ),
     ] = None,
     xwalk_dir: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--xwalk-dir",
             help="Directory containing crosswalk files.",
         ),
-    ] = Path("data/curated/xwalks"),
+    ] = None,
     acs_dir: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--acs-dir",
             help="Directory containing ACS tract population files.",
         ),
-    ] = Path("data/curated/acs"),
+    ] = None,
     by_state: Annotated[
         bool,
         typer.Option(
@@ -347,6 +354,11 @@ def validate_population(
     ] = 0.05,
 ) -> None:
     """Validate population totals from crosswalk aggregation."""
+    if xwalk_dir is None:
+        xwalk_dir = curated_dir("xwalks")
+    if acs_dir is None:
+        acs_dir = curated_dir("acs")
+
     _run_population_validation(
         boundary=boundary,
         acs=acs,

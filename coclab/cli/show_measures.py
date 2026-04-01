@@ -7,6 +7,8 @@ from typing import Annotated
 import pandas as pd
 import typer
 
+from coclab.paths import curated_dir
+
 
 def _find_latest_measures_file(measures_dir: Path) -> Path | None:
     """Find the most recent measures parquet file.
@@ -169,12 +171,12 @@ def show_measures(
         ),
     ] = "table",
     measures_dir: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--measures-dir",
             help="Directory containing measure files.",
         ),
-    ] = Path("data/curated/measures"),
+    ] = None,
 ) -> None:
     """Display computed measures for a specific CoC.
 
@@ -189,6 +191,9 @@ def show_measures(
 
         coclab show measures --coc NY-600 --format json
     """
+    if measures_dir is None:
+        measures_dir = curated_dir("measures")
+
     # --json flag overrides --format
     if output_json:
         output_format = "json"

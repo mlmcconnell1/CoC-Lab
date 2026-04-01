@@ -7,9 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-# Default registry location
-DEFAULT_PIT_REGISTRY_PATH = Path("data/curated/pit/pit_registry.parquet")
-DEFAULT_PIT_VINTAGE_REGISTRY_PATH = Path("data/curated/pit/pit_vintage_registry.parquet")
+from coclab.paths import curated_dir
 
 # Registry column names for Parquet serialization
 PIT_REGISTRY_COLUMNS = [
@@ -83,7 +81,7 @@ class PitRegistryEntry:
 
 def _get_registry_path(registry_path: Path | None = None) -> Path:
     """Get the registry path, using default if not specified."""
-    return registry_path or DEFAULT_PIT_REGISTRY_PATH
+    return registry_path or curated_dir("pit") / "pit_registry.parquet"
 
 
 def _load_registry(registry_path: Path) -> pd.DataFrame:
@@ -322,7 +320,7 @@ class PitVintageRegistryEntry:
 
 def _get_vintage_registry_path(registry_path: Path | None = None) -> Path:
     """Get the vintage registry path, using default if not specified."""
-    return registry_path or DEFAULT_PIT_VINTAGE_REGISTRY_PATH
+    return registry_path or curated_dir("pit") / "pit_vintage_registry.parquet"
 
 
 def _load_vintage_registry(registry_path: Path) -> pd.DataFrame:

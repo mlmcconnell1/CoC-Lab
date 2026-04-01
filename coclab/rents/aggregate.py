@@ -67,6 +67,7 @@ from coclab.geo.ct_planning_regions import (
     translate_zori_legacy_to_planning,
 )
 from coclab.naming import county_xwalk_path, discover_zori_ingest
+from coclab.paths import curated_dir
 from coclab.provenance import (
     ProvenanceBlock,
     read_provenance,
@@ -81,9 +82,6 @@ from coclab.rents.weights import (
 
 logger = logging.getLogger(__name__)
 
-# Default directories
-DEFAULT_OUTPUT_DIR = Path("data/curated/zori")
-DEFAULT_XWALK_DIR = Path("data/curated/xwalks")
 
 # Default minimum coverage threshold (per spec section 5.2).
 # ZORI uses a lower threshold than PEP (0.90 vs 0.95) because Zillow
@@ -176,7 +174,7 @@ def load_zori(
         path = discover_zori_ingest(geography, output_dir)
         # Fall back to global curated directory if build-local path doesn't exist
         if path is None and output_dir is not None:
-            path = discover_zori_ingest(geography, DEFAULT_OUTPUT_DIR)
+            path = discover_zori_ingest(geography, curated_dir("zori"))
             if path is not None:
                 logger.info(f"ZORI not found in {output_dir}, using global {path}")
 
@@ -298,7 +296,7 @@ def load_weights(
         Weights DataFrame with columns: county_fips, weight_value, ...
     """
     if weights_dir is None:
-        weights_dir = Path("data/curated/acs")
+        weights_dir = curated_dir("acs")
     else:
         weights_dir = Path(weights_dir)
 
@@ -648,7 +646,7 @@ def get_coc_zori_path(
     from coclab.naming import zori_filename as _zori_filename
 
     if output_dir is None:
-        output_dir = DEFAULT_OUTPUT_DIR
+        output_dir = curated_dir("zori")
     else:
         output_dir = Path(output_dir)
 
@@ -697,7 +695,7 @@ def get_coc_zori_yearly_path(
     from coclab.naming import zori_yearly_filename as _zori_yearly_filename
 
     if output_dir is None:
-        output_dir = DEFAULT_OUTPUT_DIR
+        output_dir = curated_dir("zori")
     else:
         output_dir = Path(output_dir)
 
@@ -805,7 +803,7 @@ def aggregate_zori_to_coc(
     else:
         zori_source_path = discover_zori_ingest(geography, output_dir)
         if zori_source_path is None and output_dir is not None:
-            zori_source_path = discover_zori_ingest(geography, DEFAULT_OUTPUT_DIR)
+            zori_source_path = discover_zori_ingest(geography, curated_dir("zori"))
             if zori_source_path is not None:
                 logger.info(f"ZORI not found in {output_dir}, using global {zori_source_path}")
         if zori_source_path is None:

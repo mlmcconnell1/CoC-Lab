@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from shapely.geometry import shape
 
+from coclab.paths import raw_root
 from coclab.raw_snapshot import make_run_id, write_api_snapshot
 from coclab.source_registry import check_source_changed, register_source
 from coclab.sources import (
@@ -535,7 +536,7 @@ def download_hud_exchange_gdb(
         RuntimeError: If all download sources fail.
     """
     if output_dir is None:
-        output_dir = Path("data/raw/hud_exchange") / boundary_vintage
+        output_dir = raw_root() / "hud_exchange" / boundary_vintage
     else:
         output_dir = Path(output_dir)
 
@@ -779,7 +780,7 @@ def ingest_hud_exchange(
     else:
         # Legacy path: download ZIP from HUD Exchange
         if raw_dir is None:
-            raw_dir = Path("data/raw/hud_exchange") / boundary_vintage
+            raw_dir = raw_root() / "hud_exchange" / boundary_vintage
         else:
             raw_dir = Path(raw_dir)
 

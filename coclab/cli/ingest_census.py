@@ -1,14 +1,11 @@
 """CLI command for ingesting TIGER geometries."""
 
-from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from coclab.naming import county_filename, tract_filename
-
-# Output directory matches the census ingest modules
-OUTPUT_DIR = Path("data/curated/tiger")
+from coclab.paths import curated_dir
 
 
 def ingest_tiger(
@@ -63,8 +60,8 @@ def ingest_tiger(
     download_counties = type_ in ("counties", "all")
 
     # Define output paths using canonical naming helpers
-    tracts_path = OUTPUT_DIR / tract_filename(year)
-    counties_path = OUTPUT_DIR / county_filename(year)
+    tracts_path = curated_dir("tiger") / tract_filename(year)
+    counties_path = curated_dir("tiger") / county_filename(year)
 
     # Track what was downloaded
     downloaded = []

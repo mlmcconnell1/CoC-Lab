@@ -9,10 +9,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from coclab.paths import curated_root
 from coclab.registry.schema import REGISTRY_COLUMNS, RegistryEntry
-
-# Default registry location
-DEFAULT_REGISTRY_PATH = Path("data/curated/boundary_registry.parquet")
 
 # Known temp directory patterns (platform-specific)
 TEMP_DIR_PATTERNS = (
@@ -84,7 +82,7 @@ class RegistryHealthReport:
 
 def _get_registry_path(registry_path: Path | None = None) -> Path:
     """Get the registry path, using default if not specified."""
-    return registry_path or DEFAULT_REGISTRY_PATH
+    return registry_path or curated_root() / "boundary_registry.parquet"
 
 
 def _load_registry(registry_path: Path) -> pd.DataFrame:

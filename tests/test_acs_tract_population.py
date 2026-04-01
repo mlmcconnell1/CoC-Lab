@@ -112,10 +112,11 @@ class TestNormalizeGeoid:
 class TestGetOutputPath:
     """Tests for get_output_path function."""
 
-    def test_default_path(self):
+    def test_default_path(self, tmp_path, monkeypatch):
         """Test default output path generation with new temporal shorthand."""
+        monkeypatch.chdir(tmp_path)
         path = get_output_path("2019-2023", "2023")
-        assert path == Path("data/curated/acs/acs5_tracts__A2023xT2023.parquet")
+        assert path == tmp_path / "data" / "curated" / "acs" / "acs5_tracts__A2023xT2023.parquet"
 
     def test_custom_base_dir(self):
         """Test output path with custom base directory."""

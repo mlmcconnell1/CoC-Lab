@@ -9,6 +9,7 @@ import pyarrow.parquet as pq
 import typer
 
 from coclab.curated_policy import CURATED_SUBDIRS
+from coclab.paths import curated_root
 
 
 def _format_size(size_bytes: int) -> str:
@@ -47,13 +48,13 @@ def list_curated(
         ),
     ] = None,
     directory: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--dir",
             "-d",
             help="Path to curated data root.",
         ),
-    ] = Path("data/curated"),
+    ] = None,
     json_output: Annotated[
         bool,
         typer.Option(
@@ -76,6 +77,9 @@ def list_curated(
 
         coclab list curated --subdir acs --json
     """
+    if directory is None:
+        directory = curated_root()
+
     if subdir is not None and subdir not in CURATED_SUBDIRS:
         typer.echo(
             f"Error: Unknown subdirectory '{subdir}'. "

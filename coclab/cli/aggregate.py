@@ -25,6 +25,7 @@ from coclab.builds import (
     require_build_dir,
     resolve_build_dir,
 )
+from coclab.paths import curated_root
 from coclab.year_spec import parse_year_spec
 
 aggregate_app = typer.Typer(
@@ -32,9 +33,6 @@ aggregate_app = typer.Typer(
     help="Aggregate source datasets into standalone CoC analysis inputs.",
     no_args_is_help=True,
 )
-
-# Default output root when no --build is provided
-DEFAULT_CURATED_DIR = Path("data/curated")
 
 # ---------------------------------------------------------------------------
 # Valid alignment modes per dataset
@@ -258,7 +256,7 @@ def aggregate_pep(
         _require_boundary_years(build_dir)
         curated_dir = build_curated_dir(build_dir)
     else:
-        curated_dir = DEFAULT_CURATED_DIR
+        curated_dir = curated_root()
     output_dir = curated_dir / "pep"
 
     label = f"build '{build}'" if build else "global curated"
@@ -409,7 +407,7 @@ def aggregate_pit(
     _validate_align(align, PIT_ALIGN_MODES, "pit")
     parsed_years = _resolve_years(years, build_dir)
 
-    curated_dir = build_curated_dir(build_dir) if build_dir else DEFAULT_CURATED_DIR
+    curated_dir = build_curated_dir(build_dir) if build_dir else curated_root()
     output_dir = curated_dir / "pit"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -604,7 +602,7 @@ def aggregate_acs(
         _require_boundary_years(build_dir)
         curated_dir = build_curated_dir(build_dir)
     else:
-        curated_dir = DEFAULT_CURATED_DIR
+        curated_dir = curated_root()
     output_dir = curated_dir / "measures"
 
     label = f"build '{build}'" if build else "global curated"
@@ -892,7 +890,7 @@ def aggregate_zori(
     }
     yearly_method = yearly_method_map.get(align, "pit_january")
 
-    curated_dir = build_curated_dir(build_dir) if build_dir else DEFAULT_CURATED_DIR
+    curated_dir = build_curated_dir(build_dir) if build_dir else curated_root()
     output_dir = curated_dir / "zori"
 
     label = f"build '{build}'" if build else "global curated"

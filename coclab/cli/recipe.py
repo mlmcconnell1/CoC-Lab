@@ -8,6 +8,7 @@ from typing import Annotated
 
 import typer
 
+from coclab.config import load_config
 from coclab.recipe.adapters import (
     dataset_registry,
     geometry_registry,
@@ -125,6 +126,20 @@ def recipe_cmd(
             help="Skip the preflight readiness check before execution.",
         ),
     ] = False,
+    asset_store_root: Annotated[
+        Path | None,
+        typer.Option(
+            "--asset-store-root",
+            help="Override the asset store root directory.",
+        ),
+    ] = None,
+    output_root: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-root",
+            help="Override the output root directory for recipe products.",
+        ),
+    ] = None,
     use_json: _JSON_OPTION = False,
 ) -> None:
     """Load, validate, preflight, and execute a build recipe.
@@ -276,9 +291,14 @@ def recipe_cmd(
 
     # 3. Execute the build pipeline
     cache = RecipeCache(enabled=not no_cache)
+    storage_cfg = load_config(
+        asset_store_root=asset_store_root,
+        output_root=output_root,
+    )
     try:
         results = execute_recipe(
             parsed, cache=cache, quiet=use_json,
+            storage_config=storage_cfg,
         )
     except ExecutorError as exc:
         if use_json:
@@ -291,7 +311,9 @@ def recipe_cmd(
             {
                 "pipeline_id": r.pipeline_id,
                 "success": r.success,
-                "artifacts": resolve_pipeline_artifacts(parsed, r.pipeline_id),
+                "artifacts": resolve_pipeline_artifacts(
+                    parsed, r.pipeline_id, storage_config=storage_cfg,
+                ),
                 "steps": [
                     {
                         "step_kind": s.step_kind,

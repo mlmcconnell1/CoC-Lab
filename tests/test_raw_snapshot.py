@@ -35,17 +35,20 @@ from coclab.raw_snapshot import (
 class TestRawDir:
     """Tests for raw_dir path builder."""
 
-    def test_without_variant(self):
+    def test_without_variant(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
         p = raw_dir("zori", 2024)
-        assert p == Path("data/raw/zori/2024")
+        assert p == tmp_path / "data" / "raw" / "zori" / "2024"
 
-    def test_with_variant(self):
+    def test_with_variant(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
         p = raw_dir("acs5_tract", 2023, "full")
-        assert p == Path("data/raw/acs5_tract/2023/full")
+        assert p == tmp_path / "data" / "raw" / "acs5_tract" / "2023" / "full"
 
-    def test_year_as_string(self):
+    def test_year_as_string(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
         p = raw_dir("tiger", "2020", "tracts")
-        assert p == Path("data/raw/tiger/2020/tracts")
+        assert p == tmp_path / "data" / "raw" / "tiger" / "2020" / "tracts"
 
     def test_custom_raw_root(self, tmp_path: Path):
         p = raw_dir("pep", 2024, raw_root=tmp_path)
@@ -55,13 +58,15 @@ class TestRawDir:
 class TestRawPath:
     """Tests for raw_path file path builder."""
 
-    def test_without_variant(self):
+    def test_without_variant(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
         p = raw_path("zori", 2026, "zori__county__2026-02-07.csv")
-        assert p == Path("data/raw/zori/2026/zori__county__2026-02-07.csv")
+        assert p == tmp_path / "data" / "raw" / "zori" / "2026" / "zori__county__2026-02-07.csv"
 
-    def test_with_variant(self):
+    def test_with_variant(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
         p = raw_path("tiger", 2020, "tab20_tract20_tract10_natl.txt", "tract_relationship")
-        assert p == Path("data/raw/tiger/2020/tract_relationship/tab20_tract20_tract10_natl.txt")
+        assert p == tmp_path / "data" / "raw" / "tiger" / "2020" / "tract_relationship" / "tab20_tract20_tract10_natl.txt"
 
     def test_custom_raw_root(self, tmp_path: Path):
         p = raw_path("pep", 2024, "pep.csv", raw_root=tmp_path)
@@ -172,11 +177,8 @@ class TestPersistFileSnapshot:
         assert path.parent == nested_root / "census" / "a" / "b"
 
     def test_uses_default_raw_root_when_not_specified(self, tmp_path: Path, monkeypatch):
-        """When raw_root is None, uses the module-level RAW_DATA_ROOT."""
-        # Monkeypatch the module constant so it writes inside tmp_path
-        import coclab.raw_snapshot as mod
-
-        monkeypatch.setattr(mod, "RAW_DATA_ROOT", tmp_path / "data" / "raw")
+        """When raw_root is None, resolves from storage config defaults."""
+        monkeypatch.chdir(tmp_path)
 
         content = b"default root"
         path, _, _ = persist_file_snapshot(content, "src", "file.csv")

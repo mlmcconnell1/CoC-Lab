@@ -7,17 +7,18 @@ from typing import Annotated
 import typer
 
 from coclab.curated_policy import validate_curated_layout
+from coclab.paths import curated_root
 
 
 def validate_curated_layout_cmd(
     base_dir: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--dir",
             "-d",
             help="Path to the curated data directory.",
         ),
-    ] = Path("data/curated"),
+    ] = None,
     json_output: Annotated[
         bool,
         typer.Option(
@@ -27,6 +28,9 @@ def validate_curated_layout_cmd(
     ] = False,
 ) -> None:
     """Validate curated data directory for naming and layout policy violations."""
+    if base_dir is None:
+        base_dir = curated_root()
+
     violations = validate_curated_layout(base_dir)
 
     if json_output:

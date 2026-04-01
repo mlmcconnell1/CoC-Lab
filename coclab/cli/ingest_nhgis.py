@@ -5,8 +5,7 @@ from typing import Annotated, Literal
 
 import typer
 
-# Output directory matches the TIGER ingest modules
-OUTPUT_DIR = Path("data/curated/tiger")
+from coclab.paths import curated_dir
 
 GeoType = Literal["tracts", "counties", "all"]
 
@@ -123,7 +122,7 @@ def ingest_nhgis(
     for year in years:
         # Process tracts if requested
         if process_tracts:
-            output_path = OUTPUT_DIR / tract_filename(year)
+            output_path = curated_dir("tiger") / tract_filename(year)
 
             if output_path.exists() and not force:
                 typer.echo(f"Tracts file exists for {year}: {output_path}")
@@ -157,7 +156,7 @@ def ingest_nhgis(
 
         # Process counties if requested
         if process_counties:
-            output_path = OUTPUT_DIR / county_filename(year)
+            output_path = curated_dir("tiger") / county_filename(year)
 
             if output_path.exists() and not force:
                 typer.echo(f"Counties file exists for {year}: {output_path}")

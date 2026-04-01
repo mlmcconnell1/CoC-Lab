@@ -7,17 +7,18 @@ from typing import Annotated
 import typer
 
 from coclab.curated_migrate import apply_migration, scan_curated_for_migration
+from coclab.paths import curated_root
 
 
 def migrate_curated_cmd(
     base_dir: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--dir",
             "-d",
             help="Path to the curated data directory.",
         ),
-    ] = Path("data/curated"),
+    ] = None,
     apply: Annotated[
         bool,
         typer.Option(
@@ -46,6 +47,9 @@ def migrate_curated_cmd(
 
         coclab migrate curated-layout --json
     """
+    if base_dir is None:
+        base_dir = curated_root()
+
     plan = scan_curated_for_migration(base_dir)
 
     total = len(plan.renames) + len(plan.duplicates) + len(plan.unknown)

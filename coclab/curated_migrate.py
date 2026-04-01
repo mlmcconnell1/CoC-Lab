@@ -12,6 +12,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from coclab.paths import curated_root
+
 
 @dataclass
 class MigrationAction:
@@ -62,7 +64,7 @@ def scan_curated_for_migration(
         Proposed renames, detected duplicates, and unknown files.
     """
     if base_dir is None:
-        base_dir = Path("data/curated")
+        base_dir = curated_root()
 
     plan = MigrationPlan()
 

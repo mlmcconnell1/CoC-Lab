@@ -38,6 +38,8 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from coclab.paths import curated_dir
+
 logger = logging.getLogger(__name__)
 
 
@@ -678,7 +680,7 @@ def get_canonical_output_path(year: int, base_dir: Path | str | None = None) -> 
     from coclab.naming import pit_filename
 
     if base_dir is None:
-        base_dir = Path("data/curated/pit")
+        base_dir = curated_dir("pit")
     else:
         base_dir = Path(base_dir)
     return base_dir / pit_filename(year)
@@ -703,7 +705,7 @@ def get_vintage_output_path(vintage: int, base_dir: Path | str | None = None) ->
     from coclab.naming import pit_vintage_filename
 
     if base_dir is None:
-        base_dir = Path("data/curated/pit")
+        base_dir = curated_dir("pit")
     else:
         base_dir = Path(base_dir)
     return base_dir / pit_vintage_filename(vintage)

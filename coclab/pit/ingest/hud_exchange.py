@@ -26,6 +26,7 @@ from pathlib import Path
 
 import httpx
 
+from coclab.paths import raw_root
 from coclab.source_registry import check_source_changed, register_source
 from coclab.sources import HUD_USER_PIT_BASE as HUD_USER_PIT_BASE_URL
 
@@ -55,8 +56,6 @@ PIT_DATA_URLS: dict[int, str] = {
     2013: "https://www.huduser.gov/portal/sites/default/files/xls/2007-2013-PIT-Counts-by-CoC.xlsx",
 }
 
-# Default data directory
-DEFAULT_RAW_DIR = Path("data/raw/pit")
 
 # HTTP timeout for downloads
 DOWNLOAD_TIMEOUT = 120.0
@@ -225,7 +224,7 @@ def download_pit_data(
     url = get_pit_source_url(year)
 
     if output_dir is None:
-        output_dir = DEFAULT_RAW_DIR / str(year)
+        output_dir = raw_root() / "pit" / str(year)
     else:
         output_dir = Path(output_dir)
 

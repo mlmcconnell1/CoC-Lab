@@ -11,6 +11,8 @@ from pathlib import Path
 import geopandas as gpd
 import pandas as pd
 
+from coclab.paths import curated_dir
+
 # ESRI:102003 - USA Contiguous Albers Equal Area Conic
 ALBERS_EQUAL_AREA_CRS = "ESRI:102003"
 
@@ -131,7 +133,7 @@ def save_county_crosswalk(
     crosswalk: pd.DataFrame,
     boundary_vintage: str,
     county_vintage: str | int,
-    output_dir: Path | str = "data/curated/xwalks",
+    output_dir: Path | str | None = None,
 ) -> Path:
     """Save county crosswalk to parquet file.
 
@@ -153,7 +155,10 @@ def save_county_crosswalk(
     """
     from coclab.naming import county_xwalk_filename
 
-    output_dir = Path(output_dir)
+    if output_dir is None:
+        output_dir = curated_dir("xwalks")
+    else:
+        output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance

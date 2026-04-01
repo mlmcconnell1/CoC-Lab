@@ -241,25 +241,28 @@ class TestValidateMonthyContinuity:
 class TestGetOutputPath:
     """Tests for get_output_path function."""
 
-    def test_default_path_with_max_year(self):
+    def test_default_path_with_max_year(self, tmp_path, monkeypatch):
         """Test output path with temporal Z-year notation."""
+        monkeypatch.chdir(tmp_path)
         path = get_output_path("county", max_year=2026)
-        assert path == Path("data/curated/zori/zori__county__Z2026.parquet")
+        assert path == tmp_path / "data" / "curated" / "zori" / "zori__county__Z2026.parquet"
 
-    def test_legacy_path_without_max_year(self):
+    def test_legacy_path_without_max_year(self, tmp_path, monkeypatch):
         """Test legacy output path when max_year is omitted."""
+        monkeypatch.chdir(tmp_path)
         path = get_output_path("county")
-        assert path == Path("data/curated/zori/zori__county.parquet")
+        assert path == tmp_path / "data" / "curated" / "zori" / "zori__county.parquet"
 
     def test_custom_base_dir(self):
         """Test output path with custom base directory."""
         path = get_output_path("county", output_dir="/tmp/test", max_year=2026)
         assert path == Path("/tmp/test/zori__county__Z2026.parquet")
 
-    def test_zip_geography(self):
+    def test_zip_geography(self, tmp_path, monkeypatch):
         """Test output path for ZIP geography."""
+        monkeypatch.chdir(tmp_path)
         path = get_output_path("zip", max_year=2025)
-        assert path == Path("data/curated/zori/zori__zip__Z2025.parquet")
+        assert path == tmp_path / "data" / "curated" / "zori" / "zori__zip__Z2025.parquet"
 
 
 class TestDiscoverZoriIngest:

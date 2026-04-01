@@ -15,11 +15,8 @@ import httpx
 import typer
 
 from coclab.builds import build_curated_dir, require_build_dir, resolve_build_dir
-
-# Default directories matching the spec
-DEFAULT_OUTPUT_DIR = Path("data/curated/zori")
-DEFAULT_RAW_DIR = Path("data/raw/zori")
-DEFAULT_XWALK_DIR = Path("data/curated/xwalks")
+from coclab.paths import curated_dir as _curated_dir
+from coclab.paths import raw_root
 
 # Weighting method choices
 WeightingChoice = Literal["renter_households", "housing_units", "population", "equal"]
@@ -53,20 +50,20 @@ def ingest_zori(
         ),
     ] = False,
     output_dir: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--output-dir",
             "-o",
             help="Output directory for curated parquet.",
         ),
-    ] = DEFAULT_OUTPUT_DIR,
+    ] = None,
     raw_dir: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--raw-dir",
             help="Directory for raw downloads.",
         ),
-    ] = DEFAULT_RAW_DIR,
+    ] = None,
     start: Annotated[
         str | None,
         typer.Option(
@@ -101,6 +98,11 @@ def ingest_zori(
 
         coclab ingest zori --geography county --start 2020-01-01 --end 2024-12-31
     """
+    if output_dir is None:
+        output_dir = _curated_dir("zori")
+    if raw_dir is None:
+        raw_dir = raw_root() / "zori"
+
     # Validate geography
     valid_geographies = {"county", "zip"}
     if geography not in valid_geographies:
@@ -213,13 +215,13 @@ def aggregate_zori(
         ),
     ] = None,
     output_dir: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--output-dir",
             "-o",
             help="Output directory for CoC-level ZORI parquet.",
         ),
-    ] = DEFAULT_OUTPUT_DIR,
+    ] = None,
     to_yearly: Annotated[
         bool,
         typer.Option(
@@ -263,6 +265,9 @@ def aggregate_zori(
 
         coclab aggregate zori --build demo --boundary 2025 --counties 2023 --acs 2019-2023
     """
+    if output_dir is None:
+        output_dir = _curated_dir("zori")
+
     # Validate weighting method
     valid_weightings = {"renter_households", "housing_units", "population", "equal"}
     if weighting not in valid_weightings:
@@ -296,7 +301,7 @@ def aggregate_zori(
             raise typer.Exit(2) from exc
 
         build_curated = build_curated_dir(build_dir)
-        if output_dir == DEFAULT_OUTPUT_DIR:
+        if output_dir == _curated_dir("zori"):
             output_dir = build_curated / "zori"
         if xwalk_path is None:
             xwalk_path = (build_curated / "xwalks" / f"xwalk__B{boundary}xC{counties}.parquet")

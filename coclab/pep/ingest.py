@@ -39,6 +39,7 @@ from typing import Literal
 import httpx
 import pandas as pd
 
+from coclab.paths import curated_dir
 from coclab.provenance import ProvenanceBlock, read_provenance, write_parquet_with_provenance
 from coclab.raw_snapshot import raw_dir as canonical_raw_dir
 from coclab.source_registry import check_source_changed, register_source
@@ -57,8 +58,6 @@ PEP_URLS = {
 # Census Bureau attribution (public domain, but cite source)
 CENSUS_ATTRIBUTION = "Source: U.S. Census Bureau, Population Estimates Program (PEP)"
 
-# Default directories
-DEFAULT_OUTPUT_DIR = Path("data/curated/pep")
 
 # Population columns by vintage
 # Vintage 2020 file: POPESTIMATE2010 through POPESTIMATE2020
@@ -452,7 +451,7 @@ def get_output_path(
         optionally suffixed with a year filter like '__y2015-2020'.
     """
     if output_dir is None:
-        output_dir = DEFAULT_OUTPUT_DIR
+        output_dir = curated_dir("pep")
     else:
         output_dir = Path(output_dir)
 

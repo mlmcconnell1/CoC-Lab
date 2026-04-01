@@ -47,6 +47,7 @@ from typing import Literal
 import httpx
 import pandas as pd
 
+from coclab.paths import curated_dir
 from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
 from coclab.raw_snapshot import write_api_snapshot
 from coclab.source_registry import check_source_changed, register_source
@@ -136,8 +137,6 @@ STATE_FIPS_CODES = [
     "72",  # Puerto Rico
 ]
 
-# Default data directory
-DEFAULT_DATA_DIR = Path("data/curated/acs")
 
 # Type alias for weighting methods
 WeightingMethod = Literal["renter_households", "housing_units", "population"]
@@ -434,7 +433,7 @@ def get_county_weights_path(
 
     using_default = base_dir is None
     if base_dir is None:
-        base_dir = DEFAULT_DATA_DIR
+        base_dir = curated_dir("acs")
     else:
         base_dir = Path(base_dir)
 
@@ -509,7 +508,7 @@ def build_county_weights(
        county_fips  acs_vintage weighting_method  weight_value  ...
     0        01001   2019-2023  renter_households         8234  ...
     """
-    output_dir = Path(output_dir) if output_dir else DEFAULT_DATA_DIR
+    output_dir = Path(output_dir) if output_dir else curated_dir("acs")
     output_path = get_county_weights_path(acs_vintage, method, output_dir)
 
     # Check for cached file

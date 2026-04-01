@@ -1,11 +1,11 @@
 """CLI command for ingesting all years from a PIT vintage file."""
 
 import logging
-from pathlib import Path
 from typing import Annotated
 
 import typer
 
+from coclab.paths import raw_root
 from coclab.pit.ingest import get_vintage_output_path
 
 # Configure logging to show INFO messages from PIT parser
@@ -70,7 +70,7 @@ def ingest_pit_vintage(
     typer.echo(f"Ingesting PIT vintage {vintage} (all years)...")
 
     # Step 1: Download PIT data
-    raw_dir = Path("data/raw/pit") / str(vintage)
+    raw_dir = raw_root() / "pit" / str(vintage)
     try:
         source_url = get_pit_source_url(vintage)
     except ValueError as e:

@@ -57,15 +57,15 @@ import numpy as np
 import pandas as pd
 
 from coclab import naming
-from coclab.metro.definitions import metro_name_for_id
 from coclab.analysis_geo import (
     GEO_ID_COL,
-    GEO_TYPE_COL,
     GEO_TYPE_COC,
+    GEO_TYPE_COL,
     GEO_TYPE_METRO,
     ensure_canonical_geo_columns,
     resolve_geo_col,
 )
+from coclab.metro.definitions import metro_name_for_id
 from coclab.panel.policies import DEFAULT_POLICY, AlignmentPolicy
 from coclab.panel.zori_eligibility import (
     DEFAULT_ZORI_MIN_COVERAGE,
@@ -75,6 +75,7 @@ from coclab.panel.zori_eligibility import (
     compute_rent_to_income,
     summarize_zori_eligibility,
 )
+from coclab.paths import curated_dir, raw_root
 from coclab.pit.ingest import parse_pit_file
 from coclab.pit.ingest.hud_exchange import MIN_PIT_YEAR as MIN_PIT_VINTAGE_YEAR
 from coclab.pit.registry import get_pit_path
@@ -85,11 +86,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Default paths
-DEFAULT_PIT_DIR = Path("data/curated/pit")
-DEFAULT_MEASURES_DIR = Path("data/curated/measures")
-DEFAULT_PANEL_DIR = Path("data/curated/panel")
-DEFAULT_RENTS_DIR = Path("data/curated/zori")
 
 # Canonical panel columns in desired order
 PANEL_COLUMNS = [
@@ -157,9 +153,6 @@ ZORI_PROVENANCE_COLUMNS = [
     "zori_min_coverage",
 ]
 
-# Default raw PIT directory
-DEFAULT_RAW_PIT_DIR = Path("data/raw/pit")
-
 
 def _panel_geo_id_col(geo_type: str) -> str:
     """Return the native identifier column for a panel geo type."""
@@ -206,7 +199,7 @@ def _find_latest_raw_vintage_file(
         Tuple of (file_path, vintage_year) for the most recent vintage file,
         or None if no vintage files are found.
     """
-    raw_pit_dir = raw_pit_dir or DEFAULT_RAW_PIT_DIR
+    raw_pit_dir = raw_pit_dir or raw_root() / "pit"
 
     if not raw_pit_dir.exists():
         return None
@@ -336,7 +329,7 @@ def _load_pit_for_year(
 
         geo_col = _panel_geo_id_col(geo_type)
         if pit_dir is None:
-            pit_dir = DEFAULT_PIT_DIR
+            pit_dir = curated_dir("pit")
 
         exact_path = pit_dir / naming.metro_pit_filename(year, definition_version)
         candidates: list[Path] = []
@@ -408,8 +401,8 @@ def _load_pit_for_year(
                 df = pd.read_parquet(registry_path)
             else:
                 # Fall back to canonical path (try new naming first, then legacy)
-                canonical_path = DEFAULT_PIT_DIR / pit_filename(year)
-                legacy_path = DEFAULT_PIT_DIR / f"pit_counts__{year}.parquet"
+                canonical_path = curated_dir("pit") / pit_filename(year)
+                legacy_path = curated_dir("pit") / f"pit_counts__{year}.parquet"
                 if canonical_path.exists():
                     logger.info(f"Loading PIT {year} from canonical path: {canonical_path}")
                     df = pd.read_parquet(canonical_path)
@@ -497,7 +490,7 @@ def _load_acs_measures(
     and legacy naming (coc_measures__{boundary}__{acs}.parquet). Tries new naming first,
     then falls back to legacy naming.
     """
-    measures_dir = measures_dir or DEFAULT_MEASURES_DIR
+    measures_dir = measures_dir or curated_dir("measures")
     geo_col = _panel_geo_id_col(geo_type)
 
     if geo_type == GEO_TYPE_METRO:
@@ -696,7 +689,7 @@ def _load_acs1_metro_measures(
         no ACS1 artifact is found.
     """
     if measures_dir is None:
-        measures_dir = Path("data/curated/acs")
+        measures_dir = curated_dir("acs")
 
     artifact_path = measures_dir / naming.acs1_metro_filename(
         acs1_vintage, definition_version
@@ -774,7 +767,7 @@ def _load_zori_yearly(
     The coverage_ratio column from ZORI is renamed to zori_coverage_ratio
     to avoid collision with the ACS coverage_ratio column.
     """
-    rents_dir = rents_dir or DEFAULT_RENTS_DIR
+    rents_dir = rents_dir or curated_dir("zori")
     geo_col = _panel_geo_id_col(geo_type)
 
     if zori_yearly_path is not None:
@@ -1406,7 +1399,7 @@ def save_panel(
     - Policy settings (if provided)
     - ZORI provenance (if provided)
     """
-    output_dir = output_dir or DEFAULT_PANEL_DIR
+    output_dir = output_dir or curated_dir("panel")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 

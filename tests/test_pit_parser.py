@@ -363,10 +363,11 @@ class TestWritePitParquet:
 class TestGetCanonicalOutputPath:
     """Tests for get_canonical_output_path function."""
 
-    def test_default_path(self):
+    def test_default_path(self, tmp_path, monkeypatch):
         """Test default base directory with temporal shorthand."""
+        monkeypatch.chdir(tmp_path)
         path = get_canonical_output_path(2024)
-        assert path == Path("data/curated/pit/pit__P2024.parquet")
+        assert path == tmp_path / "data" / "curated" / "pit" / "pit__P2024.parquet"
 
     def test_custom_base_dir(self, tmp_path):
         """Test custom base directory."""

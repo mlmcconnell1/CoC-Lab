@@ -18,6 +18,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import typer
 
+from coclab.config import StorageConfig, load_config
 from coclab.geo.ct_planning_regions import (
     CT_LEGACY_COUNTY_VINTAGE,
     CT_PLANNING_REGION_VINTAGE,
@@ -130,6 +131,8 @@ class ExecutionContext:
     )
     # Assets consumed during execution (for provenance manifest)
     consumed_assets: list[AssetRecord] = field(default_factory=list)
+    # Storage roots (asset store, output) — resolved from config precedence
+    storage_config: StorageConfig | None = None
     # Suppress progress output (for --json mode)
     quiet: bool = False
     # Cache: dataset_id → number of distinct resolved paths (for broadcast check)
@@ -1614,6 +1617,7 @@ def _resolve_panel_output_file(
     recipe: RecipeV1,
     pipeline_id: str,
     project_root: Path,
+    storage_config: StorageConfig | None = None,
 ) -> Path:
     """Return the canonical panel parquet path for a pipeline."""
     _, target = _resolve_pipeline_target(recipe, pipeline_id)
@@ -1631,8 +1635,9 @@ def _resolve_panel_output_file(
     start_year = min(universe_years)
     end_year = max(universe_years)
 
+    cfg = storage_config or load_config(project_root=project_root)
     return (
-        project_root / "data" / "curated" / "panel" / geo_panel_filename(
+        cfg.output_root / geo_panel_filename(
             start_year,
             end_year,
             geo_type=target_geo_type,
@@ -1647,28 +1652,39 @@ def resolve_pipeline_artifacts(
     pipeline_id: str,
     *,
     project_root: Path | None = None,
+    storage_config: StorageConfig | None = None,
 ) -> dict[str, str]:
-    """Return canonical relative output paths for a pipeline's declared outputs."""
+    """Return canonical output paths for a pipeline's declared outputs.
+
+    Paths are relative to *project_root* when the output falls within the
+    project tree, otherwise absolute.
+    """
     if project_root is None:
         project_root = Path.cwd()
 
     _, target = _resolve_pipeline_target(recipe, pipeline_id)
-    panel_file = _resolve_panel_output_file(recipe, pipeline_id, project_root)
+    panel_file = _resolve_panel_output_file(
+        recipe, pipeline_id, project_root, storage_config=storage_config,
+    )
     artifacts: dict[str, str] = {}
 
+    def _display_path(p: Path) -> str:
+        try:
+            return str(p.relative_to(project_root))
+        except ValueError:
+            return str(p)
+
     if "panel" in target.outputs:
-        artifacts["panel_path"] = str(panel_file.relative_to(project_root))
-        artifacts["manifest_path"] = str(
-            panel_file.with_suffix(".manifest.json").relative_to(project_root),
+        artifacts["panel_path"] = _display_path(panel_file)
+        artifacts["manifest_path"] = _display_path(
+            panel_file.with_suffix(".manifest.json"),
         )
 
     if "diagnostics" in target.outputs:
         diagnostics_file = panel_file.with_name(
             f"{panel_file.stem}__diagnostics.json",
         )
-        artifacts["diagnostics_path"] = str(
-            diagnostics_file.relative_to(project_root),
-        )
+        artifacts["diagnostics_path"] = _display_path(diagnostics_file)
 
     return artifacts
 
@@ -1865,6 +1881,7 @@ def _persist_outputs(
     try:
         output_file = _resolve_panel_output_file(
             ctx.recipe, plan.pipeline_id, ctx.project_root,
+            storage_config=ctx.storage_config,
         )
     except ExecutorError as exc:
         return StepResult(
@@ -1884,7 +1901,7 @@ def _persist_outputs(
             success=False,
             error=(
                 f"Output collision: pipeline '{plan.pipeline_id}' resolves to "
-                f"'{output_file.relative_to(ctx.project_root)}' which was "
+                f"'{output_file}' which was "
                 f"already written by another pipeline in this recipe. "
                 f"Namespace targets or use distinct geometry vintages."
             ),
@@ -1920,7 +1937,10 @@ def _persist_outputs(
         print(conformance_report.summary(), file=sys.stderr)
 
     # Build provenance and write with metadata
-    output_rel = str(output_file.relative_to(ctx.project_root))
+    try:
+        output_rel = str(output_file.relative_to(ctx.project_root))
+    except ValueError:
+        output_rel = str(output_file)
     provenance = _build_provenance(ctx.recipe, plan.pipeline_id, ctx)
     provenance["target_geometry"] = {
         "type": target_geo_type,
@@ -1957,7 +1977,7 @@ def _persist_outputs(
     detail = (
         f"persist panel: {len(frames)} year(s), "
         f"{len(panel)} rows → "
-        f"{output_file.relative_to(ctx.project_root)}"
+        f"{output_rel}"
     )
     _echo(ctx, f"  [persist] {detail}")
     return StepResult(step_kind="persist", detail=detail, success=True)
@@ -1982,10 +2002,11 @@ def _persist_diagnostics(
     panel = assembled.panel
 
     try:
-        artifacts = resolve_pipeline_artifacts(
+        panel_file = _resolve_panel_output_file(
             ctx.recipe,
             plan.pipeline_id,
-            project_root=ctx.project_root,
+            ctx.project_root,
+            storage_config=ctx.storage_config,
         )
     except ExecutorError as exc:
         return StepResult(
@@ -1994,18 +2015,9 @@ def _persist_diagnostics(
             success=False,
             error=str(exc),
         )
-    diagnostics_path = artifacts.get("diagnostics_path")
-    if diagnostics_path is None:
-        return StepResult(
-            step_kind="persist_diagnostics",
-            detail="persist_diagnostics",
-            success=False,
-            error=(
-                f"Pipeline '{plan.pipeline_id}' does not declare a diagnostics "
-                "output path."
-            ),
-        )
-    diagnostics_file = ctx.project_root / diagnostics_path
+    diagnostics_file = panel_file.with_name(
+        f"{panel_file.stem}__diagnostics.json",
+    )
     diagnostics_file.parent.mkdir(parents=True, exist_ok=True)
 
     # Generate diagnostics
@@ -2015,10 +2027,11 @@ def _persist_diagnostics(
     diagnostics_dict = report.to_dict()
     diagnostics_file.write_text(json.dumps(diagnostics_dict, indent=2, default=str) + "\n")
 
-    detail = (
-        f"persist diagnostics: "
-        f"{diagnostics_file.relative_to(ctx.project_root)}"
-    )
+    try:
+        diag_display = str(diagnostics_file.relative_to(ctx.project_root))
+    except ValueError:
+        diag_display = str(diagnostics_file)
+    detail = f"persist diagnostics: {diag_display}"
     _echo(ctx, f"  [persist] {detail}")
     return StepResult(step_kind="persist_diagnostics", detail=detail, success=True)
 
@@ -2035,6 +2048,7 @@ def _execute_plan(
     *,
     cache: RecipeCache | None = None,
     quiet: bool = False,
+    storage_config: StorageConfig | None = None,
 ) -> PipelineResult:
     """Execute all tasks in a resolved plan in deterministic order.
 
@@ -2045,6 +2059,7 @@ def _execute_plan(
         project_root=project_root,
         recipe=recipe,
         cache=cache or RecipeCache(),
+        storage_config=storage_config,
         quiet=quiet,
     )
     result = PipelineResult(pipeline_id=plan.pipeline_id)
@@ -2119,6 +2134,7 @@ def execute_recipe(
     *,
     cache: RecipeCache | None = None,
     quiet: bool = False,
+    storage_config: StorageConfig | None = None,
 ) -> list[PipelineResult]:
     """Execute all pipelines in a recipe.
 
@@ -2133,6 +2149,8 @@ def execute_recipe(
         caching.  Defaults to an enabled cache.
     quiet : bool
         Suppress progress output (for JSON mode).
+    storage_config : StorageConfig | None
+        Storage root configuration.  Defaults to ``load_config()``.
 
     Returns
     -------
@@ -2191,7 +2209,8 @@ def execute_recipe(
 
         # Execute the plan
         result = _execute_plan(
-            plan, recipe, project_root, cache=cache, quiet=quiet,
+            plan, recipe, project_root,
+            cache=cache, quiet=quiet, storage_config=storage_config,
         )
         results.append(result)
 

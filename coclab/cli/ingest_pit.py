@@ -1,11 +1,11 @@
 """CLI command for ingesting PIT (Point-in-Time) count data from HUD User."""
 
 import logging
-from pathlib import Path
 from typing import Annotated
 
 import typer
 
+from coclab.paths import raw_root
 from coclab.pit.ingest import get_canonical_output_path
 
 # Configure logging to show INFO messages from PIT parser
@@ -69,7 +69,7 @@ def ingest_pit(
     typer.echo(f"Ingesting PIT data for year {year}...")
 
     # Step 1: Download PIT data
-    raw_dir = Path("data/raw/pit") / str(year)
+    raw_dir = raw_root() / "pit" / str(year)
     # Get filename from URL (format changed from .xlsx to .xlsb in 2024)
     try:
         source_url = get_pit_source_url(year)

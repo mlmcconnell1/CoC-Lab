@@ -16,6 +16,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from coclab.paths import curated_root
+
 
 @dataclass
 class CuratedViolation:
@@ -131,7 +133,7 @@ def validate_curated_layout(
         All detected violations, sorted by path.
     """
     if base_dir is None:
-        base_dir = Path("data/curated")
+        base_dir = curated_root()
 
     violations: list[CuratedViolation] = []
 
