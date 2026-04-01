@@ -26,6 +26,7 @@ from coclab.recipe.executor import (
     PipelineResult,
     StepResult,
     _apply_temporal_filter,
+    _canonicalize_panel_for_target,
     _execute_materialize,
     _execute_resample,
     _persist_diagnostics,
@@ -5082,3 +5083,34 @@ class TestApplyCohortSelector:
         )
         with pytest.raises(ExecutorError, match="reference_year"):
             _apply_cohort_selector(panel, cohort)
+
+
+class TestCanonicalizeMetroNameBackfill:
+    """Regression tests for coclab-vwa5: metro_name backfill with null values."""
+
+    def _metro_geometry(self):
+        return GeometryRef(type="metro", source="glynn_fox_v1")
+
+    def test_backfills_when_column_absent(self):
+        df = pd.DataFrame({"geo_id": ["GF01", "GF02"], "year": [2020, 2020]})
+        result = _canonicalize_panel_for_target(df, self._metro_geometry())
+        assert "metro_name" in result.columns
+        assert result["metro_name"].notna().all()
+
+    def test_backfills_when_column_has_nulls(self):
+        df = pd.DataFrame({
+            "geo_id": ["GF01", "GF02"],
+            "year": [2020, 2020],
+            "metro_name": [None, None],
+        })
+        result = _canonicalize_panel_for_target(df, self._metro_geometry())
+        assert result["metro_name"].notna().all()
+
+    def test_backfills_partial_nulls(self):
+        df = pd.DataFrame({
+            "geo_id": ["GF01", "GF02"],
+            "year": [2020, 2020],
+            "metro_name": ["New York", None],
+        })
+        result = _canonicalize_panel_for_target(df, self._metro_geometry())
+        assert result["metro_name"].notna().all()

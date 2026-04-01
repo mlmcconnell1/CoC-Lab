@@ -1728,6 +1728,10 @@ def _canonicalize_panel_for_target(
         if geo_type == "metro":
             if "metro_id" not in result.columns:
                 result["metro_id"] = result["geo_id"]
+            if "metro_name" not in result.columns or result["metro_name"].isna().any():
+                from coclab.metro.definitions import metro_name_for_id
+
+                result["metro_name"] = result["metro_id"].map(metro_name_for_id)
             if (
                 definition_version is not None
                 and "definition_version_used" not in result.columns

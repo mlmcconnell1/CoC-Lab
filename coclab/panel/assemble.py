@@ -57,6 +57,7 @@ import numpy as np
 import pandas as pd
 
 from coclab import naming
+from coclab.metro.definitions import metro_name_for_id
 from coclab.analysis_geo import (
     GEO_ID_COL,
     GEO_TYPE_COL,
@@ -115,6 +116,7 @@ PANEL_COLUMNS = [
 
 METRO_PANEL_COLUMNS = [
     "metro_id",
+    "metro_name",
     "geo_type",
     "geo_id",
     "year",
@@ -1131,6 +1133,7 @@ def build_panel(
         if geo_type == GEO_TYPE_COC:
             year_df["boundary_vintage_used"] = boundary_vintage
         else:
+            year_df["metro_name"] = year_df[geo_col].map(metro_name_for_id)
             year_df["definition_version_used"] = definition_version
             year_df = ensure_canonical_geo_columns(
                 year_df,
