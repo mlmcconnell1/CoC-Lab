@@ -35,6 +35,9 @@ from coclab.naming import (
     tract_path,
     tract_xwalk_path,
 )
+from coclab.panel.finalize import (
+    finalize_panel,
+)
 from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
 from coclab.recipe.cache import RecipeCache
 from coclab.recipe.manifest import (
@@ -54,8 +57,6 @@ from coclab.recipe.planner import (
     resolve_plan,
 )
 from coclab.recipe.probes import (
-    GEO_CANDIDATES,
-    YEAR_CANDIDATES,
     get_weighted_transform_requirements,
     probe_geo_column,
     probe_measures,
@@ -65,6 +66,7 @@ from coclab.recipe.probes import (
 from coclab.recipe.recipe_schema import (
     CohortSelector,
     GeometryRef,
+    PanelPolicy,
     RecipeV1,
     TemporalFilter,
     expand_year_spec,
@@ -83,9 +85,9 @@ class ExecutorError(Exception):
         succeeded and what failed.
     """
 
-    partial_results: list["PipelineResult"]
+    partial_results: list[PipelineResult]
 
-    def __init__(self, message: str, *, partial_results: list["PipelineResult"] | None = None):
+    def __init__(self, message: str, *, partial_results: list[PipelineResult] | None = None):
         super().__init__(message)
         self.partial_results = partial_results or []
 
@@ -1735,7 +1737,7 @@ def resolve_pipeline_artifacts(
 
 def _apply_cohort_selector(
     panel: pd.DataFrame,
-    cohort: "CohortSelector",
+    cohort: CohortSelector,
     geo_id_col: str = "geo_id",
     year_col: str = "year",
 ) -> pd.DataFrame:
@@ -1818,6 +1820,20 @@ class _AssembledPanel:
     definition_version: str | None
 
 
+def _resolve_panel_aliases(target) -> dict[str, str]:
+    """Return column aliases for a target from its panel_policy.
+
+    Aliases are opt-in: only applied when the target's ``panel_policy``
+    declares explicit ``column_aliases``.  The preferred recipe aliases
+    are available as ``RECIPE_COLUMN_ALIASES`` for recipes that want
+    the new naming convention (coclab-t9rp).
+    """
+    policy: PanelPolicy | None = getattr(target, "panel_policy", None)
+    if policy is not None and policy.column_aliases:
+        return dict(policy.column_aliases)
+    return {}
+
+
 def _assemble_panel(
     plan: ExecutionPlan,
     ctx: ExecutionContext,
@@ -1858,20 +1874,25 @@ def _assemble_panel(
     panel = pd.concat(frames, ignore_index=True)
     panel = _canonicalize_panel_for_target(panel, target.geometry)
 
-    # Compute boundary_changed from vintage metadata (mirrors build_panel logic
-    # in coclab.panel.assemble).  Recipe-built panels bypass build_panel() so
-    # this column must be added here.
-    from coclab.panel.assemble import _detect_boundary_changes
-
-    _bc_geo_type, _, _ = _target_geometry_metadata(target.geometry)
-    _bc_vintage_col = (
-        "boundary_vintage_used" if _bc_geo_type == "coc" else "definition_version_used"
+    target_geo_type, boundary_vintage, definition_version = _target_geometry_metadata(
+        target.geometry,
     )
-    _bc_geo_col = "coc_id" if _bc_geo_type == "coc" else "metro_id"
-    if _bc_vintage_col in panel.columns and _bc_geo_col in panel.columns:
-        panel["boundary_changed"] = _detect_boundary_changes(
-            panel, geo_col=_bc_geo_col, vintage_col=_bc_vintage_col,
-        )
+
+    # Resolve panel policy for source label and ZORI inclusion.
+    policy: PanelPolicy | None = getattr(target, "panel_policy", None)
+    source_label = policy.source_label if policy else None
+    include_zori = policy is not None and policy.zori is not None
+    aliases = _resolve_panel_aliases(target)
+
+    # Shared finalization: boundary detection, column ordering, dtypes,
+    # source labeling, and column aliases.
+    panel = finalize_panel(
+        panel,
+        geo_type=target_geo_type,
+        include_zori=include_zori,
+        source_label=source_label,
+        column_aliases=aliases,
+    )
 
     if target.cohort is not None:
         pre_count = panel["geo_id"].nunique() if "geo_id" in panel.columns else len(panel)
@@ -1883,10 +1904,6 @@ def _assemble_panel(
             f"ref_year={target.cohort.reference_year}: "
             f"{pre_count} → {post_count} geographies",
         )
-
-    target_geo_type, boundary_vintage, definition_version = _target_geometry_metadata(
-        target.geometry,
-    )
 
     return _AssembledPanel(
         panel=panel,

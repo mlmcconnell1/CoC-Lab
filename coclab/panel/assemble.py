@@ -60,12 +60,16 @@ from coclab import naming
 from coclab.analysis_geo import (
     GEO_ID_COL,
     GEO_TYPE_COC,
-    GEO_TYPE_COL,
     GEO_TYPE_METRO,
     ensure_canonical_geo_columns,
     resolve_geo_col,
 )
 from coclab.metro.definitions import metro_name_for_id
+from coclab.panel.finalize import (
+    detect_boundary_changes,
+    determine_alignment_type,
+    finalize_panel,
+)
 from coclab.panel.policies import DEFAULT_POLICY, AlignmentPolicy
 from coclab.panel.zori_eligibility import (
     DEFAULT_ZORI_MIN_COVERAGE,
@@ -890,76 +894,12 @@ def _compute_rent_to_income(
     return result
 
 
-def _detect_boundary_changes(
-    df: pd.DataFrame,
-    *,
-    geo_col: str = "coc_id",
-    vintage_col: str = "boundary_vintage_used",
-) -> pd.Series:
-    """Detect vintage changes between consecutive years for each geo unit.
-
-    A boundary change is detected when the boundary_vintage_used differs
-    from the prior year's boundary_vintage_used for the same CoC.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Panel DataFrame with geo identifier, year, and vintage columns.
-        Must be sorted by geo identifier and year.
-
-    Returns
-    -------
-    pd.Series
-        Boolean series indicating whether boundary changed from prior year.
-        First year for each CoC will be False (no prior year to compare).
-
-    Notes
-    -----
-    This detection is based on vintage labels, not actual geometry comparison.
-    A True value indicates the boundary vintage changed, which typically
-    corresponds to a boundary geometry change, though not always.
-    """
-    if df.empty:
-        return pd.Series(dtype=bool)
-
-    if geo_col not in df.columns or vintage_col not in df.columns:
-        return pd.Series(False, index=df.index, dtype=bool)
-
-    # Sort by geography and year
-    df = df.sort_values([geo_col, "year"]).copy()
-
-    # Get prior year's vintage for each geography unit
-    df["_prior_vintage"] = df.groupby(geo_col)[vintage_col].shift(1)
-
-    # Boundary changed if vintage differs from prior (and prior exists)
-    boundary_changed = df["_prior_vintage"].notna() & (
-        df[vintage_col] != df["_prior_vintage"]
-    )
-
-    # Restore original index order
-    return boundary_changed.reindex(df.index)
-
-
-def _determine_alignment_type(pit_year: int, boundary_vintage: str) -> str:
-    """Classify alignment type for a PIT year and boundary vintage.
-
-    Returns:
-    - period_faithful: boundary vintage matches PIT year.
-    - retrospective: boundary vintage is newer or same-year than PIT year.
-    - custom: boundary vintage is older or non-numeric.
-    """
-    if boundary_vintage == str(pit_year):
-        return "period_faithful"
-
-    try:
-        boundary_year = int(boundary_vintage)
-    except (TypeError, ValueError):
-        return "custom"
-
-    if boundary_year >= pit_year:
-        return "retrospective"
-
-    return "custom"
+# _detect_boundary_changes and _determine_alignment_type now live in
+# coclab.panel.finalize and are imported at module level.  These aliases
+# preserve backward compatibility for any internal callers that reference
+# the private names.
+_detect_boundary_changes = detect_boundary_changes
+_determine_alignment_type = determine_alignment_type
 
 
 def build_panel(
@@ -1242,6 +1182,7 @@ def build_panel(
     # =========================================================================
     # ZORI Integration (if enabled)
     # =========================================================================
+    zori_integrated = False
     if include_zori and zori_df is not None:
         logger.info("Integrating ZORI data into panel...")
 
@@ -1260,8 +1201,6 @@ def build_panel(
                 rent_alignment = methods[0]
 
         # Apply ZORI eligibility rules (Agent C logic)
-        # This adds zori_is_eligible, zori_excluded_reason, and nulls out
-        # ineligible rows
         panel_df = apply_zori_eligibility(
             panel_df,
             zori_col="zori_coc",
@@ -1300,49 +1239,22 @@ def build_panel(
             f"{summary.get('zori_eligible_count', 0)} eligible observations "
             f"({summary.get('zori_eligible_pct', 0):.1f}%)"
         )
+        zori_integrated = True
 
-        # Add ZORI columns to the ordering
-        all_columns = panel_columns + ZORI_COLUMNS + ZORI_PROVENANCE_COLUMNS
-        # Also keep zori_max_geo_contribution if present
-        if "zori_max_geo_contribution" in panel_df.columns:
-            all_columns.append("zori_max_geo_contribution")
-    else:
-        all_columns = panel_columns
-
-    # Ensure all required columns exist
-    for col in all_columns:
-        if col not in panel_df.columns:
-            panel_df[col] = pd.NA
-
-    # Reorder columns to canonical order (only keep columns that exist)
-    final_columns = [col for col in all_columns if col in panel_df.columns]
-    panel_df = panel_df[final_columns].copy()
-
-    # Final dtype cleanup
-    panel_df[geo_col] = panel_df[geo_col].astype(str)
-    if geo_type == GEO_TYPE_METRO:
-        panel_df[GEO_ID_COL] = panel_df[GEO_ID_COL].astype(str)
-        panel_df[GEO_TYPE_COL] = panel_df[GEO_TYPE_COL].astype(str)
-    panel_df["year"] = panel_df["year"].astype(int)
-    panel_df["pit_total"] = panel_df["pit_total"].astype(int)
-    if "boundary_vintage_used" in panel_df.columns:
-        panel_df["boundary_vintage_used"] = panel_df["boundary_vintage_used"].astype(str)
-    if "definition_version_used" in panel_df.columns:
-        panel_df["definition_version_used"] = panel_df["definition_version_used"].astype(str)
-    panel_df["acs_vintage_used"] = panel_df["acs_vintage_used"].astype(str)
-    # tract_vintage_used may be None if provenance not available, use nullable string
-    if "tract_vintage_used" in panel_df.columns:
-        panel_df["tract_vintage_used"] = panel_df["tract_vintage_used"].astype("string")
-    if "alignment_type" in panel_df.columns:
-        panel_df["alignment_type"] = panel_df["alignment_type"].astype("string")
-    panel_df["weighting_method"] = panel_df["weighting_method"].astype(str)
-    panel_df["source"] = panel_df["source"].astype(str)
-    panel_df["boundary_changed"] = panel_df["boundary_changed"].astype(bool)
-
-    # Nullable integer columns
-    for col in ["pit_sheltered", "pit_unsheltered"]:
-        if col in panel_df.columns:
-            panel_df[col] = panel_df[col].astype("Int64")
+    # Shared finalization: column ordering, dtype enforcement, boundary
+    # detection (already done above, so skip re-detection).
+    extra_cols = (
+        ["zori_max_geo_contribution"]
+        if zori_integrated and "zori_max_geo_contribution" in panel_df.columns
+        else None
+    )
+    panel_df = finalize_panel(
+        panel_df,
+        geo_type=geo_type,
+        include_zori=zori_integrated,
+        add_boundary_changed=False,  # already computed above
+        extra_columns=extra_cols,
+    )
 
     logger.info(
         f"Built panel: {len(panel_df)} rows, "

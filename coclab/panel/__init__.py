@@ -23,6 +23,15 @@ from coclab.panel.assemble import (
     build_panel,
     save_panel,
 )
+from coclab.panel.conformance import (
+    ACS1_MEASURE_COLUMNS,
+    ACS_MEASURE_COLUMNS,
+    ConformanceReport,
+    ConformanceResult,
+    PanelRequest,
+    register_check,
+    run_conformance,
+)
 from coclab.panel.diagnostics import (
     DiagnosticsReport,
     boundary_change_summary,
@@ -31,20 +40,17 @@ from coclab.panel.diagnostics import (
     missingness_report,
     weighting_sensitivity,
 )
+from coclab.panel.finalize import (
+    RECIPE_COLUMN_ALIASES,
+    detect_boundary_changes,
+    determine_alignment_type,
+    finalize_panel,
+)
 from coclab.panel.policies import (
     DEFAULT_POLICY,
     AlignmentPolicy,
     default_acs_vintage,
     default_boundary_vintage,
-)
-from coclab.panel.conformance import (
-    ACS_MEASURE_COLUMNS,
-    ACS1_MEASURE_COLUMNS,
-    ConformanceReport,
-    ConformanceResult,
-    PanelRequest,
-    register_check,
-    run_conformance,
 )
 from coclab.panel.zori_eligibility import (
     DEFAULT_ZORI_MIN_COVERAGE,
@@ -73,6 +79,11 @@ __all__ = [
     "METRO_PANEL_COLUMNS",
     "ZORI_COLUMNS",
     "ZORI_PROVENANCE_COLUMNS",
+    # Finalization
+    "RECIPE_COLUMN_ALIASES",
+    "detect_boundary_changes",
+    "determine_alignment_type",
+    "finalize_panel",
     # Diagnostics
     "DiagnosticsReport",
     "boundary_change_summary",

@@ -286,6 +286,67 @@ OutputKind = Literal["panel", "diagnostics"]
 CohortMethod = Literal["top_n", "bottom_n", "percentile"]
 
 
+class ZoriPolicy(BaseModel):
+    """Declarative ZORI eligibility and provenance policy.
+
+    When present on a target, the recipe executor applies ZORI eligibility
+    rules and provenance column generation using these settings instead of
+    relying on implicit ``build_panel`` defaults.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    min_coverage: float = Field(
+        default=0.90, ge=0.0, le=1.0,
+        description="Minimum coverage ratio for ZORI eligibility.",
+    )
+
+
+class Acs1Policy(BaseModel):
+    """Declarative ACS 1-year merge policy for metro panels.
+
+    When present, the executor merges ACS 1-year metro-native measures
+    (e.g. unemployment_rate_acs1) into the panel alongside ACS 5-year
+    measures.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    include: bool = Field(
+        default=False,
+        description="If true, merge ACS 1-year metro-native measures into the panel.",
+    )
+
+
+class PanelPolicy(BaseModel):
+    """Declarative panel output and finalization policy.
+
+    Allows recipes to explicitly declare panel-specific semantics that
+    were previously implicit in ``build_panel``, including ZORI eligibility
+    thresholds, ACS 1-year merge behavior, source labeling, and column
+    rename aliases.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    source_label: Optional[str] = Field(
+        default=None,
+        description="Override the default source label for the panel (e.g. 'coclab_panel').",
+    )
+    zori: Optional[ZoriPolicy] = Field(
+        default=None,
+        description="ZORI eligibility and provenance policy. Null means no ZORI integration.",
+    )
+    acs1: Optional[Acs1Policy] = Field(
+        default=None,
+        description="ACS 1-year merge policy (metro targets only).",
+    )
+    column_aliases: Dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Column rename mapping for output. "
+            "E.g. {'total_population': 'acs_total_population', 'population': 'pep_population'}."
+        ),
+    )
+
+
 class CohortSelector(BaseModel):
     """Declarative cohort filter that ranks geographies by a measure column
     at a reference year and keeps only the selected subset."""
@@ -322,6 +383,7 @@ class TargetSpec(BaseModel):
     geometry: GeometryRef = Field(..., description="Target geometry for the pipeline.")
     outputs: List[OutputKind] = Field(default_factory=lambda: ["panel"], description="Requested outputs for this target.")
     cohort: Optional[CohortSelector] = Field(default=None, description="Optional cohort selector to filter to a ranked subset of geographies.")
+    panel_policy: Optional[PanelPolicy] = Field(default=None, description="Declarative panel output and finalization policy.")
 
 
 # -----------------------------

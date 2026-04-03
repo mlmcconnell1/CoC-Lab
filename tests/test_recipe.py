@@ -48,13 +48,16 @@ from coclab.recipe.planner import (
 )
 from coclab.recipe.loader import RecipeLoadError, load_recipe
 from coclab.recipe.recipe_schema import (
+    Acs1Policy,
     DatasetSpec,
     FileSetSegment,
     FileSetSpec,
     GeometryRef,
+    PanelPolicy,
     RecipeV1,
     TemporalFilter,
     YearSpec,
+    ZoriPolicy,
     expand_year_spec,
 )
 
@@ -1732,6 +1735,84 @@ class TestPersistDiagnostics:
         diag_files = list(panel_dir.glob("*__diagnostics.json"))
         assert len(parquet_files) >= 1, "Panel parquet should be written"
         assert len(diag_files) == 1, "Diagnostics JSON should be written"
+
+
+class TestPanelPolicy:
+    """Tests for declarative PanelPolicy in recipe schema (coclab-gude.4)."""
+
+    def test_panel_policy_defaults(self):
+        policy = PanelPolicy()
+        assert policy.source_label is None
+        assert policy.zori is None
+        assert policy.acs1 is None
+        assert policy.column_aliases == {}
+
+    def test_zori_policy_defaults(self):
+        zori = ZoriPolicy()
+        assert zori.min_coverage == 0.90
+
+    def test_zori_policy_custom(self):
+        zori = ZoriPolicy(min_coverage=0.80)
+        assert zori.min_coverage == 0.80
+
+    def test_acs1_policy_defaults(self):
+        acs1 = Acs1Policy()
+        assert acs1.include is False
+
+    def test_panel_policy_with_aliases(self):
+        policy = PanelPolicy(
+            column_aliases={
+                "total_population": "acs_total_population",
+                "population": "pep_population",
+            },
+        )
+        assert policy.column_aliases["total_population"] == "acs_total_population"
+        assert policy.column_aliases["population"] == "pep_population"
+
+    def test_target_with_panel_policy(self):
+        data = _minimal_recipe()
+        data["targets"][0]["panel_policy"] = {
+            "source_label": "custom_source",
+            "zori": {"min_coverage": 0.85},
+            "column_aliases": {"total_population": "acs_total_population"},
+        }
+        recipe = load_recipe(data)
+        target = recipe.targets[0]
+        assert target.panel_policy is not None
+        assert target.panel_policy.source_label == "custom_source"
+        assert target.panel_policy.zori.min_coverage == 0.85
+        assert target.panel_policy.column_aliases == {
+            "total_population": "acs_total_population",
+        }
+
+    def test_target_without_panel_policy(self):
+        data = _minimal_recipe()
+        recipe = load_recipe(data)
+        assert recipe.targets[0].panel_policy is None
+
+    def test_panel_policy_rejects_extra_fields(self):
+        with pytest.raises(Exception):
+            PanelPolicy(unknown_field="bad")
+
+    def test_zori_coverage_bounds(self):
+        with pytest.raises(Exception):
+            ZoriPolicy(min_coverage=1.5)
+        with pytest.raises(Exception):
+            ZoriPolicy(min_coverage=-0.1)
+
+    def test_full_panel_policy_round_trip(self):
+        policy = PanelPolicy(
+            source_label="test_panel",
+            zori=ZoriPolicy(min_coverage=0.95),
+            acs1=Acs1Policy(include=True),
+            column_aliases={"zori_coc": "zori"},
+        )
+        d = policy.model_dump()
+        restored = PanelPolicy(**d)
+        assert restored.source_label == "test_panel"
+        assert restored.zori.min_coverage == 0.95
+        assert restored.acs1.include is True
+        assert restored.column_aliases == {"zori_coc": "zori"}
 
 
 class TestPipelineResult:
