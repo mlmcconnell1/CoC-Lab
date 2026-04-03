@@ -68,6 +68,17 @@ class TestCLIFlags:
         cfg = load_config(asset_store_root="/tmp/assets", project_root=tmp_path)
         assert cfg.asset_store_root == Path("/tmp/assets")
 
+    def test_cli_relative_path_resolves_from_current_working_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        runtime_dir = tmp_path / "runtime"
+        runtime_dir.mkdir()
+        monkeypatch.chdir(runtime_dir)
+
+        cfg = load_config(output_root="outputs/panel", project_root=tmp_path)
+
+        assert cfg.output_root == (runtime_dir / "outputs" / "panel").resolve()
+
     def test_cli_overrides_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(ENV_ASSET_STORE_ROOT, "/env/assets")
         cfg = load_config(asset_store_root="/cli/assets", project_root=tmp_path)
@@ -109,6 +120,18 @@ class TestEnvVars:
         cfg = load_config(project_root=tmp_path)
         assert cfg.asset_store_root == Path("/env/assets")
 
+    def test_env_relative_path_resolves_from_current_working_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        runtime_dir = tmp_path / "runtime"
+        runtime_dir.mkdir()
+        monkeypatch.chdir(runtime_dir)
+        monkeypatch.setenv(ENV_OUTPUT_ROOT, "exports/panel")
+
+        cfg = load_config(project_root=tmp_path)
+
+        assert cfg.output_root == (runtime_dir / "exports" / "panel").resolve()
+
 
 # ---------------------------------------------------------------------------
 # Repo-local config (layer 3)
@@ -134,6 +157,18 @@ class TestRepoConfig:
         cfg = load_config(project_root=tmp_path)
         assert cfg.asset_store_root == Path("/repo/assets")
         assert cfg.output_root == tmp_path / "data" / "curated" / "panel"
+
+    def test_repo_relative_path_resolves_from_project_root(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        off_repo_dir = tmp_path / "elsewhere"
+        off_repo_dir.mkdir()
+        monkeypatch.chdir(off_repo_dir)
+        (tmp_path / REPO_CONFIG_FILENAME).write_text("output_root: ../HHP-Data\n")
+
+        cfg = load_config(project_root=tmp_path)
+
+        assert cfg.output_root == (tmp_path.parent / "HHP-Data").resolve()
 
     def test_repo_overrides_user_config(self, tmp_path: Path) -> None:
         user_dir = tmp_path / "user_config"
@@ -175,6 +210,28 @@ class TestUserConfig:
         try:
             cfg = load_config(project_root=tmp_path)
             assert cfg.output_root == Path("/user/outputs")
+        finally:
+            config_mod.USER_CONFIG_PATH = original
+
+    def test_user_relative_path_resolves_from_user_config_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user_dir = tmp_path / "user_config"
+        user_dir.mkdir()
+        user_cfg_path = user_dir / "config.yaml"
+        user_cfg_path.write_text("output_root: ../shared/panel\n")
+
+        off_repo_dir = tmp_path / "runtime"
+        off_repo_dir.mkdir()
+        monkeypatch.chdir(off_repo_dir)
+
+        import coclab.config as config_mod
+
+        original = config_mod.USER_CONFIG_PATH
+        config_mod.USER_CONFIG_PATH = user_cfg_path
+        try:
+            cfg = load_config(project_root=tmp_path)
+            assert cfg.output_root == (user_dir.parent / "shared" / "panel").resolve()
         finally:
             config_mod.USER_CONFIG_PATH = original
 

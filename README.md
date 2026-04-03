@@ -81,6 +81,12 @@ Built-in defaults preserve the historical layout:
 - `asset_store_root = <project_root>/data`
 - `output_root = <project_root>/data/curated/panel`
 
+Relative paths are resolved by source:
+
+- CLI flags and environment variables are relative to the current working directory
+- `coclab.yaml` values are relative to the repo root
+- `~/.config/coclab/config.yaml` values are relative to `~/.config/coclab/`
+
 Internal curated assets resolve under `asset_store_root/curated/...`. Recipe
 panels and their manifest sidecars resolve under `output_root/`.
 

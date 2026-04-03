@@ -14,6 +14,13 @@ Built-in defaults preserve current behavior:
 
 - ``asset_store_root = <project_root>/data``
 - ``output_root = <project_root>/data/curated/panel``
+
+Relative path semantics:
+
+- CLI flags and environment variables resolve relative to the current
+  working directory.
+- Repo-local ``coclab.yaml`` values resolve relative to ``project_root``.
+- User config values resolve relative to ``~/.config/coclab``.
 """
 
 from __future__ import annotations
@@ -127,12 +134,16 @@ def load_config(
     default_asset = project_root / "data"
     default_output = project_root / "data" / "curated" / "panel"
 
+    user_config_dir = USER_CONFIG_PATH.parent.resolve()
+
     # Resolve asset_store_root: CLI > env > repo > user > default
     resolved_asset = _resolve_value(
         cli=asset_store_root,
         env=env_asset,
         repo=repo_cfg.get("asset_store_root"),
         user=user_cfg.get("asset_store_root"),
+        repo_base=project_root,
+        user_base=user_config_dir,
         default=default_asset,
     )
 
@@ -142,6 +153,8 @@ def load_config(
         env=env_output,
         repo=repo_cfg.get("output_root"),
         user=user_cfg.get("output_root"),
+        repo_base=project_root,
+        user_base=user_config_dir,
         default=default_output,
     )
 
@@ -157,10 +170,30 @@ def _resolve_value(
     env: str | None,
     repo: str | None,
     user: str | None,
+    repo_base: Path,
+    user_base: Path,
     default: Path,
 ) -> Path:
     """Pick the highest-precedence non-None value and return as Path."""
-    for candidate in (cli, env, repo, user):
+    candidates = (
+        (cli, None),
+        (env, None),
+        (repo, repo_base),
+        (user, user_base),
+    )
+    for candidate, base_dir in candidates:
         if candidate is not None:
-            return Path(candidate)
+            return _normalize_path(candidate, base_dir=base_dir)
     return default
+
+
+def _normalize_path(candidate: Path | str, *, base_dir: Path | None) -> Path:
+    """Return an absolute path for a config candidate.
+
+    Relative paths from config files are resolved against the directory that
+    defines them. Relative CLI/env values use the current working directory.
+    """
+    path = Path(candidate).expanduser()
+    if not path.is_absolute() and base_dir is not None:
+        path = base_dir / path
+    return Path(os.path.abspath(path))
