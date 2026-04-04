@@ -1,4 +1,9 @@
-"""Tests for ZORI panel integration (Agent D).
+"""Tests for ZORI panel integration (Agent D, legacy build path).
+
+.. deprecated::
+    These tests exercise ZORI integration through the legacy
+    ``build_panel`` path.  Recipe-native ZORI coverage lives in
+    ``test_recipe_panel_policies.py::TestZoriPanelPolicy``.
 
 Tests cover:
 - rent_to_income math calculations
@@ -19,6 +24,8 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+
+pytestmark = pytest.mark.legacy_build_path
 
 from coclab.panel.assemble import (
     PANEL_COLUMNS,

@@ -1,4 +1,10 @@
-"""Phase 3 Integration Tests for CoC Lab.
+"""Phase 3 Integration Tests for CoC Lab (legacy build path).
+
+.. deprecated::
+    These tests exercise the legacy ``build_panel``/``save_panel`` path.
+    Recipe-native equivalents live in ``test_recipe.py`` and
+    ``test_recipe_panel_policies.py``.  Run with
+    ``pytest -m legacy_build_path`` to select only legacy tests.
 
 This module provides end-to-end integration tests that validate the entire
 Phase 3 pipeline works together correctly. These tests cover:
@@ -24,6 +30,8 @@ import geopandas as gpd
 import pandas as pd
 import pytest
 from shapely.geometry import Polygon
+
+pytestmark = pytest.mark.legacy_build_path
 
 from coclab.panel import (
     DEFAULT_POLICY,

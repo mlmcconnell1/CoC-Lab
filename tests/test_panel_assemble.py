@@ -1,4 +1,9 @@
-"""Tests for panel assembly engine (WP-3F).
+"""Tests for panel assembly engine (WP-3F, legacy build path).
+
+.. deprecated::
+    These tests exercise the legacy ``build_panel``/``save_panel``
+    functions directly.  Recipe-native panel assembly is covered in
+    ``test_recipe.py`` and ``test_recipe_panel_policies.py``.
 
 Tests cover:
 - Loading PIT data for specific years
@@ -13,6 +18,8 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
+
+pytestmark = pytest.mark.legacy_build_path
 
 from coclab.panel.assemble import (
     METRO_PANEL_COLUMNS,

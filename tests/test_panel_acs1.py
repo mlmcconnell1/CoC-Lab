@@ -1,4 +1,9 @@
-"""Tests for ACS 1-year metro dual-product panel assembly (coclab-e88y).
+"""Tests for ACS 1-year metro dual-product panel assembly (coclab-e88y, legacy build path).
+
+.. deprecated::
+    These tests exercise ACS1 integration through the legacy
+    ``build_panel`` path.  Recipe-native ACS1 coverage lives in
+    ``test_recipe_panel_policies.py::TestAcs1PanelPolicy``.
 
 Tests cover:
 - Default behavior (include_acs1=False) leaves ACS1 columns as NaN
@@ -14,12 +19,13 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+pytestmark = pytest.mark.legacy_build_path
+
 from coclab.panel.assemble import (
     METRO_PANEL_COLUMNS,
     build_panel,
 )
 from coclab.panel.policies import AlignmentPolicy
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

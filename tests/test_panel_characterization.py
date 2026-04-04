@@ -1,4 +1,9 @@
-"""Characterization and validation tests for panel output.
+"""Characterization and validation tests for panel output (legacy build path).
+
+.. deprecated::
+    These tests exercise the legacy ``build_panel`` function.  Panel
+    output contract validation through the recipe executor is covered in
+    ``test_recipe.py`` and ``test_recipe_panel_policies.py``.
 
 These tests assert structural invariants, dtype contracts, value domain
 constraints, cross-column consistency, uniqueness guarantees, round-trip
@@ -40,6 +45,8 @@ import re
 import numpy as np
 import pandas as pd
 import pytest
+
+pytestmark = pytest.mark.legacy_build_path
 
 from coclab.panel.assemble import (
     PANEL_COLUMNS,

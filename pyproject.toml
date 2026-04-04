@@ -38,11 +38,21 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+# pytestmark must precede project imports; E402 is expected.
+"tests/test_phase3_integration.py" = ["E402"]
+"tests/test_conformance_integration.py" = ["E402"]
+"tests/test_panel_assemble.py" = ["E402"]
+"tests/test_panel_characterization.py" = ["E402"]
+"tests/test_zori_panel_integration.py" = ["E402"]
+"tests/test_panel_acs1.py" = ["E402"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')"
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "legacy_build_path: tests anchored to the legacy build_panel/save_panel/aggregate --build path",
 ]
 
 [build-system]

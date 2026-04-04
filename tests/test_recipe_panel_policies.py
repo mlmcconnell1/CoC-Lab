@@ -1,8 +1,13 @@
-"""Tests for recipe-native ZORI and ACS1 panel policies (coclab-gude.2, coclab-gude.3).
+"""Recipe-native panel policy and parity tests.
 
-Verifies that the recipe executor applies ZORI eligibility, rent_to_income,
-and provenance when panel_policy.zori is declared, and populates ACS1
-provenance columns when panel_policy.acs1 is declared.
+Covers:
+- coclab-gude.2: ZORI eligibility and provenance in recipe execution
+- coclab-gude.3: ACS1 provenance columns in recipe execution
+- coclab-gude.5: Recipe-native parity for CoC and metro panel contracts
+
+This is the authoritative test surface for panel semantics through
+the recipe executor.  Legacy ``build_panel``/``save_panel`` tests are
+in files marked with ``pytest.mark.legacy_build_path``.
 """
 
 from __future__ import annotations
@@ -420,6 +425,196 @@ class TestAcs1PanelPolicy:
         assert gf01["acs1_vintage_used"].notna().all()
         assert gf02["acs1_vintage_used"].isna().all()
         assert (panel["acs_products_used"] == "acs5,acs1").all()
+
+
+# ===========================================================================
+# Recipe-native panel contract parity tests (coclab-gude.5)
+# ===========================================================================
+
+
+def _coc_recipe_dict() -> dict:
+    """Minimal CoC recipe with PIT + ACS for parity testing."""
+    return {
+        "version": 1,
+        "name": "coc-parity-test",
+        "universe": {"years": [2020, 2021]},
+        "targets": [
+            {
+                "id": "coc_panel",
+                "geometry": {
+                    "type": "coc", "vintage": 2025,
+                    "source": "hud_exchange",
+                },
+                "outputs": ["panel"],
+            },
+        ],
+        "datasets": {
+            "pit": {
+                "provider": "hud",
+                "product": "pit",
+                "version": 1,
+                "native_geometry": {"type": "coc"},
+                "years": {"years": [2020, 2021]},
+                "path": "data/pit.parquet",
+            },
+            "acs": {
+                "provider": "census",
+                "product": "acs5",
+                "version": 1,
+                "native_geometry": {"type": "coc"},
+                "years": {"years": [2020, 2021]},
+                "path": "data/acs.parquet",
+            },
+        },
+        "transforms": [],
+        "pipelines": [
+            {
+                "id": "main",
+                "target": "coc_panel",
+                "steps": [
+                    {
+                        "resample": {
+                            "dataset": "pit",
+                            "to_geometry": {
+                                "type": "coc", "vintage": 2025,
+                                "source": "hud_exchange",
+                            },
+                            "method": "identity",
+                            "measures": ["pit_total"],
+                        },
+                    },
+                    {
+                        "resample": {
+                            "dataset": "acs",
+                            "to_geometry": {
+                                "type": "coc", "vintage": 2025,
+                                "source": "hud_exchange",
+                            },
+                            "method": "identity",
+                            "measures": [
+                                "total_population",
+                                "median_household_income",
+                            ],
+                        },
+                    },
+                    {
+                        "join": {
+                            "datasets": ["pit", "acs"],
+                            "join_on": ["geo_id", "year"],
+                        },
+                    },
+                ],
+            },
+        ],
+    }
+
+
+def _setup_coc_parity_fixtures(tmp_path: Path) -> None:
+    """Create PIT + ACS dataset files for CoC parity testing."""
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    pd.DataFrame({
+        "coc_id": ["COC1", "COC2", "COC1", "COC2"],
+        "year": [2020, 2020, 2021, 2021],
+        "pit_total": [100, 200, 110, 210],
+    }).to_parquet(data_dir / "pit.parquet")
+
+    pd.DataFrame({
+        "coc_id": ["COC1", "COC2", "COC1", "COC2"],
+        "year": [2020, 2020, 2021, 2021],
+        "total_population": [50000, 80000, 51000, 82000],
+        "median_household_income": [60000.0, 48000.0, 62000.0, 50000.0],
+    }).to_parquet(data_dir / "acs.parquet")
+
+
+class TestCocPanelParity:
+    """Recipe-native CoC panel matches legacy build_panel output contract."""
+
+    def test_coc_panel_columns_present(self, tmp_path: Path):
+        """Canonical CoC columns are present in recipe-built panel."""
+        from coclab.panel.finalize import COC_PANEL_COLUMNS
+
+        _setup_coc_parity_fixtures(tmp_path)
+        recipe = load_recipe(_coc_recipe_dict())
+        execute_recipe(recipe, project_root=tmp_path)
+
+        panel = pd.read_parquet(_find_panel_output(tmp_path))
+        for col in COC_PANEL_COLUMNS:
+            assert col in panel.columns, f"Missing canonical column: {col}"
+
+    def test_coc_panel_shape(self, tmp_path: Path):
+        """2 CoCs x 2 years = 4 rows."""
+        _setup_coc_parity_fixtures(tmp_path)
+        recipe = load_recipe(_coc_recipe_dict())
+        execute_recipe(recipe, project_root=tmp_path)
+
+        panel = pd.read_parquet(_find_panel_output(tmp_path))
+        assert len(panel) == 4
+        assert panel["year"].nunique() == 2
+
+    def test_boundary_changed_derived(self, tmp_path: Path):
+        """boundary_changed column is present and boolean."""
+        _setup_coc_parity_fixtures(tmp_path)
+        recipe = load_recipe(_coc_recipe_dict())
+        execute_recipe(recipe, project_root=tmp_path)
+
+        panel = pd.read_parquet(_find_panel_output(tmp_path))
+        assert "boundary_changed" in panel.columns
+        assert panel["boundary_changed"].dtype == bool
+
+    def test_source_label_set(self, tmp_path: Path):
+        """source column has default label."""
+        _setup_coc_parity_fixtures(tmp_path)
+        recipe = load_recipe(_coc_recipe_dict())
+        execute_recipe(recipe, project_root=tmp_path)
+
+        panel = pd.read_parquet(_find_panel_output(tmp_path))
+        assert "source" in panel.columns
+        assert panel["source"].notna().all()
+
+    def test_provenance_in_parquet(self, tmp_path: Path):
+        """coclab_provenance metadata exists in the output parquet."""
+        _setup_coc_parity_fixtures(tmp_path)
+        recipe = load_recipe(_coc_recipe_dict())
+        execute_recipe(recipe, project_root=tmp_path)
+
+        panel_path = _find_panel_output(tmp_path)
+        metadata = pq.read_metadata(panel_path)
+        schema_metadata = metadata.schema.to_arrow_schema().metadata
+        assert b"coclab_provenance" in schema_metadata
+
+        provenance = json.loads(schema_metadata[b"coclab_provenance"])
+        assert "conformance" in provenance
+        assert "target_geometry" in provenance
+
+
+class TestMetroPanelParity:
+    """Recipe-native metro panel matches legacy build_panel output contract."""
+
+    def test_metro_panel_columns_present(self, tmp_path: Path):
+        """Canonical metro columns are present in recipe-built panel."""
+        from coclab.panel.finalize import METRO_PANEL_COLUMNS
+
+        _setup_acs1_policy_fixtures(tmp_path)
+        recipe = load_recipe(_acs1_policy_recipe_dict())
+        execute_recipe(recipe, project_root=tmp_path)
+
+        panel = pd.read_parquet(_find_panel_output(tmp_path))
+        for col in METRO_PANEL_COLUMNS:
+            assert col in panel.columns, (
+                f"Missing canonical metro column: {col}"
+            )
+
+    def test_metro_geo_metadata(self, tmp_path: Path):
+        """Metro panel has geo_type, metro_id, metro_name columns."""
+        _setup_acs1_policy_fixtures(tmp_path)
+        recipe = load_recipe(_acs1_policy_recipe_dict())
+        execute_recipe(recipe, project_root=tmp_path)
+
+        panel = pd.read_parquet(_find_panel_output(tmp_path))
+        assert (panel["geo_type"] == "metro").all()
+        assert panel["metro_id"].notna().all()
 
 
 # ===========================================================================

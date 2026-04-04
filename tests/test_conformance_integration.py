@@ -1,4 +1,10 @@
-"""Integration tests for panel conformance wiring.
+"""Integration tests for panel conformance wiring (legacy build path).
+
+.. deprecated::
+    Tests 1-3 validate conformance logic that is shared across both paths.
+    Test 4 (``save_panel`` provenance embedding) exercises the legacy path;
+    recipe-native provenance embedding is covered in
+    ``test_recipe_panel_policies.py``.
 
 Tests verify:
 1. Conformance checks run and produce a report on a valid panel.
@@ -16,7 +22,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from coclab.panel.assemble import PANEL_COLUMNS, save_panel
+pytestmark = pytest.mark.legacy_build_path
+
+from coclab.panel.assemble import save_panel
 from coclab.panel.conformance import (
     ConformanceReport,
     ConformanceResult,
@@ -24,7 +32,6 @@ from coclab.panel.conformance import (
     run_conformance,
 )
 from coclab.provenance import read_provenance
-
 
 # ---------------------------------------------------------------------------
 # Minimal panel fixture
