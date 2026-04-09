@@ -51,7 +51,9 @@ from coclab.panel.assemble import (
 # Column and threshold constants
 # ---------------------------------------------------------------------------
 
-#: ACS 5-year measure columns checked for schema presence and data completeness.
+#: ACS measure columns checked for schema presence and data completeness.
+#: Includes ACS5 tract-level measures (apportioned to analysis geography) and
+#: the ACS1-derived metro unemployment rate used in CoC and metro panels.
 ACS_MEASURE_COLUMNS: list[str] = [
     "total_population",
     "adult_population",
@@ -64,6 +66,17 @@ ACS_MEASURE_COLUMNS: list[str] = [
 #: ACS 1-year measure columns (metro-native measures from ACS 1-year estimates).
 ACS1_MEASURE_COLUMNS: list[str] = [
     "unemployment_rate_acs1",
+]
+
+#: BLS LAUS metro-native measure columns.
+#: These are sourced from the BLS LAUS annual-average ingest, not ACS.
+#: The unemployment_rate here is the official BLS rate; it must not be confused
+#: with unemployment_rate_acs1 which comes from the ACS 1-year survey.
+LAUS_MEASURE_COLUMNS: list[str] = [
+    "labor_force",
+    "employed",
+    "unemployed",
+    "unemployment_rate",
 ]
 
 #: Measures that should normally vary across years. If too many CoC-year
@@ -133,6 +146,10 @@ class PanelRequest:
         Which ACS products are expected in the panel.  Default ``["acs5"]``
         validates only ACS 5-year columns.  Include ``"acs1"`` to also
         validate ACS 1-year columns (e.g., ``["acs5", "acs1"]``).
+    include_laus : bool
+        Whether BLS LAUS metro-native labor-market measures are expected
+        (``labor_force``, ``employed``, ``unemployed``, ``unemployment_rate``).
+        These are distinct from ACS-derived unemployment measures.
     """
 
     start_year: int
@@ -146,6 +163,7 @@ class PanelRequest:
     null_rate_threshold: float = 0.50
     measure_columns: list[str] | None = None
     acs_products: list[str] = field(default_factory=lambda: ["acs5"])
+    include_laus: bool = False
 
 
 @dataclass
@@ -334,9 +352,10 @@ def _effective_measure_columns(request: PanelRequest) -> list[str]:
     """Return the measure columns to validate for *request*.
 
     When ``request.measure_columns`` is set, those columns are used.
-    Otherwise builds the expected set from the union of requested ACS
+    Otherwise builds the expected set from the union of requested data
     products: ACS5 columns when ``"acs5"`` is requested, ACS1 columns
-    when ``"acs1"`` is requested.
+    when ``"acs1"`` is requested, and LAUS columns when
+    ``request.include_laus`` is True.
     """
     if request.measure_columns is not None:
         return request.measure_columns
@@ -345,7 +364,17 @@ def _effective_measure_columns(request: PanelRequest) -> list[str]:
         columns.extend(ACS_MEASURE_COLUMNS)
     if "acs1" in request.acs_products:
         columns.extend(ACS1_MEASURE_COLUMNS)
-    return columns or list(ACS_MEASURE_COLUMNS)
+    if request.include_laus:
+        columns.extend(LAUS_MEASURE_COLUMNS)
+    # Deduplicate while preserving order: unemployment_rate appears in both
+    # ACS_MEASURE_COLUMNS and LAUS_MEASURE_COLUMNS; only validate it once.
+    seen: set[str] = set()
+    result: list[str] = []
+    for col in columns or list(ACS_MEASURE_COLUMNS):
+        if col not in seen:
+            seen.add(col)
+            result.append(col)
+    return result
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,567 @@
+"""Tests for BLS LAUS metro ingest and contract modules.
+
+Truth table — expected BLS LAUS series IDs for key metros
+----------------------------------------------------------
+The BLS LAUS metro series ID format is 20 characters:
+  LA + U + MT + state_fips(2) + cbsa(5) + 000000(6) + measure(2)
+
+| metro_id | cbsa  | state_fips | unemployment_rate series    |
+|----------|-------|------------|-----------------------------|
+| GF01     | 35620 | 36 (NY)    | LAUMT363562000000003        |
+| GF02     | 31080 | 06 (CA)    | LAUMT063108000000003        |
+| GF07     | 47900 | 11 (DC)    | LAUMT114790000000003        |
+
+Measure codes: 03=rate, 04=unemployed, 05=employed, 06=labor_force.
+Codes 07/08 are NOT available for metro-area series (national/state only).
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from unittest.mock import patch
+
+import pandas as pd
+import pytest
+
+from coclab.ingest.bls_laus import (
+    _build_metro_series_map,
+    _chunked,
+    fetch_laus_annual_averages,
+    ingest_laus_metro,
+)
+from coclab.metro.definitions import METRO_CBSA_MAPPING, METRO_STATE_FIPS
+from coclab.metro.laus import (
+    BLS_ANNUAL_AVERAGE_PERIOD,
+    LAUS_MEASURE_CODES,
+    LAUS_METRO_OUTPUT_COLUMNS,
+    build_all_series_ids,
+    build_laus_series_id,
+)
+from coclab.naming import laus_metro_filename, laus_metro_path
+from coclab.panel.conformance import (
+    ACS_MEASURE_COLUMNS,
+    ACS1_MEASURE_COLUMNS,
+    LAUS_MEASURE_COLUMNS,
+    PanelRequest,
+    _effective_measure_columns,
+)
+
+
+# ---------------------------------------------------------------------------
+# Series ID contract tests  (coclab-7isb.1)
+# ---------------------------------------------------------------------------
+
+#: Expected series IDs for New York (GF01, state_fips=36, cbsa=35620).
+#: Used as the reference case to guard the BLS series ID format.
+NY_SERIES_IDS = {
+    "unemployment_rate": "LAUMT363562000000003",
+    "unemployed":        "LAUMT363562000000004",
+    "employed":          "LAUMT363562000000005",
+    "labor_force":       "LAUMT363562000000006",
+}
+
+#: Expected series IDs for Los Angeles (GF02, state_fips=06, cbsa=31080).
+LA_SERIES_IDS = {
+    "unemployment_rate": "LAUMT063108000000003",
+    "unemployed":        "LAUMT063108000000004",
+    "employed":          "LAUMT063108000000005",
+    "labor_force":       "LAUMT063108000000006",
+}
+
+#: Expected series ID for Washington DC (GF07, state_fips=11, cbsa=47900).
+DC_UNEMPLOYMENT_RATE_SERIES = "LAUMT114790000000003"
+
+
+class TestLausSeriesIds:
+    @pytest.mark.parametrize("measure,expected", list(NY_SERIES_IDS.items()))
+    def test_new_york_series_ids(self, measure, expected):
+        sid = build_laus_series_id("35620", measure, "36")
+        assert sid == expected
+        assert len(sid) == 20
+
+    @pytest.mark.parametrize("measure,expected", list(LA_SERIES_IDS.items()))
+    def test_los_angeles_series_ids(self, measure, expected):
+        sid = build_laus_series_id("31080", measure, "06")
+        assert sid == expected
+
+    def test_washington_dc_unemployment_rate(self):
+        sid = build_laus_series_id("47900", "unemployment_rate", "11")
+        assert sid == DC_UNEMPLOYMENT_RATE_SERIES
+
+    def test_all_series_are_20_chars(self):
+        for metro_id, cbsa in METRO_CBSA_MAPPING.items():
+            state_fips = METRO_STATE_FIPS[metro_id]
+            for measure in LAUS_MEASURE_CODES:
+                sid = build_laus_series_id(cbsa, measure, state_fips)
+                assert len(sid) == 20, (
+                    f"Series ID for {metro_id}/{measure} is not 20 chars: {sid}"
+                )
+
+    def test_all_series_start_with_laumt(self):
+        for metro_id, cbsa in list(METRO_CBSA_MAPPING.items())[:5]:
+            state_fips = METRO_STATE_FIPS[metro_id]
+            for measure in LAUS_MEASURE_CODES:
+                sid = build_laus_series_id(cbsa, measure, state_fips)
+                assert sid.startswith("LAUMT"), f"Unexpected prefix in {sid}"
+
+    def test_series_encodes_state_fips_before_cbsa(self):
+        # NY: state_fips=36, cbsa=35620 → area segment = "3635620"
+        sid = build_laus_series_id("35620", "unemployment_rate", "36")
+        # Characters 5-11 (0-indexed) should be state_fips + cbsa
+        assert sid[5:7] == "36", f"Expected state FIPS '36' at positions 5-6: {sid}"
+        assert sid[7:12] == "35620", f"Expected CBSA '35620' at positions 7-11: {sid}"
+
+    def test_unknown_measure_raises(self):
+        with pytest.raises(ValueError, match="Unknown LAUS measure"):
+            build_laus_series_id("35620", "bogus_measure", "36")
+
+    def test_build_all_series_ids(self):
+        ids = build_all_series_ids("35620", "36")
+        assert set(ids) == set(LAUS_MEASURE_CODES)
+        assert ids["unemployment_rate"] == NY_SERIES_IDS["unemployment_rate"]
+        assert ids["labor_force"] == NY_SERIES_IDS["labor_force"]
+
+    def test_measure_codes_match_bls_spec(self):
+        assert LAUS_MEASURE_CODES["unemployment_rate"] == "03"
+        assert LAUS_MEASURE_CODES["unemployed"] == "04"
+        assert LAUS_MEASURE_CODES["employed"] == "05"
+        assert LAUS_MEASURE_CODES["labor_force"] == "06"
+
+    def test_all_25_metros_have_state_fips(self):
+        assert set(METRO_STATE_FIPS) == set(METRO_CBSA_MAPPING), (
+            "METRO_STATE_FIPS must cover all 25 metros in METRO_CBSA_MAPPING"
+        )
+
+    def test_state_fips_are_two_digit_strings(self):
+        for metro_id, fips in METRO_STATE_FIPS.items():
+            assert len(fips) == 2 and fips.isdigit(), (
+                f"State FIPS for {metro_id} must be a 2-digit string, got {fips!r}"
+            )
+
+
+class TestMetroSeriesMap:
+    def test_all_25_metros_present(self):
+        mapping = _build_metro_series_map()
+        assert len(mapping) == 25
+        for gf_id in [f"GF{i:02d}" for i in range(1, 26)]:
+            assert gf_id in mapping
+
+    def test_each_metro_has_four_measures(self):
+        mapping = _build_metro_series_map()
+        for metro_id, series in mapping.items():
+            assert set(series) == set(LAUS_MEASURE_CODES), (
+                f"Metro {metro_id} missing measures"
+            )
+
+    def test_series_ids_are_unique(self):
+        mapping = _build_metro_series_map()
+        all_ids = [sid for series in mapping.values() for sid in series.values()]
+        assert len(all_ids) == len(set(all_ids)), "Duplicate series IDs found"
+
+    def test_total_series_count(self):
+        mapping = _build_metro_series_map()
+        total = sum(len(v) for v in mapping.values())
+        assert total == 25 * 4  # 25 metros × 4 measures
+
+    def test_new_york_series_ids_in_map(self):
+        mapping = _build_metro_series_map()
+        assert mapping["GF01"]["unemployment_rate"] == NY_SERIES_IDS["unemployment_rate"]
+
+
+# ---------------------------------------------------------------------------
+# Chunking helper
+# ---------------------------------------------------------------------------
+
+
+class TestChunked:
+    def test_exact_multiple(self):
+        chunks = list(_chunked([1, 2, 3, 4], 2))
+        assert chunks == [[1, 2], [3, 4]]
+
+    def test_remainder(self):
+        chunks = list(_chunked([1, 2, 3], 2))
+        assert chunks == [[1, 2], [3]]
+
+    def test_single_chunk(self):
+        chunks = list(_chunked([1, 2, 3], 10))
+        assert chunks == [[1, 2, 3]]
+
+    def test_empty(self):
+        assert list(_chunked([], 5)) == []
+
+
+# ---------------------------------------------------------------------------
+# BLS API fetch tests (mocked)
+# ---------------------------------------------------------------------------
+
+
+def _make_bls_response(series_values: dict[str, float], year: int = 2023) -> dict:
+    """Build a mock BLS API v2 response payload."""
+    series_list = []
+    for sid, value in series_values.items():
+        series_list.append(
+            {
+                "seriesID": sid,
+                "data": [
+                    {"year": str(year), "period": "M13", "value": str(value)},
+                    {"year": str(year), "period": "M01", "value": str(value * 0.9)},
+                ],
+            }
+        )
+    return {
+        "status": "REQUEST_SUCCEEDED",
+        "Results": {"series": series_list},
+    }
+
+
+class TestFetchLausAnnualAverages:
+    def test_extracts_annual_average_period(self):
+        # Use a correctly-formatted series ID (state_fips=36, cbsa=35620)
+        sid = NY_SERIES_IDS["unemployment_rate"]
+        mock_response = _make_bls_response({sid: 4.2})
+
+        with patch("coclab.ingest.bls_laus.httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.post.return_value.json.return_value = mock_response
+            mock_client.return_value.__enter__.return_value.post.return_value.raise_for_status.return_value = None
+
+            result = fetch_laus_annual_averages([sid], 2023)
+
+        assert sid in result
+        assert result[sid] == pytest.approx(4.2)
+
+    def test_ignores_monthly_values(self):
+        sid = NY_SERIES_IDS["unemployment_rate"]
+        monthly_only_response = {
+            "status": "REQUEST_SUCCEEDED",
+            "Results": {
+                "series": [
+                    {
+                        "seriesID": sid,
+                        "data": [
+                            {"year": "2023", "period": "M01", "value": "3.9"},
+                        ],
+                    }
+                ]
+            },
+        }
+        with patch("coclab.ingest.bls_laus.httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.post.return_value.json.return_value = monthly_only_response
+            mock_client.return_value.__enter__.return_value.post.return_value.raise_for_status.return_value = None
+
+            result = fetch_laus_annual_averages([sid], 2023)
+
+        assert sid not in result
+
+    def test_raises_on_api_failure(self):
+        failed_response = {
+            "status": "REQUEST_FAILED",
+            "message": ["Bad request"],
+        }
+        with patch("coclab.ingest.bls_laus.httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.post.return_value.json.return_value = failed_response
+            mock_client.return_value.__enter__.return_value.post.return_value.raise_for_status.return_value = None
+
+            with pytest.raises(ValueError, match="BLS API request failed"):
+                fetch_laus_annual_averages([NY_SERIES_IDS["unemployment_rate"]], 2023)
+
+    def test_batches_large_series_lists(self):
+        # Use correctly-formatted 20-char IDs (LAUMT + 2-char fips + 5-char cbsa + 6 zeros + 2 code)
+        sids = [f"LAUMT36{i:05d}00000003" for i in range(60)]
+        empty_response = {"status": "REQUEST_SUCCEEDED", "Results": {"series": []}}
+
+        with patch("coclab.ingest.bls_laus.httpx.Client") as mock_client:
+            mock_post = mock_client.return_value.__enter__.return_value.post
+            mock_post.return_value.json.return_value = empty_response
+            mock_post.return_value.raise_for_status.return_value = None
+
+            fetch_laus_annual_averages(sids, 2023)
+
+        # 60 series should be split into 2 calls (50 + 10)
+        assert mock_post.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Full ingest integration tests (mocked BLS API)
+# ---------------------------------------------------------------------------
+
+
+def _make_full_bls_response(year: int = 2023) -> dict:
+    """Build a mock BLS response covering all 25 metros × 4 measures.
+
+    Uses the corrected series ID format including state FIPS prefix.
+    """
+    sample_values = {
+        "unemployment_rate": 4.5,
+        "unemployed": 50000,
+        "employed": 1000000,
+        "labor_force": 1050000,
+    }
+
+    series_list = []
+    for metro_id, cbsa_code in METRO_CBSA_MAPPING.items():
+        state_fips = METRO_STATE_FIPS[metro_id]
+        for measure, value in sample_values.items():
+            sid = build_laus_series_id(cbsa_code, measure, state_fips)
+            series_list.append(
+                {
+                    "seriesID": sid,
+                    "data": [
+                        {"year": str(year), "period": "M13", "value": str(value)},
+                    ],
+                }
+            )
+
+    return {"status": "REQUEST_SUCCEEDED", "Results": {"series": series_list}}
+
+
+def _mock_ingest(tmp_path: Path, year: int) -> Path:
+    """Helper: run ingest with mocked BLS API returning valid data."""
+    responses = [_make_full_bls_response(year), _make_full_bls_response(year)]
+    call_count = [0]
+
+    def mock_post(*args, **kwargs):
+        resp = responses[min(call_count[0], len(responses) - 1)]
+        call_count[0] += 1
+
+        class FakeResp:
+            def json(self):
+                return resp
+
+            def raise_for_status(self):
+                pass
+
+        return FakeResp()
+
+    with patch("coclab.ingest.bls_laus.httpx.Client") as mock_client:
+        mock_client.return_value.__enter__.return_value.post = mock_post
+        return ingest_laus_metro(year=year, project_root=tmp_path)
+
+
+class TestIngestLausMetro:
+    def test_writes_parquet_with_25_metros(self, tmp_path):
+        path = _mock_ingest(tmp_path, 2023)
+        assert path.exists()
+        df = pd.read_parquet(path)
+        assert len(df) == 25
+        assert set(df["metro_id"]) == {f"GF{i:02d}" for i in range(1, 26)}
+
+    def test_output_has_canonical_columns(self, tmp_path):
+        path = _mock_ingest(tmp_path, 2022)
+        df = pd.read_parquet(path)
+        for col in ["metro_id", "year", "unemployment_rate", "unemployed", "employed", "labor_force"]:
+            assert col in df.columns, f"Missing column: {col}"
+
+    def test_unemployment_rate_is_float(self, tmp_path):
+        path = _mock_ingest(tmp_path, 2021)
+        df = pd.read_parquet(path)
+        assert str(df["unemployment_rate"].dtype) == "Float64"
+        assert str(df["unemployed"].dtype) == "Int64"
+        assert str(df["employed"].dtype) == "Int64"
+        assert str(df["labor_force"].dtype) == "Int64"
+
+    def test_output_sorted_by_metro_id(self, tmp_path):
+        path = _mock_ingest(tmp_path, 2020)
+        df = pd.read_parquet(path)
+        assert list(df["metro_id"]) == sorted(df["metro_id"].tolist())
+
+    def test_output_path_matches_naming_convention(self, tmp_path):
+        year = 2023
+        path = _mock_ingest(tmp_path, year)
+        expected = laus_metro_path(year, "glynn_fox_v1", base_dir=tmp_path / "data")
+        assert path == expected
+
+    def test_data_source_column(self, tmp_path):
+        path = _mock_ingest(tmp_path, 2023)
+        df = pd.read_parquet(path)
+        assert (df["data_source"] == "bls_laus").all()
+
+    def test_no_null_measures_when_api_returns_data(self, tmp_path):
+        path = _mock_ingest(tmp_path, 2023)
+        df = pd.read_parquet(path)
+        # Mock returns data for all metros; no measure should be null
+        assert df["unemployment_rate"].notna().all(), (
+            "unemployment_rate should be non-null when API returns data for all metros"
+        )
+        assert df["labor_force"].notna().all()
+
+    def test_raises_when_all_measures_null(self, tmp_path):
+        """Ingest must fail fast rather than write an all-null parquet."""
+        empty_response = {"status": "REQUEST_SUCCEEDED", "Results": {"series": []}}
+
+        with patch("coclab.ingest.bls_laus.httpx.Client") as mock_client:
+            mock_post = mock_client.return_value.__enter__.return_value.post
+            mock_post.return_value.json.return_value = empty_response
+            mock_post.return_value.raise_for_status.return_value = None
+
+            with pytest.raises(ValueError, match="All measure values are null"):
+                ingest_laus_metro(year=2023, project_root=tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Naming tests
+# ---------------------------------------------------------------------------
+
+
+class TestLausNaming:
+    def test_filename(self):
+        assert laus_metro_filename(2023, "glynn_fox_v1") == "laus_metro__A2023@Dglynnfoxv1.parquet"
+
+    def test_filename_string_year(self):
+        assert laus_metro_filename("2022", "glynn_fox_v1") == "laus_metro__A2022@Dglynnfoxv1.parquet"
+
+    def test_path_default_base(self):
+        p = laus_metro_path(2023, "glynn_fox_v1")
+        assert str(p) == "data/curated/laus/laus_metro__A2023@Dglynnfoxv1.parquet"
+
+    def test_path_custom_base(self, tmp_path):
+        p = laus_metro_path(2023, "glynn_fox_v1", base_dir=tmp_path)
+        assert p.parent == tmp_path / "curated" / "laus"
+        assert p.name == "laus_metro__A2023@Dglynnfoxv1.parquet"
+
+
+# ---------------------------------------------------------------------------
+# Conformance and ACS regression-guard tests  (coclab-7isb.6)
+# ---------------------------------------------------------------------------
+
+
+class TestLausConformanceColumns:
+    def test_laus_measure_columns_defined(self):
+        assert "unemployment_rate" in LAUS_MEASURE_COLUMNS
+        assert "unemployed" in LAUS_MEASURE_COLUMNS
+        assert "employed" in LAUS_MEASURE_COLUMNS
+        assert "labor_force" in LAUS_MEASURE_COLUMNS
+
+    def test_laus_columns_excluded_by_default(self):
+        req = PanelRequest(start_year=2015, end_year=2020)
+        cols = _effective_measure_columns(req)
+        assert "unemployed" not in cols
+        assert "employed" not in cols
+        assert "labor_force" not in cols
+
+    def test_laus_columns_included_when_requested(self):
+        req = PanelRequest(start_year=2015, end_year=2020, include_laus=True)
+        cols = _effective_measure_columns(req)
+        assert "unemployment_rate" in cols
+        assert "unemployed" in cols
+        assert "employed" in cols
+        assert "labor_force" in cols
+
+    def test_acs_unemployment_rate_still_validated(self):
+        """Regression guard: unemployment_rate must remain in ACS_MEASURE_COLUMNS.
+
+        The LAUS work must not silently remove unemployment_rate from the default
+        ACS conformance set; CoC panels carry this column from ACS1-derived data.
+        """
+        assert "unemployment_rate" in ACS_MEASURE_COLUMNS, (
+            "unemployment_rate was removed from ACS_MEASURE_COLUMNS. "
+            "This is a regression: CoC panels rely on this column in conformance checks."
+        )
+
+    def test_acs1_unemployment_rate_is_tracked(self):
+        """ACS1 unemployment rate must be in ACS1_MEASURE_COLUMNS."""
+        assert "unemployment_rate_acs1" in ACS1_MEASURE_COLUMNS
+
+    def test_no_duplicate_columns_when_acs_and_laus_combined(self):
+        """unemployment_rate appears in both ACS and LAUS; must not duplicate."""
+        req = PanelRequest(
+            start_year=2015,
+            end_year=2020,
+            acs_products=["acs5"],
+            include_laus=True,
+        )
+        cols = _effective_measure_columns(req)
+        assert len(cols) == len(set(cols)), (
+            f"Duplicate columns in _effective_measure_columns: {cols}"
+        )
+
+    def test_laus_and_acs1_are_distinct_columns(self):
+        req = PanelRequest(
+            start_year=2015,
+            end_year=2020,
+            acs_products=["acs5", "acs1"],
+            include_laus=True,
+        )
+        cols = _effective_measure_columns(req)
+        # ACS1 rate and LAUS rate are distinct named columns
+        assert "unemployment_rate_acs1" in cols
+        assert "unemployment_rate" in cols
+        # No duplicates
+        assert len(cols) == len(set(cols))
+
+
+# ---------------------------------------------------------------------------
+# Panel integration tests  (coclab-7isb.6)
+# ---------------------------------------------------------------------------
+
+
+class TestLausPanelIntegration:
+    """Tests for LAUS loading into metro panels via _load_laus_metro_measures."""
+
+    def _write_laus_artifact(self, tmp_path: Path, year: int) -> Path:
+        """Write a minimal valid LAUS artifact for testing panel integration."""
+        from coclab.metro.definitions import METRO_CBSA_MAPPING, METRO_STATE_FIPS
+        from coclab.naming import laus_metro_path
+
+        rows = []
+        for metro_id, cbsa in METRO_CBSA_MAPPING.items():
+            state_fips = METRO_STATE_FIPS[metro_id]
+            rows.append({
+                "metro_id": metro_id,
+                "year": year,
+                "cbsa_code": cbsa,
+                "labor_force": 1_000_000,
+                "employed": 950_000,
+                "unemployed": 50_000,
+                "unemployment_rate": 5.0,
+                "data_source": "bls_laus",
+            })
+
+        df = pd.DataFrame(rows)
+        df["labor_force"] = df["labor_force"].astype("Int64")
+        df["employed"] = df["employed"].astype("Int64")
+        df["unemployed"] = df["unemployed"].astype("Int64")
+        df["unemployment_rate"] = df["unemployment_rate"].astype("Float64")
+
+        laus_dir = tmp_path / "curated" / "laus"
+        laus_dir.mkdir(parents=True, exist_ok=True)
+        out_path = laus_metro_path(year, "glynn_fox_v1", base_dir=tmp_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_parquet(out_path, index=False)
+        return out_path
+
+    def test_load_laus_metro_measures_returns_dataframe(self, tmp_path):
+        from coclab.panel.assemble import _load_laus_metro_measures
+
+        year = 2023
+        self._write_laus_artifact(tmp_path, year)
+        laus_dir = tmp_path / "curated" / "laus"
+
+        df = _load_laus_metro_measures(
+            year=year,
+            definition_version="glynn_fox_v1",
+            laus_dir=laus_dir,
+        )
+
+        assert df is not None
+        assert len(df) == 25
+        assert "metro_id" in df.columns
+        assert "unemployment_rate" in df.columns
+        assert "labor_force" in df.columns
+
+    def test_load_laus_metro_measures_returns_none_when_missing(self, tmp_path):
+        from coclab.panel.assemble import _load_laus_metro_measures
+
+        df = _load_laus_metro_measures(
+            year=2023,
+            definition_version="glynn_fox_v1",
+            laus_dir=tmp_path / "laus",
+        )
+        assert df is None
+
+    def test_laus_measures_appear_in_metro_panel_columns(self):
+        from coclab.panel.assemble import METRO_PANEL_COLUMNS
+        for col in ["labor_force", "employed", "unemployed", "unemployment_rate"]:
+            assert col in METRO_PANEL_COLUMNS, (
+                f"LAUS column '{col}' missing from METRO_PANEL_COLUMNS"
+            )

@@ -223,6 +223,40 @@ METRO_CBSA_MAPPING: dict[str, str] = {
     "GF25": "40900",  # Sacramento
 }
 
+#: Maps metro_id to the 2-digit FIPS code of the MSA's principal state.
+#: For multi-state MSAs BLS uses the state where the principal city is located.
+#: These codes are required to construct valid BLS LAUS metro series IDs.
+#:
+#: Series ID format: LA + U + MT + state_fips(2) + cbsa(5) + 000000 + measure(2)
+#: Example: New York (state_fips=36, cbsa=35620) → LAUMT363562000000003
+METRO_STATE_FIPS: dict[str, str] = {
+    "GF01": "36",  # New York, NY
+    "GF02": "06",  # Los Angeles, CA
+    "GF03": "17",  # Chicago, IL
+    "GF04": "48",  # Dallas-Fort Worth, TX
+    "GF05": "42",  # Philadelphia, PA (principal state; also spans NJ/DE/MD)
+    "GF06": "48",  # Houston, TX
+    "GF07": "11",  # Washington, DC (principal state; also spans VA/MD/WV)
+    "GF08": "12",  # Miami-Fort Lauderdale, FL
+    "GF09": "13",  # Atlanta, GA
+    "GF10": "25",  # Boston, MA (principal state; also spans NH)
+    "GF11": "06",  # San Francisco, CA
+    "GF12": "26",  # Detroit, MI
+    "GF13": "06",  # Riverside, CA
+    "GF14": "04",  # Phoenix, AZ
+    "GF15": "53",  # Seattle, WA
+    "GF16": "27",  # Minneapolis-St Paul, MN (principal state; also spans WI)
+    "GF17": "06",  # San Diego, CA
+    "GF18": "29",  # St. Louis, MO (principal state; also spans IL)
+    "GF19": "12",  # Tampa, FL
+    "GF20": "24",  # Baltimore, MD
+    "GF21": "08",  # Denver, CO
+    "GF22": "42",  # Pittsburgh, PA
+    "GF23": "41",  # Portland, OR (principal state; also spans WA)
+    "GF24": "37",  # Charlotte, NC (principal state; also spans SC)
+    "GF25": "06",  # Sacramento, CA
+}
+
 #: Short metro names derived from METRO_DEFINITIONS (for display/DataFrame building).
 _CBSA_METRO_NAMES: dict[str, str] = {
     mid: name.split(",")[0] for mid, name, _mtype in METRO_DEFINITIONS
@@ -350,3 +384,22 @@ def metro_name_for_id(metro_id: str) -> str | None:
         The metro name (e.g., "New York") if found, otherwise None.
     """
     return _CBSA_METRO_NAMES.get(metro_id)
+
+
+def metro_state_fips_for_id(metro_id: str) -> str | None:
+    """Look up the principal-state 2-digit FIPS code for a Glynn/Fox metro_id.
+
+    Used to build BLS LAUS metro series IDs, which encode both the state FIPS
+    and the CBSA code in the area segment of the series ID.
+
+    Parameters
+    ----------
+    metro_id : str
+        Metro identifier (e.g., "GF01").
+
+    Returns
+    -------
+    str or None
+        2-digit state FIPS (e.g., "36" for New York) if found, otherwise None.
+    """
+    return METRO_STATE_FIPS.get(metro_id)

@@ -134,9 +134,15 @@ METRO_PANEL_COLUMNS = [
     "median_household_income",
     "median_gross_rent",
     "unemployment_rate_acs1",  # ACS 1-year metro-native unemployment
+    # BLS LAUS metro-native labor-market measures (present when include_laus=True)
+    "labor_force",
+    "employed",
+    "unemployed",
+    "unemployment_rate",       # BLS LAUS official unemployment rate
     "coverage_ratio",
     "boundary_changed",
     "acs1_vintage_used",   # Which ACS1 vintage contributed (nullable)
+    "laus_vintage_used",   # Which LAUS reference year contributed (nullable)
     "acs_products_used",   # Comma-separated: "acs5" or "acs5,acs1"
     "source",
 ]
@@ -728,6 +734,67 @@ def _load_acs1_metro_measures(
     return df
 
 
+def _load_laus_metro_measures(
+    year: int,
+    definition_version: str,
+    laus_dir: Path | None = None,
+) -> pd.DataFrame | None:
+    """Load BLS LAUS annual-average metro measures for a specific year.
+
+    Parameters
+    ----------
+    year : int
+        The reference year for LAUS annual-average data.
+    definition_version : str
+        Synthetic geography definition version (e.g., "glynn_fox_v1").
+    laus_dir : Path, optional
+        Directory containing curated LAUS artifacts.
+        Defaults to 'data/curated/laus'.
+
+    Returns
+    -------
+    pd.DataFrame or None
+        DataFrame with metro_id, labor_force, employed, unemployed,
+        unemployment_rate, and laus_vintage_used; or None if not found.
+    """
+    if laus_dir is None:
+        laus_dir = curated_dir("laus")
+
+    artifact_path = laus_dir / naming.laus_metro_filename(year, definition_version)
+
+    if not artifact_path.exists():
+        canonical = naming.laus_metro_path(
+            year,
+            definition_version,
+            base_dir=laus_dir.parent.parent if laus_dir.name == "laus" else None,
+        )
+        if canonical.exists():
+            artifact_path = canonical
+        else:
+            return None
+
+    logger.info(f"Loading LAUS metro measures from: {artifact_path}")
+    df = pd.read_parquet(artifact_path)
+
+    if "metro_id" not in df.columns:
+        logger.warning(
+            f"LAUS metro artifact {artifact_path.name} missing 'metro_id' column"
+        )
+        return None
+
+    laus_cols = ["metro_id", "labor_force", "employed", "unemployed", "unemployment_rate"]
+    result_cols = [c for c in laus_cols if c in df.columns]
+    if len(result_cols) <= 1:  # only metro_id, no measures
+        logger.warning(
+            f"LAUS metro artifact {artifact_path.name} missing measure columns"
+        )
+        return None
+
+    df = df[result_cols].copy()
+    df["metro_id"] = df["metro_id"].astype(str)
+    return df
+
+
 def _load_zori_yearly(
     zori_yearly_path: Path | str | None = None,
     rents_dir: Path | None = None,
@@ -911,6 +978,8 @@ def build_panel(
     definition_version: str | None = None,
     include_acs1: bool = False,
     acs1_dir: Path | None = None,
+    include_laus: bool = False,
+    laus_dir: Path | None = None,
 ) -> pd.DataFrame:
     """Build analysis-ready analysis-geography x year panel.
 
@@ -952,6 +1021,15 @@ def build_panel(
     acs1_dir : Path, optional
         Directory containing curated ACS 1-year metro artifacts.
         Defaults to 'data/curated/acs'.
+    include_laus : bool, optional
+        If True and geo_type is 'metro', discover and merge BLS LAUS
+        annual-average metro artifacts (labor_force, employed, unemployed,
+        unemployment_rate) into the panel.  LAUS and ACS1 are distinct
+        sources; LAUS uses the official BLS rate while ACS1 uses the
+        Census survey-derived rate.  Default is False.
+    laus_dir : Path, optional
+        Directory containing curated LAUS metro artifacts.
+        Defaults to 'data/curated/laus'.
 
     Returns
     -------
@@ -1127,6 +1205,37 @@ def build_panel(
             year_df["unemployment_rate_acs1"] = np.nan
             year_df["acs1_vintage_used"] = pd.NA
             year_df["acs_products_used"] = "acs5"
+
+        # -----------------------------------------------------------------
+        # BLS LAUS metro integration (when requested)
+        # -----------------------------------------------------------------
+        if include_laus and geo_type == GEO_TYPE_METRO and definition_version:
+            laus_df = _load_laus_metro_measures(
+                year=year,
+                definition_version=definition_version,
+                laus_dir=laus_dir,
+            )
+            if laus_df is not None and not laus_df.empty:
+                year_df = year_df.merge(laus_df, on="metro_id", how="left")
+                year_df["laus_vintage_used"] = str(year)
+                n_matched = year_df["unemployment_rate"].notna().sum()
+                logger.info(
+                    f"Year {year}: merged LAUS data, "
+                    f"{n_matched} metros with unemployment_rate"
+                )
+            else:
+                logger.warning(
+                    f"Year {year}: no LAUS metro artifact for year {year} "
+                    f"(definition={definition_version}). "
+                    f"Run 'coclab ingest laus-metro --year {year}' first."
+                )
+                for col in ["labor_force", "employed", "unemployed", "unemployment_rate"]:
+                    year_df[col] = np.nan
+                year_df["laus_vintage_used"] = pd.NA
+        elif geo_type == GEO_TYPE_METRO:
+            for col in ["labor_force", "employed", "unemployed", "unemployment_rate"]:
+                year_df[col] = np.nan
+            year_df["laus_vintage_used"] = pd.NA
 
         year_dfs.append(year_df)
 
