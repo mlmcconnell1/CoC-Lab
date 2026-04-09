@@ -440,6 +440,37 @@ class TestIngestLausMetro:
             with pytest.raises(ValueError, match="metro\\(s\\) have no data for any measure"):
                 ingest_laus_metro(year=2023, project_root=tmp_path)
 
+    def test_raises_on_single_missing_measure(self, tmp_path):
+        """Ingest must fail when one measure is missing across all metros (coclab-q3uz).
+
+        Truth table
+        -----------
+        Scenario: All unemployment_rate series IDs return no data; the three count
+        series (labor_force, employed, unemployed) return normal values for all 25
+        metros.  The all-null-metro check passes (each metro has three valid
+        measures), but the parquet would be silently written with 25 null rates.
+        Expected: ValueError naming the missing measure.
+        """
+        from coclab.ingest.bls_laus import _build_metro_series_map
+        from coclab.metro.laus import LAUS_MEASURE_CODES
+
+        # Collect series IDs for every measure except unemployment_rate
+        metro_series = _build_metro_series_map()
+        rate_measure = "unemployment_rate"
+        rate_code = LAUS_MEASURE_CODES[rate_measure]
+        non_rate_values: dict[str, float] = {}
+        for mid, measure_map in metro_series.items():
+            for measure, sid in measure_map.items():
+                if measure != rate_measure:
+                    non_rate_values[sid] = 50000.0
+
+        def _no_rate_fetch(series_ids, year, api_key=None):
+            return {sid: v for sid, v in non_rate_values.items() if sid in series_ids}
+
+        with patch("coclab.ingest.bls_laus.fetch_laus_annual_averages", _no_rate_fetch):
+            with pytest.raises(ValueError, match="unemployment_rate"):
+                ingest_laus_metro(year=2023, project_root=tmp_path)
+
 
 # ---------------------------------------------------------------------------
 # Naming tests
@@ -531,6 +562,39 @@ class TestLausConformanceColumns:
         assert "unemployment_rate" in cols
         # No duplicates
         assert len(cols) == len(set(cols))
+
+    def test_laus_columns_present_when_measure_columns_set_explicitly(self):
+        """measure_columns=<explicit list> must not silently drop LAUS columns (coclab-xt72).
+
+        When executor.py translates measure_columns through column aliases it sets
+        request.measure_columns to an explicit list, causing _effective_measure_columns
+        to return early before adding LAUS columns.  This test guards against that
+        regression by verifying that the explicitly-set list contains all LAUS columns
+        (i.e. the caller is responsible for including them before setting the field).
+        """
+        # Simulate what executor builds after alias translation with include_laus=True:
+        # ACS_MEASURE_COLUMNS + unique LAUS extras, all translated through aliases.
+        aliases = {
+            "total_population": "total_population_acs5",
+            "unemployment_rate": "unemployment_rate",  # identity — not renamed
+        }
+        base_cols = list(ACS_MEASURE_COLUMNS) + [
+            c for c in LAUS_MEASURE_COLUMNS if c not in ACS_MEASURE_COLUMNS
+        ]
+        translated = [aliases.get(c, c) for c in base_cols]
+
+        req = PanelRequest(
+            start_year=2020,
+            end_year=2023,
+            measure_columns=translated,
+            include_laus=True,
+        )
+        cols = _effective_measure_columns(req)
+        # All LAUS columns must appear (possibly aliased)
+        laus_translated = {aliases.get(c, c) for c in LAUS_MEASURE_COLUMNS}
+        assert laus_translated.issubset(set(cols)), (
+            f"LAUS columns {laus_translated - set(cols)} missing from conformance columns"
+        )
 
 
 # ---------------------------------------------------------------------------

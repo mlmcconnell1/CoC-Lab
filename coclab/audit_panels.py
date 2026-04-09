@@ -54,6 +54,7 @@ AUDIT_PANEL_VERSION = "v1"
 EXPECTED_PI = 0.60
 BETA_VARIANCE = 0.01
 METRO_SOURCE_PATH = "outputs/audit_panels/_sources/glynn_fox_metro_audit_source_2015_2024.parquet"
+COC_SOURCE_PATH = "outputs/audit_panels/_sources/glynn_fox_coc_audit_source_2015_2024.parquet"
 
 
 @dataclass(frozen=True)
@@ -76,7 +77,7 @@ AUDIT_PANEL_SPECS: tuple[AuditPanelSpec, ...] = (
         panel_name="glynn_fox_broad_metro_v1",
         workload_id="A",
         unit_type="metro",
-        source_panel_path="data/curated/panel/panel__metro__Y2015-2024@Dglynnfoxv1.parquet",
+        source_panel_path=METRO_SOURCE_PATH,
         selection_rule=(
             "All Glynn/Fox metros from definition glynn_fox_v1 with complete "
             "2015-2024 coverage and valid audit-required fields."
@@ -93,7 +94,7 @@ AUDIT_PANEL_SPECS: tuple[AuditPanelSpec, ...] = (
         panel_name="glynn_fox_headline_metro_v1",
         workload_id="B",
         unit_type="metro",
-        source_panel_path="data/curated/panel/panel__metro__Y2015-2024@Dglynnfoxv1.parquet",
+        source_panel_path=METRO_SOURCE_PATH,
         selection_rule=(
             "Subset of the broad metro audit panel restricted to the headline "
             "metros emphasized in the paper narrative: New York, Los Angeles, "
@@ -108,7 +109,7 @@ AUDIT_PANEL_SPECS: tuple[AuditPanelSpec, ...] = (
         panel_name="glynn_fox_coc_robustness_v1",
         workload_id="C",
         unit_type="coc",
-        source_panel_path="data/curated/panel/panel__Y2015-2024@B2025.parquet",
+        source_panel_path=COC_SOURCE_PATH,
         selection_rule=(
             "All CoCs from the 2015-2024 CoC panel that retain complete "
             "coverage and satisfy audit validity checks after dropping rows "
@@ -117,13 +118,16 @@ AUDIT_PANEL_SPECS: tuple[AuditPanelSpec, ...] = (
         ),
         missing_policy="drop",
         rent_proxy="zori_january",
-        notes="Robustness panel derived from the current CoC-wide panel.",
+        notes=(
+            "Robustness panel derived from the current CoC-wide panel. "
+            "Source must be placed at COC_SOURCE_PATH before running audit workflows."
+        ),
     ),
     AuditPanelSpec(
         panel_name="glynn_fox_reuse_broad_metro_v1",
         workload_id="D",
         unit_type="metro",
-        source_panel_path="data/curated/panel/panel__metro__Y2015-2024@Dglynnfoxv1.parquet",
+        source_panel_path=METRO_SOURCE_PATH,
         selection_rule=(
             "Exact copy of Workload A for cross-method reuse comparisons. "
             "No unit or year differences are allowed."

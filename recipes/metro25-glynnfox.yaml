@@ -17,6 +17,13 @@ targets:
   - id: metro_panel
     geometry: { type: metro, source: glynn_fox_v1 }
     outputs: [panel, diagnostics]
+    panel_policy:
+      column_aliases:
+        total_population: total_population_acs5
+        adult_population: adult_population_acs5
+        population_below_poverty: population_below_poverty_acs5
+        median_household_income: median_household_income_acs5
+        median_gross_rent: median_gross_rent_acs5
 
 datasets:
   pit:
@@ -58,6 +65,24 @@ datasets:
       align: point_in_time_jan
     path: data/curated/zori/zori__county__Z2026.parquet
 
+  acs_tract:
+    provider: census
+    product: acs5
+    version: 1
+    native_geometry: { type: tract }
+    geo_column: tract_geoid
+    file_set:
+      path_template: "data/curated/acs/acs5_tracts__A{acs_end}xT{tract}.parquet"
+      segments:
+        - years: "2015-2019"
+          geometry: { type: tract, vintage: 2010 }
+          constants: { tract: 2010 }
+          year_offsets: { acs_end: 0 }
+        - years: "2020-2020"
+          geometry: { type: tract, vintage: 2020 }
+          constants: { tract: 2020 }
+          year_offsets: { acs_end: 0 }
+
 transforms:
   - id: coc_to_metro
     type: crosswalk
@@ -77,12 +102,28 @@ transforms:
         population_source: pep_county
         population_field: population
 
+  - id: tract_to_metro_2010
+    type: crosswalk
+    from: { type: tract, vintage: 2010 }
+    to: { type: metro, source: glynn_fox_v1 }
+    spec:
+      weighting:
+        scheme: area
+
+  - id: tract_to_metro_2020
+    type: crosswalk
+    from: { type: tract, vintage: 2020 }
+    to: { type: metro, source: glynn_fox_v1 }
+    spec:
+      weighting:
+        scheme: area
+
 pipelines:
   - id: build_metro_panel
     target: metro_panel
     steps:
       - materialize:
-          transforms: [coc_to_metro, county_to_metro]
+          transforms: [coc_to_metro, county_to_metro, tract_to_metro_2010, tract_to_metro_2020]
 
       - resample:
           dataset: pit
@@ -101,6 +142,18 @@ pipelines:
           aggregation: sum
 
       - resample:
+          dataset: acs_tract
+          to_geometry: { type: metro, source: glynn_fox_v1 }
+          method: aggregate
+          via: auto
+          measures:
+            total_population: { aggregation: sum }
+            adult_population: { aggregation: sum }
+            population_below_poverty: { aggregation: sum }
+            median_household_income: { aggregation: weighted_mean }
+            median_gross_rent: { aggregation: weighted_mean }
+
+      - resample:
           dataset: zori_county
           to_geometry: { type: metro, source: glynn_fox_v1 }
           method: aggregate
@@ -109,7 +162,7 @@ pipelines:
           aggregation: weighted_mean
 
       - join:
-          datasets: [pit, pep_county, zori_county]
+          datasets: [pit, pep_county, acs_tract, zori_county]
           join_on: [geo_id, year]
 
 filters:

@@ -42,6 +42,7 @@ CURATED_SUBDIRS: set[str] = {
     "panel",
     "metro",
     "maps",
+    "laus",
 }
 
 # ---- Canonical filename patterns per subdirectory ----
@@ -100,6 +101,9 @@ CANONICAL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
         re.compile(r"^metro_definitions__\w+\.parquet$"),
         re.compile(r"^metro_coc_membership__\w+\.parquet$"),
         re.compile(r"^metro_county_membership__\w+\.parquet$"),
+    ],
+    "laus": [
+        re.compile(r"^laus_metro__A\d{4}@D\w+\.parquet$"),
     ],
     "maps": [
         re.compile(r"^.+\.html$"),

@@ -20,6 +20,7 @@ from coclab.cli.crosscheck_population import validate_population
 from coclab.cli.diagnostics import diagnostics
 from coclab.cli.generate_metro import generate_metro
 from coclab.cli.ingest_acs1_metro import ingest_acs1_metro
+from coclab.cli.ingest_laus_metro import ingest_laus_metro
 from coclab.cli.ingest_acs_population import ingest_acs_population
 from coclab.cli.ingest_census import ingest_tiger
 from coclab.cli.ingest_nhgis import ingest_nhgis
@@ -675,6 +676,7 @@ app.add_typer(registry_app, name="registry")
 app.add_typer(migrate_app, name="migrate")
 
 ingest_app.command("acs1-metro")(ingest_acs1_metro)
+ingest_app.command("laus-metro")(ingest_laus_metro)
 ingest_app.command("acs5-tract")(ingest_acs_population)
 ingest_app.command("boundaries")(ingest_boundaries)
 ingest_app.command("tiger")(ingest_tiger)

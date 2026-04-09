@@ -2087,6 +2087,7 @@ def _persist_outputs(
     # Run conformance checks on the assembled panel
     from coclab.panel.conformance import (
         ACS_MEASURE_COLUMNS,
+        LAUS_MEASURE_COLUMNS,
         PanelRequest,
         run_conformance,
     )
@@ -2105,11 +2106,25 @@ def _persist_outputs(
     _, persist_target = _resolve_pipeline_target(ctx.recipe, plan.pipeline_id)
     persist_policy: PanelPolicy | None = getattr(persist_target, "panel_policy", None)
 
+    # LAUS-aware conformance: determine include_laus before alias translation
+    # so that LAUS columns are included in the alias-translated measure_columns
+    # list (coclab-xt72).
+    include_laus = (
+        persist_policy is not None
+        and persist_policy.laus is not None
+        and persist_policy.laus.include
+    )
+
     # Translate measure_columns through any active column aliases so that
     # conformance checks look for the renamed names in the finalized panel.
+    # When include_laus is True, LAUS columns are appended to base_cols before
+    # translation so they are not silently dropped by the early-return path in
+    # _effective_measure_columns (coclab-xt72).
     _panel_aliases = _resolve_panel_aliases(persist_target)
     if _panel_aliases:
-        base_cols = ACS_MEASURE_COLUMNS if measure_columns is None else measure_columns
+        base_cols = list(ACS_MEASURE_COLUMNS if measure_columns is None else measure_columns)
+        if include_laus:
+            base_cols += [c for c in LAUS_MEASURE_COLUMNS if c not in base_cols]
         measure_columns = [_panel_aliases.get(c, c) for c in base_cols]
 
     # ACS1-aware conformance (coclab-gude.3): include acs1 product when
@@ -2122,13 +2137,6 @@ def _persist_outputs(
         and "unemployment_rate_acs1" in panel.columns
     ):
         acs_products = ["acs5", "acs1"]
-
-    # LAUS-aware conformance: set include_laus when the policy requests it.
-    include_laus = (
-        persist_policy is not None
-        and persist_policy.laus is not None
-        and persist_policy.laus.include
-    )
 
     # ZORI-aware conformance (coclab-gude.2).
     include_zori = persist_policy is not None and persist_policy.zori is not None

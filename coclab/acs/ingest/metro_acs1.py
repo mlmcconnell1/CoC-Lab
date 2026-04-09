@@ -44,6 +44,7 @@ from coclab.acs.variables_acs1 import (
     ACS1_FIRST_RELIABLE_YEAR,
     ACS1_METRO_OUTPUT_COLUMNS,
     ACS1_TABLES,
+    ACS1_UNAVAILABLE_VINTAGES,
     ACS1_UNEMPLOYMENT_VARIABLES,
     ACS1_VARIABLE_NAMES,
 )
@@ -90,6 +91,15 @@ def fetch_acs1_cbsa_data(
     ValueError
         If the API response cannot be parsed.
     """
+    if vintage in ACS1_UNAVAILABLE_VINTAGES:
+        raise ValueError(
+            f"ACS 1-year data for vintage {vintage} is not available from Census. "
+            f"Census did not publish ACS 1-year estimates for {vintage} due to "
+            f"COVID-19 data collection disruptions. "
+            f"For labor-market measures in {vintage}, consider BLS LAUS data "
+            f"('coclab ingest laus-metro --year {vintage}') instead."
+        )
+
     if vintage < ACS1_FIRST_RELIABLE_YEAR:
         logger.warning(
             "ACS 1-year vintage %d is before the first reliable year (%d); "

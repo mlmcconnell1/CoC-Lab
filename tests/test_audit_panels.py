@@ -8,7 +8,9 @@ import pandas as pd
 from coclab.audit_panels import (
     AUDIT_PANEL_SPECS,
     AuditPanelSpec,
+    COC_SOURCE_PATH,
     METRO_DEFINITION_VERSION,
+    METRO_SOURCE_PATH,
     MODELING_READY_COLUMNS,
     RAW_REQUIRED_COLUMNS,
     _derive_modeling_ready,
@@ -227,8 +229,8 @@ def test_build_audit_panels_writes_expected_artifacts(tmp_path: Path):
         "zori": [900.0, 945.0, 950.0, 997.5],
     })
 
-    broad_path = tmp_path / "data" / "curated" / "panel" / "panel__metro__Y2015-2024@Dglynnfoxv1.parquet"
-    coc_path = tmp_path / "data" / "curated" / "panel" / "panel__Y2015-2024@B2025.parquet"
+    broad_path = tmp_path / METRO_SOURCE_PATH
+    coc_path = tmp_path / COC_SOURCE_PATH
     broad_path.parent.mkdir(parents=True, exist_ok=True)
     broad.to_parquet(broad_path)
     coc.to_parquet(coc_path)
@@ -294,8 +296,8 @@ def test_metro_outputs_include_reference_artifacts(tmp_path: Path):
         "zori": [900.0, 945.0, 950.0, 997.5],
     })
 
-    broad_path = tmp_path / "data" / "curated" / "panel" / "panel__metro__Y2015-2024@Dglynnfoxv1.parquet"
-    coc_path = tmp_path / "data" / "curated" / "panel" / "panel__Y2015-2024@B2025.parquet"
+    broad_path = tmp_path / METRO_SOURCE_PATH
+    coc_path = tmp_path / COC_SOURCE_PATH
     broad_path.parent.mkdir(parents=True, exist_ok=True)
     broad.to_parquet(broad_path)
     coc.to_parquet(coc_path)

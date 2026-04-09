@@ -71,3 +71,10 @@ ACS1_METRO_OUTPUT_COLUMNS: list[str] = [
 
 #: ACS 1-year estimates are reliable for metros starting ~2012.
 ACS1_FIRST_RELIABLE_YEAR: int = 2012
+
+#: ACS 1-year vintages known to be unavailable.
+#: Census did not publish ACS 1-year estimates for 2020 due to data
+#: collection disruptions caused by COVID-19. The standard API endpoint
+#: returns HTTP 404 for this vintage; there is no workaround.
+#: Source: https://www.census.gov/programs-surveys/acs/technical-documentation/table-and-geography-changes/2020/1-year.html
+ACS1_UNAVAILABLE_VINTAGES: set[int] = {2020}

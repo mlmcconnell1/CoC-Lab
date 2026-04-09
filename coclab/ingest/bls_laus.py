@@ -297,6 +297,17 @@ def ingest_laus_metro(
                 f"Series IDs sampled: {all_series_ids[:4]}..."
             )
 
+        # Also fail if any single required measure is entirely null while other
+        # measures have data.  This catches partial-series loss (e.g. all
+        # unemployment_rate series IDs fail while the three count series succeed)
+        # which the all-null-metro check above would miss.
+        missing_measures = [c for c in measure_cols_present if df[c].isna().all()]
+        if missing_measures:
+            raise ValueError(
+                f"Measure(s) {missing_measures} are null for every metro in year {year}. "
+                f"One or more BLS LAUS series types returned no data — verify series IDs."
+            )
+
     # Enforce types
     int_cols = ["labor_force", "employed", "unemployed"]
     for col in int_cols:

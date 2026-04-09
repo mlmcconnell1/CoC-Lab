@@ -34,6 +34,12 @@ HUD_EXCHANGE_COC_STATE_SHAPEFILE_TEMPLATE: Final = (
 )
 HUD_USER_PIT_BASE: Final = "https://www.huduser.gov/portal/sites/default/files/xls/"
 
+# BLS (Bureau of Labor Statistics)
+BLS_API_V2: Final = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+BLS_LAUS_SOURCE_REF: Final = (
+    "https://www.bls.gov/lau/home.htm"
+)
+
 # Zillow
 ZILLOW_ZORI_COUNTY: Final = (
     "https://files.zillowstatic.com/research/public_csvs/zori/County_zori_uc_sfrcondomfr_sm_month.csv"

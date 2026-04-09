@@ -15,6 +15,7 @@ from coclab.acs.ingest.metro_acs1 import (
 )
 from coclab.acs.variables_acs1 import (
     ACS1_METRO_OUTPUT_COLUMNS,
+    ACS1_UNAVAILABLE_VINTAGES,
     ACS1_UNEMPLOYMENT_VARIABLES,
 )
 from coclab.metro.definitions import cbsa_to_metro_id
@@ -405,3 +406,27 @@ class TestIngestWritesParquet:
         # Verify metro names are present
         assert df["metro_name"].notna().all()
         assert "New York" in df[df["metro_id"] == "GF01"].iloc[0]["metro_name"]
+
+
+class TestAcs12020Unavailability:
+    def test_2020_vintage_raises_before_api_call(self):
+        """fetch_acs1_cbsa_data must raise ValueError for 2020 without hitting the API."""
+        with pytest.raises(ValueError, match="not available from Census"):
+            fetch_acs1_cbsa_data(vintage=2020)
+
+    def test_2020_ingest_raises_actionable_error(self, tmp_path):
+        """ingest_metro_acs1 should raise with a message suggesting LAUS."""
+        with pytest.raises(ValueError) as exc_info:
+            ingest_metro_acs1(vintage=2020, project_root=tmp_path)
+        msg = str(exc_info.value)
+        assert "2020" in msg
+        assert "laus" in msg.lower() or "LAUS" in msg
+
+    def test_unavailable_vintages_constant(self):
+        assert 2020 in ACS1_UNAVAILABLE_VINTAGES
+
+    def test_other_vintages_not_blocked(self):
+        """Vintages other than 2020 should not be blocked by the unavailability check."""
+        assert 2019 not in ACS1_UNAVAILABLE_VINTAGES
+        assert 2021 not in ACS1_UNAVAILABLE_VINTAGES
+        assert 2023 not in ACS1_UNAVAILABLE_VINTAGES

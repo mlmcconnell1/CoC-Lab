@@ -98,7 +98,11 @@ ZORI_PROVENANCE_COLUMNS: list[str] = [
 # provenance of each column explicit.
 
 RECIPE_COLUMN_ALIASES: dict[str, str] = {
-    "total_population": "acs_total_population",
+    "total_population": "total_population_acs5",
+    "adult_population": "adult_population_acs5",
+    "population_below_poverty": "population_below_poverty_acs5",
+    "median_household_income": "median_household_income_acs5",
+    "median_gross_rent": "median_gross_rent_acs5",
     "population": "pep_population",
     "zori_coc": "zori",
 }

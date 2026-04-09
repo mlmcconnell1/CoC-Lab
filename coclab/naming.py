@@ -1020,6 +1020,47 @@ def metro_county_membership_path(
 
 
 # =============================================================================
+# BLS LAUS metro artifact filenames
+# =============================================================================
+
+
+def laus_metro_filename(year: int | str, definition_version: str) -> str:
+    """Generate filename for a curated BLS LAUS metro yearly ingest artifact.
+
+    Args:
+        year: Reference year for the annual-average LAUS data (e.g., 2023).
+        definition_version: Synthetic geography definition version (e.g., "glynn_fox_v1").
+
+    Returns:
+        Filename like 'laus_metro__A2023@Dglynnfoxv1.parquet'
+    """
+    defn = _normalize_definition_version(definition_version)
+    return f"laus_metro__A{year}@D{defn}.parquet"
+
+
+def laus_metro_path(
+    year: int | str,
+    definition_version: str,
+    base_dir: Path | str | None = None,
+) -> Path:
+    """Get canonical path for a curated BLS LAUS metro yearly ingest artifact.
+
+    Args:
+        year: Reference year for the annual-average LAUS data (e.g., 2023).
+        definition_version: Synthetic geography definition version (e.g., "glynn_fox_v1").
+        base_dir: Base data directory (defaults to "data").
+
+    Returns:
+        Path like data/curated/laus/laus_metro__A2023@Dglynnfoxv1.parquet
+    """
+    if base_dir is None:
+        base_dir = Path("data")
+    else:
+        base_dir = Path(base_dir)
+    return base_dir / "curated" / "laus" / laus_metro_filename(year, definition_version)
+
+
+# =============================================================================
 # Geography-aware filename dispatcher
 # =============================================================================
 

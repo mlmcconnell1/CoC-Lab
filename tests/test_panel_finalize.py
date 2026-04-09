@@ -227,7 +227,11 @@ class TestFinalizePanel:
 class TestColumnAliases:
     def test_recipe_aliases_defined(self):
         assert "total_population" in RECIPE_COLUMN_ALIASES
-        assert RECIPE_COLUMN_ALIASES["total_population"] == "acs_total_population"
+        assert RECIPE_COLUMN_ALIASES["total_population"] == "total_population_acs5"
+        assert "adult_population" in RECIPE_COLUMN_ALIASES
+        assert RECIPE_COLUMN_ALIASES["adult_population"] == "adult_population_acs5"
+        assert "median_gross_rent" in RECIPE_COLUMN_ALIASES
+        assert RECIPE_COLUMN_ALIASES["median_gross_rent"] == "median_gross_rent_acs5"
         assert "population" in RECIPE_COLUMN_ALIASES
         assert RECIPE_COLUMN_ALIASES["population"] == "pep_population"
         assert "zori_coc" in RECIPE_COLUMN_ALIASES
@@ -237,9 +241,9 @@ class TestColumnAliases:
         df = _make_coc_panel()
         panel = finalize_panel(
             df, geo_type="coc",
-            column_aliases={"total_population": "acs_total_population"},
+            column_aliases={"total_population": "total_population_acs5"},
         )
-        assert "acs_total_population" in panel.columns
+        assert "total_population_acs5" in panel.columns
         assert "total_population" not in panel.columns
 
     def test_aliases_not_applied_by_default(self):
@@ -275,7 +279,8 @@ class TestColumnAliases:
             df, geo_type="coc",
             column_aliases=RECIPE_COLUMN_ALIASES,
         )
-        assert "acs_total_population" in panel.columns
+        assert "total_population_acs5" in panel.columns
+        assert "adult_population_acs5" in panel.columns
         assert "pep_population" in panel.columns
         assert "zori" in panel.columns
         assert "total_population" not in panel.columns

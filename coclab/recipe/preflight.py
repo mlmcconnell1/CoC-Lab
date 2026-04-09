@@ -313,16 +313,35 @@ def _check_dataset_paths(
                 message=msg,
                 dataset_id=ds_id,
                 years=missing_years,
-                remediation=_dataset_remediation(ds_id, ds),
+                remediation=_dataset_remediation(ds_id, ds, years=missing_years),
             ))
 
     return findings
 
 
-def _dataset_remediation(ds_id: str, ds) -> Remediation:
+def _dataset_remediation(ds_id: str, ds, *, years: list[int] | None = None) -> Remediation:
     """Build a remediation hint for a missing dataset."""
+    from coclab.acs.variables_acs1 import ACS1_UNAVAILABLE_VINTAGES
+
     provider = ds.provider
     product = ds.product
+
+    # Detect ACS 1-year datasets that span unavailable vintages (e.g. 2020).
+    if product == "acs1" and years:
+        unavailable = sorted(set(years) & ACS1_UNAVAILABLE_VINTAGES)
+        if unavailable:
+            years_str = ", ".join(str(y) for y in unavailable)
+            return Remediation(
+                hint=(
+                    f"ACS 1-year data for vintage(s) {years_str} is not "
+                    f"available from Census (data collection was disrupted by "
+                    f"COVID-19 in 2020). No ingest command can succeed for "
+                    f"these vintages. Consider BLS LAUS data for labor-market "
+                    f"measures, or exclude {years_str} from the recipe universe."
+                ),
+                command=None,
+            )
+
     return Remediation(
         hint=(
             f"Ingest {provider}/{product} data for dataset '{ds_id}'."
