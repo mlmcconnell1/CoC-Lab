@@ -10,10 +10,10 @@ precedence order (highest wins):
 4. User config file (``~/.config/coclab/config.yaml``)
 5. Built-in defaults
 
-Built-in defaults preserve current behavior:
+Built-in defaults:
 
 - ``asset_store_root = <project_root>/data``
-- ``output_root = <project_root>/data/curated/panel``
+- ``output_root = <project_root>/outputs``
 
 Relative path semantics:
 
@@ -130,9 +130,9 @@ def load_config(
     env_asset = os.environ.get(ENV_ASSET_STORE_ROOT)
     env_output = os.environ.get(ENV_OUTPUT_ROOT)
 
-    # Layer 5 — built-in defaults (backward compatible)
+    # Layer 5 — built-in defaults
     default_asset = project_root / "data"
-    default_output = project_root / "data" / "curated" / "panel"
+    default_output = project_root / "outputs"
 
     user_config_dir = USER_CONFIG_PATH.parent.resolve()
 

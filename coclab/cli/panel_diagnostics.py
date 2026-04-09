@@ -47,7 +47,7 @@ def panel_diagnostics(
 
     Examples:
 
-        coclab diagnostics panel --panel data/curated/panel/coc_panel__2018_2024.parquet
+        coclab diagnostics panel --panel outputs/my-recipe/panel__Y2018-2024@B2025.parquet
 
         coclab diagnostics panel --panel panel.parquet --output-dir ./diagnostics/
 

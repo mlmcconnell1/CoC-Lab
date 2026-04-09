@@ -97,4 +97,4 @@ class TestDefaultFallback:
     def test_default_output_root(self, tmp_path: Path, monkeypatch) -> None:
         monkeypatch.chdir(tmp_path)
         result = output_root()
-        assert result == tmp_path / "data" / "curated" / "panel"
+        assert result == tmp_path / "outputs"

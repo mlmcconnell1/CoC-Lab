@@ -6,7 +6,7 @@ Unless stated otherwise, path examples in this chapter assume the built-in
 storage-root defaults:
 
 - `asset_store_root = <project_root>/data`
-- `output_root = <project_root>/data/curated/panel`
+- `output_root = <project_root>/outputs`
 
 ## Minimal Example
 

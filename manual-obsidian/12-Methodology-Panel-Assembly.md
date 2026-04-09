@@ -15,8 +15,8 @@ Panel assembly uses `coclab build recipe` to align heterogeneous inputs to a geo
 - Uses explicit YAML declarations for datasets/transforms/pipelines
 - Planner resolves dataset-year tasks deterministically
 - Executor runs `materialize -> resample -> join`, then persists only when the target includes `panel` output (default)
-- Current persisted panel target is the configured `output_root/`
-  (`data/curated/panel/` with built-in defaults)
+- Current persisted panel target is the configured `output_root/<recipe-name>/`
+  (`outputs/<recipe-name>/` with built-in defaults)
 - Non-panel outputs declared in `targets[].outputs` are currently intent-only and emit runtime warnings
 - Writes `*.manifest.json` sidecar listing consumed assets, with root-aware
   asset references for configurable storage layouts

@@ -44,7 +44,7 @@ The project defaults to CoC-level inference but supports metro areas as an alter
 By default those roots are:
 
 - `asset_store_root = <project_root>/data`
-- `output_root = <project_root>/data/curated/panel`
+- `output_root = <project_root>/outputs`
 
 ## Panel Assembly
 

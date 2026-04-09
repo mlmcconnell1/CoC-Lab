@@ -89,9 +89,9 @@ coclab build recipe --recipe recipes/metro25-glynnfox.yaml --dry-run
 Current behavior:
 - Runs schema + adapter validation and the same preflight checks used by `recipe-preflight` before execution
 - Executes `materialize -> resample -> join -> persist`
-- Persists panel output under the configured `output_root/` when the target
-  declares `outputs: [panel]` (default). Built-in default:
-  `<project_root>/data/curated/panel/`
+- Persists panel output under the configured `output_root/<recipe-name>/` when
+  the target declares `outputs: [panel]` (default). Built-in default:
+  `<project_root>/outputs/<recipe-name>/`
 - Writes recipe sidecar manifest: `*.manifest.json`
 - Supports `--no-cache` to disable recipe asset caching
 - Supports `--asset-store-root` and `--output-root` for one-off path overrides
@@ -152,7 +152,7 @@ Resolution precedence is:
 Built-in defaults:
 
 - `asset_store_root = <project_root>/data`
-- `output_root = <project_root>/data/curated/panel`
+- `output_root = <project_root>/outputs`
 
 ### Core Ingestion Commands
 

@@ -30,7 +30,7 @@ from coclab.config import (
 
 
 class TestDefaults:
-    """Built-in defaults preserve current repo-relative behavior."""
+    """Built-in defaults use repo-relative storage roots."""
 
     def test_default_asset_store_root(self, tmp_path: Path) -> None:
         cfg = load_config(project_root=tmp_path)
@@ -38,7 +38,7 @@ class TestDefaults:
 
     def test_default_output_root(self, tmp_path: Path) -> None:
         cfg = load_config(project_root=tmp_path)
-        assert cfg.output_root == tmp_path / "data" / "curated" / "panel"
+        assert cfg.output_root == tmp_path / "outputs"
 
     def test_frozen(self, tmp_path: Path) -> None:
         cfg = load_config(project_root=tmp_path)
@@ -156,7 +156,7 @@ class TestRepoConfig:
         (tmp_path / REPO_CONFIG_FILENAME).write_text("asset_store_root: /repo/assets\n")
         cfg = load_config(project_root=tmp_path)
         assert cfg.asset_store_root == Path("/repo/assets")
-        assert cfg.output_root == tmp_path / "data" / "curated" / "panel"
+        assert cfg.output_root == tmp_path / "outputs"
 
     def test_repo_relative_path_resolves_from_project_root(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -302,4 +302,4 @@ class TestFullPrecedence:
         """With no config files or env vars, defaults apply."""
         cfg = load_config(project_root=tmp_path)
         assert cfg.asset_store_root == tmp_path / "data"
-        assert cfg.output_root == tmp_path / "data" / "curated" / "panel"
+        assert cfg.output_root == tmp_path / "outputs"

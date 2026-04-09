@@ -11,7 +11,7 @@ and runs are recorded in the build manifest.
 .. deprecated::
     The ``--build`` flag and named build directories are deprecated.
     Prefer recipe-driven panel assembly via ``coclab build recipe``
-    which produces canonical outputs in ``data/curated/panel/``.
+    which produces canonical outputs in ``output_root/<recipe-name>/``.
 """
 
 from __future__ import annotations

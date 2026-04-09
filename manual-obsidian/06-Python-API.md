@@ -55,7 +55,7 @@ artifacts = resolve_pipeline_artifacts(
     "build_coc_panel",
     storage_config=cfg,
 )
-# {"panel_path": "/srv/coclab-outputs/panel__...", "manifest_path": "..."}
+# {"panel_path": "/srv/coclab-outputs/my-recipe/panel__...", "manifest_path": "..."}
 ```
 
 Notes:

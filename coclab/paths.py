@@ -25,7 +25,10 @@ Asset store (``asset_store_root``)::
 Output root (``output_root``)::
 
     <output_root>/
-        panel/          # recipe-built panels (future: diagnostics/)
+        <recipe-name>/  # recipe-built panels + sidecars
+            panel__...parquet
+            panel__...manifest.json
+            panel__...__diagnostics.json
 """
 
 from __future__ import annotations
@@ -88,8 +91,8 @@ def output_dir(kind: str, config: StorageConfig | None = None) -> Path:
     Parameters
     ----------
     kind : str
-        Subdirectory name under ``output_root/`` (e.g. ``"panel"``,
-        ``"diagnostics"``).
+        Subdirectory name under ``output_root/`` for non-recipe outputs or
+        higher-level workflow grouping.
     config : StorageConfig, optional
         Storage configuration.  Defaults to ``load_config()``.
     """

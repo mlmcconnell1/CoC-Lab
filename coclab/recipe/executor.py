@@ -8,6 +8,7 @@ deterministic order.
 from __future__ import annotations
 
 import json
+import re
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1659,6 +1660,13 @@ def _resolve_pipeline_target(
     return pipeline, target
 
 
+def _recipe_output_dirname(recipe_name: str) -> str:
+    """Return a deterministic directory name for a recipe output namespace."""
+    normalized = re.sub(r"[^A-Za-z0-9._-]+", "-", recipe_name.strip().lower())
+    normalized = re.sub(r"-{2,}", "-", normalized).strip("-.")
+    return normalized or "recipe"
+
+
 def _resolve_panel_output_file(
     recipe: RecipeV1,
     pipeline_id: str,
@@ -1682,8 +1690,9 @@ def _resolve_panel_output_file(
     end_year = max(universe_years)
 
     cfg = storage_config or load_config(project_root=project_root)
+    recipe_dir = _recipe_output_dirname(recipe.name)
     return (
-        cfg.output_root / geo_panel_filename(
+        cfg.output_root / recipe_dir / geo_panel_filename(
             start_year,
             end_year,
             geo_type=target_geo_type,
@@ -2070,6 +2079,13 @@ def _persist_outputs(
     # Resolve panel policy for ACS1 and ZORI conformance awareness.
     _, persist_target = _resolve_pipeline_target(ctx.recipe, plan.pipeline_id)
     persist_policy: PanelPolicy | None = getattr(persist_target, "panel_policy", None)
+
+    # Translate measure_columns through any active column aliases so that
+    # conformance checks look for the renamed names in the finalized panel.
+    _panel_aliases = _resolve_panel_aliases(persist_target)
+    if _panel_aliases:
+        base_cols = ACS_MEASURE_COLUMNS if measure_columns is None else measure_columns
+        measure_columns = [_panel_aliases.get(c, c) for c in base_cols]
 
     # ACS1-aware conformance (coclab-gude.3): include acs1 product when
     # the panel policy requests it and the column is present.

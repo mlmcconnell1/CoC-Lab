@@ -2,7 +2,7 @@
 
 Unless stated otherwise, path examples in this chapter show the built-in
 default layout. Replace `data/raw/...`, `data/curated/...`, and
-`data/curated/panel/...` with the configured `asset_store_root` and
+`outputs/<recipe-name>/...` with the configured `asset_store_root` and
 `output_root` when your environment uses custom storage roots.
 
 ## Analysis Geography Model
@@ -385,7 +385,7 @@ ACS 1-year estimates are only available for geographies with population >= 65,00
 | Metro PEP | `data/curated/pep/pep__metro__D{version}xC{county}__w{weight}__{start}_{end}.parquet` | Metro population estimates |
 | Metro ZORI | `data/curated/zori/zori__metro__A{acs}@D{version}xC{county}__w{weight}.parquet` | Metro rent index |
 | Metro ZORI yearly | `data/curated/zori/zori_yearly__metro__A{acs}@D{version}xC{county}__w{weight}__m{method}.parquet` | Metro yearly-collapsed rent index |
-| Metro panels | `data/curated/panel/panel__metro__Y{start}-{end}@D{version}.parquet` | Metro analysis panels |
+| Metro panels | `outputs/<recipe-name>/panel__metro__Y{start}-{end}@D{version}.parquet` | Metro analysis panels |
 | Metro ACS1 | `data/curated/acs/acs1__metro__A{vintage}@D{version}.parquet` | Metro-native ACS 1-year unemployment |
 
 ## Normalized ZORI Schema
@@ -504,7 +504,7 @@ Filenames use temporal shorthand notation (see [[08-Temporal-Terminology]]).
 | PIT vintages | `data/curated/pit/pit_vintage__P{vintage}.parquet` | All years from a vintage release |
 | PIT registry | `data/curated/pit/pit_registry.parquet` | PIT year tracking |
 | PIT vintage registry | `data/curated/pit/pit_vintage_registry.parquet` | PIT vintage tracking |
-| CoC panels | `data/curated/panel/panel__Y{start}-{end}@B{boundary}.parquet` | Analysis-ready panels |
+| CoC panels | `outputs/<recipe-name>/panel__Y{start}-{end}@B{boundary}.parquet` | Analysis-ready panels |
 | Tract population | `data/curated/acs/acs5_tracts__A{acs}xT{tract}.parquet` | ACS tract population |
 | CoC population rollup | `data/curated/acs/coc_population__A{acs}@B{boundary}xT{tract}__{weighting}.parquet` | Aggregated CoC population |
 | Population crosscheck | `data/curated/acs/crosscheck__A{acs}@B{boundary}xT{tract}__{weighting}.parquet` | Validation report |
@@ -527,7 +527,7 @@ Filenames use temporal shorthand notation (see [[08-Temporal-Terminology]]).
 | Metro PEP | `data/curated/pep/pep__metro__D{version}xC{county}__w{weight}__{start}_{end}.parquet` | Metro population estimates |
 | Metro ZORI | `data/curated/zori/zori__metro__A{acs}@D{version}xC{county}__w{weight}.parquet` | Metro ZORI |
 | Metro ZORI yearly | `data/curated/zori/zori_yearly__metro__A{acs}@D{version}xC{county}__w{weight}__m{method}.parquet` | Metro yearly ZORI |
-| Metro panels | `data/curated/panel/panel__metro__Y{start}-{end}@D{version}.parquet` | Metro analysis panels |
+| Metro panels | `outputs/<recipe-name>/panel__metro__Y{start}-{end}@D{version}.parquet` | Metro analysis panels |
 
 ## Dataset Provenance
 

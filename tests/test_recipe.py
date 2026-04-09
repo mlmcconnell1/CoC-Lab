@@ -30,6 +30,7 @@ from coclab.recipe.executor import (
     _execute_materialize,
     _execute_resample,
     _persist_diagnostics,
+    _recipe_output_dirname,
     _resolve_transform_path,
     execute_recipe,
 )
@@ -1305,6 +1306,21 @@ def _setup_pipeline_fixtures(tmp_path: Path) -> None:
     }).to_parquet(acs_path)
 
 
+def _default_recipe_output_dir(project_root: Path, recipe_name: str) -> Path:
+    """Return the default per-recipe output directory."""
+    return project_root / "outputs" / _recipe_output_dirname(recipe_name)
+
+
+class TestRecipeOutputPaths:
+
+    def test_recipe_output_dirname_normalizes_free_form_names(self):
+        assert _recipe_output_dirname("Metro Executor Test") == "metro-executor-test"
+        assert _recipe_output_dirname("  demo/report v1  ") == "demo-report-v1"
+
+    def test_recipe_output_dirname_falls_back_when_name_has_no_safe_chars(self):
+        assert _recipe_output_dirname("!!!") == "recipe"
+
+
 def _recipe_with_metro_pipeline() -> dict:
     """Build a recipe that joins pre-aggregated metro artifacts."""
     return {
@@ -1467,10 +1483,7 @@ class TestExecutor:
         assert results[0].success
 
         panel_path = (
-            tmp_path
-            / "data"
-            / "curated"
-            / "panel"
+            _default_recipe_output_dir(tmp_path, "executor-test")
             / "panel__Y2020-2021@B2025.parquet"
         )
         panel = pd.read_parquet(panel_path).sort_values(["geo_id", "year"])
@@ -1508,10 +1521,7 @@ class TestExecutor:
         assert results[0].success
 
         panel_path = (
-            tmp_path
-            / "data"
-            / "curated"
-            / "panel"
+            _default_recipe_output_dir(tmp_path, "executor-test")
             / "panel__Y2020-2021@B2025.parquet"
         )
         panel = pd.read_parquet(panel_path).sort_values(["geo_id", "year"])
@@ -1581,10 +1591,7 @@ class TestExecutor:
         assert results[0].success
 
         panel_path = (
-            tmp_path
-            / "data"
-            / "curated"
-            / "panel"
+            _default_recipe_output_dir(tmp_path, "metro-executor-test")
             / "panel__metro__Y2020-2021@Dglynnfoxv1.parquet"
         )
         panel = pd.read_parquet(panel_path).sort_values(["geo_id", "year"])
@@ -1636,7 +1643,9 @@ class TestTargetOutputsEnforcement:
         # Diagnostics persistence should run
         assert "persist_diagnostics" in kinds
         # Verify the diagnostics JSON file was written
-        diag_files = list((tmp_path / "data" / "curated" / "panel").glob("*__diagnostics.json"))
+        diag_files = list(
+            _default_recipe_output_dir(tmp_path, "executor-test").glob("*__diagnostics.json")
+        )
         assert len(diag_files) == 1
 
 
@@ -1655,10 +1664,10 @@ class TestPersistDiagnostics:
         return execute_recipe(recipe, project_root=tmp_path)
 
     def test_diagnostics_file_written_to_expected_path(self, tmp_path: Path):
-        """Diagnostics JSON is written to data/curated/panel/ with correct stem."""
+        """Diagnostics JSON is written to the recipe output directory with correct stem."""
         self._run_with_diagnostics(tmp_path, outputs=["diagnostics"])
         expected = (
-            tmp_path / "data" / "curated" / "panel"
+            _default_recipe_output_dir(tmp_path, "executor-test")
             / "panel__Y2020-2021@B2025__diagnostics.json"
         )
         assert expected.exists(), f"Expected diagnostics file at {expected}"
@@ -1667,7 +1676,7 @@ class TestPersistDiagnostics:
         """Diagnostics file must be valid JSON containing the DiagnosticsReport keys."""
         self._run_with_diagnostics(tmp_path, outputs=["diagnostics"])
         diag_path = (
-            tmp_path / "data" / "curated" / "panel"
+            _default_recipe_output_dir(tmp_path, "executor-test")
             / "panel__Y2020-2021@B2025__diagnostics.json"
         )
         data = json.loads(diag_path.read_text())
@@ -1678,7 +1687,7 @@ class TestPersistDiagnostics:
         """panel_info section should contain row_count, year range, and geo info."""
         self._run_with_diagnostics(tmp_path, outputs=["diagnostics"])
         diag_path = (
-            tmp_path / "data" / "curated" / "panel"
+            _default_recipe_output_dir(tmp_path, "executor-test")
             / "panel__Y2020-2021@B2025__diagnostics.json"
         )
         info = json.loads(diag_path.read_text())["panel_info"]
@@ -1690,7 +1699,7 @@ class TestPersistDiagnostics:
         """coverage and missingness should serialize as list-of-dicts (records)."""
         self._run_with_diagnostics(tmp_path, outputs=["diagnostics"])
         diag_path = (
-            tmp_path / "data" / "curated" / "panel"
+            _default_recipe_output_dir(tmp_path, "executor-test")
             / "panel__Y2020-2021@B2025__diagnostics.json"
         )
         data = json.loads(diag_path.read_text())
@@ -1730,7 +1739,7 @@ class TestPersistDiagnostics:
     def test_diagnostics_alongside_panel(self, tmp_path: Path):
         """When outputs=['panel', 'diagnostics'], both artifacts are produced."""
         self._run_with_diagnostics(tmp_path, outputs=["panel", "diagnostics"])
-        panel_dir = tmp_path / "data" / "curated" / "panel"
+        panel_dir = _default_recipe_output_dir(tmp_path, "executor-test")
         parquet_files = list(panel_dir.glob("*.parquet"))
         diag_files = list(panel_dir.glob("*__diagnostics.json"))
         assert len(parquet_files) >= 1, "Panel parquet should be written"
@@ -1762,11 +1771,11 @@ class TestPanelPolicy:
     def test_panel_policy_with_aliases(self):
         policy = PanelPolicy(
             column_aliases={
-                "total_population": "acs_total_population",
+                "total_population": "total_population_acs5",
                 "population": "pep_population",
             },
         )
-        assert policy.column_aliases["total_population"] == "acs_total_population"
+        assert policy.column_aliases["total_population"] == "total_population_acs5"
         assert policy.column_aliases["population"] == "pep_population"
 
     def test_target_with_panel_policy(self):
@@ -1774,7 +1783,7 @@ class TestPanelPolicy:
         data["targets"][0]["panel_policy"] = {
             "source_label": "custom_source",
             "zori": {"min_coverage": 0.85},
-            "column_aliases": {"total_population": "acs_total_population"},
+            "column_aliases": {"total_population": "total_population_acs5"},
         }
         recipe = load_recipe(data)
         target = recipe.targets[0]
@@ -1782,7 +1791,7 @@ class TestPanelPolicy:
         assert target.panel_policy.source_label == "custom_source"
         assert target.panel_policy.zori.min_coverage == 0.85
         assert target.panel_policy.column_aliases == {
-            "total_population": "acs_total_population",
+            "total_population": "total_population_acs5",
         }
 
     def test_target_without_panel_policy(self):
@@ -3913,7 +3922,10 @@ class TestJoinPersistence:
         assert len(results) == 1
         assert results[0].success
         # Check panel file was written
-        panel_file = tmp_path / "data" / "curated" / "panel" / "panel__Y2020-2021@B2025.parquet"
+        panel_file = (
+            _default_recipe_output_dir(tmp_path, "executor-test")
+            / "panel__Y2020-2021@B2025.parquet"
+        )
         assert panel_file.exists()
 
     def test_panel_contains_all_years(self, tmp_path: Path):
@@ -3923,7 +3935,10 @@ class TestJoinPersistence:
         data["datasets"]["acs"]["path"] = "data/acs.parquet"
         recipe = load_recipe(data)
         execute_recipe(recipe, project_root=tmp_path)
-        panel_file = tmp_path / "data" / "curated" / "panel" / "panel__Y2020-2021@B2025.parquet"
+        panel_file = (
+            _default_recipe_output_dir(tmp_path, "executor-test")
+            / "panel__Y2020-2021@B2025.parquet"
+        )
         panel = pd.read_parquet(panel_file)
         assert set(panel["year"].unique()) == {2020, 2021}
 
@@ -3937,7 +3952,10 @@ class TestJoinPersistence:
         data["datasets"]["acs"]["path"] = "data/acs.parquet"
         recipe = load_recipe(data)
         execute_recipe(recipe, project_root=tmp_path)
-        panel_file = tmp_path / "data" / "curated" / "panel" / "panel__Y2020-2021@B2025.parquet"
+        panel_file = (
+            _default_recipe_output_dir(tmp_path, "executor-test")
+            / "panel__Y2020-2021@B2025.parquet"
+        )
         table = pq.read_table(panel_file)
         metadata = table.schema.metadata
         assert b"coclab_provenance" in metadata
@@ -4347,7 +4365,7 @@ class TestProvenanceManifest:
         recipe = load_recipe(data)
         execute_recipe(recipe, project_root=tmp_path)
         manifest_file = (
-            tmp_path / "data" / "curated" / "panel"
+            _default_recipe_output_dir(tmp_path, "executor-test")
             / "panel__Y2020-2021@B2025.manifest.json"
         )
         assert manifest_file.exists()
@@ -4363,7 +4381,7 @@ class TestProvenanceManifest:
         recipe = load_recipe(data)
         execute_recipe(recipe, project_root=tmp_path)
         manifest_file = (
-            tmp_path / "data" / "curated" / "panel"
+            _default_recipe_output_dir(tmp_path, "executor-test")
             / "panel__Y2020-2021@B2025.manifest.json"
         )
         m = read_manifest(manifest_file)
@@ -4387,7 +4405,7 @@ class TestProvenanceManifest:
         recipe = load_recipe(data)
         execute_recipe(recipe, project_root=tmp_path)
         panel_file = (
-            tmp_path / "data" / "curated" / "panel"
+            _default_recipe_output_dir(tmp_path, "executor-test")
             / "panel__Y2020-2021@B2025.parquet"
         )
         table = pq.read_table(panel_file)
@@ -4443,7 +4461,7 @@ class TestRecipeProvenanceCLI:
                     dataset_id="pit",
                 ),
             ],
-            output_path="data/curated/panel/out.parquet",
+            output_path="outputs/demo/out.parquet",
         )
         mf = tmp_path / "test.manifest.json"
         write_manifest(m, mf)
@@ -4598,9 +4616,9 @@ class TestRecipeJsonMode:
         assert result.exit_code == 0
         out = json.loads(result.output)
         expected_artifacts = {
-            "panel_path": "data/curated/panel/panel__Y2020-2021@B2025.parquet",
-            "manifest_path": "data/curated/panel/panel__Y2020-2021@B2025.manifest.json",
-            "diagnostics_path": "data/curated/panel/panel__Y2020-2021@B2025__diagnostics.json",
+            "panel_path": "outputs/executor-test/panel__Y2020-2021@B2025.parquet",
+            "manifest_path": "outputs/executor-test/panel__Y2020-2021@B2025.manifest.json",
+            "diagnostics_path": "outputs/executor-test/panel__Y2020-2021@B2025__diagnostics.json",
         }
         assert out["artifacts"] == expected_artifacts
         assert out["pipelines"][0]["artifacts"] == expected_artifacts

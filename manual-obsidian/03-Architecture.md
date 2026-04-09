@@ -55,11 +55,11 @@ flowchart TB
 - Reusable ingests, crosswalks, registries, and aggregate artifacts live under
   `asset_store_root/curated/`
 - Raw snapshots live under `asset_store_root/raw/`
-- Recipe panel outputs persist under `output_root/` when target outputs include
-  `panel`
-- Built-in defaults preserve the old layout:
+- Recipe panel outputs persist under `output_root/<recipe-name>/` when target
+  outputs include `panel`
+- Built-in defaults are:
   `asset_store_root = <project_root>/data`,
-  `output_root = <project_root>/data/curated/panel`
+  `output_root = <project_root>/outputs`
 
 ## Architectural Intent
 
