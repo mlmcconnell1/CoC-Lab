@@ -266,7 +266,8 @@ class TestFetchLausAnnualAverages:
             with pytest.raises(ValueError, match="BLS API request failed"):
                 fetch_laus_annual_averages([NY_SERIES_IDS["unemployment_rate"]], 2023)
 
-    def test_batches_large_series_lists(self):
+    def test_anon_batches_large_series_lists_at_25(self):
+        # Anonymous requests must batch at 25 (not 50) to respect the BLS API limit.
         # Use correctly-formatted 20-char IDs (LAUMT + 2-char fips + 5-char cbsa + 6 zeros + 2 code)
         sids = [f"LAUMT36{i:05d}00000003" for i in range(60)]
         empty_response = {"status": "REQUEST_SUCCEEDED", "Results": {"series": []}}
@@ -278,7 +279,22 @@ class TestFetchLausAnnualAverages:
 
             fetch_laus_annual_averages(sids, 2023)
 
-        # 60 series should be split into 2 calls (50 + 10)
+        # 60 series split into 3 anonymous batches: 25 + 25 + 10
+        assert mock_post.call_count == 3
+
+    def test_registered_batches_at_50(self):
+        # With an API key, the limit is 50 series per request.
+        sids = [f"LAUMT36{i:05d}00000003" for i in range(60)]
+        empty_response = {"status": "REQUEST_SUCCEEDED", "Results": {"series": []}}
+
+        with patch("coclab.ingest.bls_laus.httpx.Client") as mock_client:
+            mock_post = mock_client.return_value.__enter__.return_value.post
+            mock_post.return_value.json.return_value = empty_response
+            mock_post.return_value.raise_for_status.return_value = None
+
+            fetch_laus_annual_averages(sids, 2023, api_key="test_registration_key")
+
+        # 60 series split into 2 registered batches: 50 + 10
         assert mock_post.call_count == 2
 
 
@@ -395,7 +411,33 @@ class TestIngestLausMetro:
             mock_post.return_value.json.return_value = empty_response
             mock_post.return_value.raise_for_status.return_value = None
 
-            with pytest.raises(ValueError, match="All measure values are null"):
+            with pytest.raises(ValueError, match="metro\\(s\\) have no data for any measure"):
+                ingest_laus_metro(year=2023, project_root=tmp_path)
+
+    def test_raises_on_partial_metro_data(self, tmp_path):
+        """Ingest must fail fast when the API returns data for only some metros.
+
+        Truth table
+        -----------
+        Scenario: API returns M13 values for metros GF01–GF13 only (13/25).
+        The remaining 12 metros have all-null measures.
+        Expected: ValueError — partial output must not be written silently.
+        """
+        from coclab.ingest.bls_laus import _build_metro_series_map
+
+        # Build values for only the first 13 metros (sorted order)
+        metro_series = _build_metro_series_map()
+        partial_metro_ids = sorted(metro_series)[:13]
+        partial_values: dict[str, float] = {}
+        for mid in partial_metro_ids:
+            for measure, sid in metro_series[mid].items():
+                partial_values[sid] = 4.5
+
+        def _partial_fetch(series_ids, year, api_key=None):
+            return {sid: v for sid, v in partial_values.items() if sid in series_ids}
+
+        with patch("coclab.ingest.bls_laus.fetch_laus_annual_averages", _partial_fetch):
+            with pytest.raises(ValueError, match="metro\\(s\\) have no data for any measure"):
                 ingest_laus_metro(year=2023, project_root=tmp_path)
 
 
@@ -697,6 +739,54 @@ class TestCliLausMetro:
                 self._app(), ["ingest", "laus-metro", "--year", "2023"]
             )
         assert result.exit_code != 0
+
+    def test_partial_backfill_json_exits_nonzero(self, tmp_path):
+        """--json mode must exit 1 when any year in a backfill fails.
+
+        Truth table
+        -----------
+        years_requested: [2021, 2022]
+        2021: succeeds
+        2022: raises ValueError
+        Expected: exit_code == 1, JSON status == "partial"
+        """
+        mock_fn = _make_mock_ingest_fn(tmp_path)
+
+        def _partial_ingest(year, **kwargs):
+            if year == 2022:
+                raise ValueError("No data for 2022")
+            return mock_fn(year=year, **kwargs)
+
+        with patch("coclab.ingest.bls_laus.ingest_laus_metro", _partial_ingest), \
+             patch("coclab.cli.main._check_working_directory"):
+            result = self._runner().invoke(
+                self._app(),
+                ["ingest", "laus-metro", "--start-year", "2021", "--end-year", "2022", "--json"],
+            )
+
+        assert result.exit_code == 1, f"Expected exit 1, got {result.exit_code}: {result.output}"
+        data = json.loads(result.output)
+        assert data["status"] == "partial"
+        assert 2021 in data["years_succeeded"]
+        assert 2022 in data["years_failed"]
+
+    def test_all_failed_backfill_json_exits_nonzero(self, tmp_path):
+        """--json mode must exit 1 and report status 'error' when all years fail."""
+        def _failing_ingest(**kwargs):
+            raise ValueError("BLS API unavailable")
+
+        with patch("coclab.ingest.bls_laus.ingest_laus_metro", _failing_ingest), \
+             patch("coclab.cli.main._check_working_directory"):
+            result = self._runner().invoke(
+                self._app(),
+                ["ingest", "laus-metro", "--start-year", "2021", "--end-year", "2022", "--json"],
+            )
+
+        assert result.exit_code == 1, f"Expected exit 1, got {result.exit_code}: {result.output}"
+        data = json.loads(result.output)
+        assert data["status"] == "error"
+        assert data["years_succeeded"] == []
+        assert set(data["years_failed"]) == {2021, 2022}
 
 
 # ---------------------------------------------------------------------------

@@ -160,14 +160,22 @@ def ingest_laus_metro(
                 result["labor_force_total"] = int(df["labor_force"].sum())
             typer.echo(json.dumps(result, indent=2))
         else:
+            if not results:
+                status = "error"
+            elif errors:
+                status = "partial"
+            else:
+                status = "ok"
             typer.echo(json.dumps({
-                "status": "ok" if not errors else "partial",
+                "status": status,
                 "years_requested": years,
                 "years_succeeded": [r["year"] for r in results],
                 "years_failed": [e["year"] for e in errors],
                 "outputs": [{"year": r["year"], "path": r["path"], "metros": r["metros"]} for r in results],
                 "errors": errors,
             }, indent=2))
+        if errors:
+            raise typer.Exit(1)
         return
 
     if not results:

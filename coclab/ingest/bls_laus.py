@@ -33,11 +33,12 @@ Output schema
 Rate limits (BLS API v2)
 ------------------------
 - 500 queries/day without a registration key
-- 50 series IDs per request maximum
+- 25 series IDs per request maximum (anonymous); 50 with a registration key
 - 20-year window per request maximum
 
-With 25 metros × 4 measures = 100 series IDs, this module issues two
-requests of 50 series each.
+With 25 metros × 4 measures = 100 series IDs, this module issues four
+anonymous requests of 25 series each, or two requests of 50 when a
+registration key is provided.
 """
 
 from __future__ import annotations
@@ -69,7 +70,10 @@ from coclab.sources import BLS_API_V2, BLS_LAUS_SOURCE_REF
 logger = logging.getLogger(__name__)
 
 # Maximum series IDs per BLS API request.
-_BLS_MAX_SERIES_PER_REQUEST: int = 50
+# The BLS public API silently truncates anonymous requests to 25 series.
+# A registration key raises the cap to 50.
+_BLS_ANON_MAX_SERIES_PER_REQUEST: int = 25
+_BLS_KEY_MAX_SERIES_PER_REQUEST: int = 50
 
 
 def _build_metro_series_map(
@@ -140,8 +144,9 @@ def fetch_laus_annual_averages(
         api_key = os.environ.get("BLS_API_KEY")
 
     results: dict[str, float | int] = {}
+    batch_size = _BLS_KEY_MAX_SERIES_PER_REQUEST if api_key else _BLS_ANON_MAX_SERIES_PER_REQUEST
 
-    for batch in _chunked(series_ids, _BLS_MAX_SERIES_PER_REQUEST):
+    for batch in _chunked(series_ids, batch_size):
         payload: dict = {
             "seriesid": batch,
             "startyear": str(year),
@@ -271,20 +276,26 @@ def ingest_laus_metro(
             f"Verify that BLS LAUS annual-average data is available for this year."
         )
 
-    # Fail fast if all measure values are null — indicates bad series IDs or
-    # no data published for this year.  Writing an all-null parquet is silent
-    # data loss that is hard to detect downstream.
+    # Fail fast if any metro has completely missing data for every measure.
+    # A metro with all-null measures means the BLS API returned no values for
+    # any of its four series, which indicates API truncation or bad series IDs
+    # rather than a legitimate data gap.  Writing a partial parquet silently
+    # corrupts downstream panels.
     measure_cols_present = [c for c in ["unemployment_rate", "unemployed", "employed", "labor_force"] if c in df.columns]
-    if measure_cols_present and df[measure_cols_present].isna().all().all():
-        n_fetched = len(values)
-        n_requested = len(all_series_ids)
-        raise ValueError(
-            f"All measure values are null for year {year}: BLS API returned data for "
-            f"{n_fetched}/{n_requested} series IDs but none matched the expected metro "
-            f"series. Verify that the LAUS series IDs are correct and that "
-            f"annual-average data (period M13) is published for {year}. "
-            f"Series IDs attempted: {all_series_ids[:4]}..."
-        )
+    if measure_cols_present:
+        all_null_mask = df[measure_cols_present].isna().all(axis=1)
+        all_null_metros = df.loc[all_null_mask, "metro_id"].tolist()
+        if all_null_metros:
+            n_fetched = len(values)
+            n_requested = len(all_series_ids)
+            raise ValueError(
+                f"{len(all_null_metros)} metro(s) have no data for any measure in year {year}: "
+                f"{all_null_metros}. BLS API returned values for {n_fetched}/{n_requested} "
+                f"series. This may indicate API truncation — verify series IDs and consider "
+                f"registering for a BLS API key to raise the per-request series limit from "
+                f"{_BLS_ANON_MAX_SERIES_PER_REQUEST} to {_BLS_KEY_MAX_SERIES_PER_REQUEST}. "
+                f"Series IDs sampled: {all_series_ids[:4]}..."
+            )
 
     # Enforce types
     int_cols = ["labor_force", "employed", "unemployed"]
