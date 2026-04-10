@@ -471,6 +471,39 @@ class TestIngestLausMetro:
             with pytest.raises(ValueError, match="unemployment_rate"):
                 ingest_laus_metro(year=2023, project_root=tmp_path)
 
+    def test_raises_on_partial_measure_for_one_metro(self, tmp_path):
+        """Ingest must fail when one metro is missing just one measure (coclab-q3uz).
+
+        Truth table
+        -----------
+        Scenario: All 25 metros have labor_force, employed, unemployed populated.
+        GF01's unemployment_rate series returns no data; the other 24 metros have
+        all four measures.  The all-null-metro check passes and the "entirely null"
+        check passes (24 metros do have unemployment_rate), but GF01 would be
+        written with a null rate.
+        Expected: ValueError naming GF01 and unemployment_rate.
+        """
+        from coclab.ingest.bls_laus import _build_metro_series_map
+
+        metro_series = _build_metro_series_map()
+        skip_metro = sorted(metro_series)[0]  # GF01
+        skip_measure = "unemployment_rate"
+
+        all_values: dict[str, float] = {}
+        for mid, measure_map in metro_series.items():
+            for measure, sid in measure_map.items():
+                if mid == skip_metro and measure == skip_measure:
+                    continue  # omit this single series
+                value = 4.5 if measure == "unemployment_rate" else 50000.0
+                all_values[sid] = value
+
+        def _one_missing_fetch(series_ids, year, api_key=None):
+            return {sid: v for sid, v in all_values.items() if sid in series_ids}
+
+        with patch("coclab.ingest.bls_laus.fetch_laus_annual_averages", _one_missing_fetch):
+            with pytest.raises(ValueError, match="partial measure data"):
+                ingest_laus_metro(year=2023, project_root=tmp_path)
+
 
 # ---------------------------------------------------------------------------
 # Naming tests

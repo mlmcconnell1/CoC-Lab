@@ -297,15 +297,23 @@ def ingest_laus_metro(
                 f"Series IDs sampled: {all_series_ids[:4]}..."
             )
 
-        # Also fail if any single required measure is entirely null while other
-        # measures have data.  This catches partial-series loss (e.g. all
-        # unemployment_rate series IDs fail while the three count series succeed)
-        # which the all-null-metro check above would miss.
-        missing_measures = [c for c in measure_cols_present if df[c].isna().all()]
-        if missing_measures:
+        # Also fail if any populated metro is missing one or more required
+        # measures.  After the all-null-metro guard above every remaining row has
+        # at least one measure, so any row that still has a null is partial.
+        # This catches both "one measure missing for all metros" and "one measure
+        # missing for a single metro" — both silently corrupt downstream panels.
+        partial_null_mask = df[measure_cols_present].isna().any(axis=1)
+        partial_metros = df.loc[partial_null_mask, "metro_id"].tolist()
+        if partial_metros:
+            affected_measures = [
+                c for c in measure_cols_present
+                if df.loc[partial_null_mask, c].isna().any()
+            ]
             raise ValueError(
-                f"Measure(s) {missing_measures} are null for every metro in year {year}. "
-                f"One or more BLS LAUS series types returned no data — verify series IDs."
+                f"{len(partial_metros)} metro(s) have partial measure data in year {year}: "
+                f"{partial_metros}. Missing measure(s): {affected_measures}. "
+                f"One or more BLS LAUS series IDs returned no data for these metros — "
+                f"verify series IDs."
             )
 
     # Enforce types
