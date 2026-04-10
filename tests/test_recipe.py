@@ -2208,7 +2208,7 @@ def _make_ct_recipe_alignment_crosswalk() -> CtPlanningRegionCrosswalk:
 
 def _patch_ct_recipe_alignment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "coclab.recipe.executor.build_ct_county_planning_region_crosswalk",
+        "coclab.recipe.executor_ct_alignment.build_ct_county_planning_region_crosswalk",
         lambda **kwargs: _make_ct_recipe_alignment_crosswalk(),
     )
     monkeypatch.setattr(
@@ -2226,7 +2226,7 @@ def _patch_ct_recipe_alignment_failure(
         raise FileNotFoundError(message)
 
     monkeypatch.setattr(
-        "coclab.recipe.executor.build_ct_county_planning_region_crosswalk",
+        "coclab.recipe.executor_ct_alignment.build_ct_county_planning_region_crosswalk",
         _raise,
     )
     monkeypatch.setattr(

@@ -1,0 +1,250 @@
+"""Transform artifact resolution helpers for recipe execution.
+
+Resolves the on-disk path for a recipe transform, identifies metro vs.
+CoC vs. base geometry roles, and materializes generated metro
+crosswalks on demand.  These helpers are imported back into
+``coclab.recipe.executor`` so legacy callers (and the lazy probe
+import in ``coclab.recipe.probes``) keep working unchanged.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pandas as pd
+
+from coclab.naming import (
+    county_xwalk_path,
+    tract_path,
+    tract_xwalk_path,
+)
+from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
+from coclab.recipe.executor import ExecutorError, _get_transform
+from coclab.recipe.recipe_schema import GeometryRef, RecipeV1
+
+_RECIPE_TRANSFORM_DIR = Path(".recipe_cache") / "transforms"
+
+
+def _resolve_transform_path(
+    transform_id: str,
+    recipe: RecipeV1,
+    project_root: Path,
+) -> Path:
+    """Map a transform spec to its expected crosswalk file path.
+
+    Uses the transform's ``from_`` / ``to`` geometry refs to determine
+    the canonical crosswalk filename via the naming module.
+
+    Raises ExecutorError if the geometry pair is not recognised.
+    """
+    transform = _get_transform(recipe, transform_id)
+
+    from_ = transform.from_
+    to = transform.to
+
+    metro_ref, base_ref = _identify_metro_and_base(from_, to)
+    if metro_ref is not None:
+        return _generated_metro_transform_path(
+            transform_id,
+            metro_ref=metro_ref,
+            base_ref=base_ref,
+            project_root=project_root,
+        )
+
+    # Determine which geometry is the CoC boundary and which is the
+    # base geography so we can build the right crosswalk filename.
+    coc_ref, base_ref = _identify_coc_and_base(from_, to)
+    if coc_ref is None:
+        raise ExecutorError(
+            f"Transform '{transform_id}' connects "
+            f"{from_.type}@{from_.vintage} → {to.type}@{to.vintage}: "
+            f"cannot resolve crosswalk path (no 'coc' geometry in pair)."
+        )
+
+    if coc_ref.vintage is None:
+        raise ExecutorError(
+            f"Transform '{transform_id}': CoC geometry has no vintage. "
+            f"Cannot resolve crosswalk path without a concrete boundary vintage. "
+            f"Set vintage on the 'coc' geometry ref (e.g., vintage: 2025)."
+        )
+    if base_ref.vintage is None:
+        raise ExecutorError(
+            f"Transform '{transform_id}': {base_ref.type} geometry has no vintage. "
+            f"Cannot resolve crosswalk path without a concrete {base_ref.type} vintage. "
+            f"Set vintage on the '{base_ref.type}' geometry ref."
+        )
+    boundary_vintage = str(coc_ref.vintage)
+    base_vintage: str | int = base_ref.vintage
+
+    if base_ref.type == "tract":
+        return project_root / tract_xwalk_path(boundary_vintage, base_vintage)
+    elif base_ref.type == "county":
+        return project_root / county_xwalk_path(boundary_vintage, base_vintage)
+    else:
+        raise ExecutorError(
+            f"Transform '{transform_id}': unsupported geometry pair "
+            f"{from_.type} → {to.type}. Only tract↔coc and county↔coc "
+            f"crosswalks are currently supported."
+        )
+
+
+def _identify_coc_and_base(
+    from_: GeometryRef, to: GeometryRef,
+) -> tuple[GeometryRef | None, GeometryRef]:
+    """Identify which end of a transform is the CoC boundary."""
+    if to.type == "coc":
+        return to, from_
+    if from_.type == "coc":
+        return from_, to
+    return None, from_
+
+
+def _identify_metro_and_base(
+    from_: GeometryRef, to: GeometryRef,
+) -> tuple[GeometryRef | None, GeometryRef]:
+    """Identify which end of a transform is the metro geometry."""
+    if to.type == "metro":
+        return to, from_
+    if from_.type == "metro":
+        return from_, to
+    return None, from_
+
+
+def _generated_metro_transform_path(
+    transform_id: str,
+    *,
+    metro_ref: GeometryRef,
+    base_ref: GeometryRef,
+    project_root: Path,
+) -> Path:
+    """Return the recipe-cache path for a generated metro transform."""
+    definition = metro_ref.source or "unknown_definition"
+    base_suffix = base_ref.type
+    if base_ref.vintage is not None:
+        base_suffix = f"{base_suffix}_{base_ref.vintage}"
+    filename = f"{transform_id}__{base_suffix}__{definition}.parquet"
+    return project_root / _RECIPE_TRANSFORM_DIR / filename
+
+
+def _resolve_metro_transform_df(
+    *,
+    metro_ref: GeometryRef,
+    base_ref: GeometryRef,
+    project_root: Path,
+) -> pd.DataFrame:
+    """Build a metro crosswalk DataFrame from curated membership artifacts."""
+    if not metro_ref.source:
+        raise ExecutorError(
+            "Metro transforms require geometry.source to identify the "
+            "definition version (for example 'glynn_fox_v1')."
+        )
+
+    from coclab.metro.io import (
+        read_metro_coc_membership,
+        read_metro_county_membership,
+    )
+
+    data_root = project_root / "data"
+    definition_version = metro_ref.source
+
+    if base_ref.type == "coc":
+        xwalk = read_metro_coc_membership(
+            definition_version=definition_version,
+            base_dir=data_root,
+        )
+        xwalk["area_share"] = 1.0
+        return xwalk[["metro_id", "coc_id", "area_share", "definition_version"]]
+
+    if base_ref.type == "county":
+        xwalk = read_metro_county_membership(
+            definition_version=definition_version,
+            base_dir=data_root,
+        )
+        xwalk["area_share"] = 1.0
+        return xwalk[["metro_id", "county_fips", "area_share", "definition_version"]]
+
+    if base_ref.type == "tract":
+        if base_ref.vintage is None:
+            raise ExecutorError(
+                "Metro tract transforms require a tract vintage so the "
+                "executor can load the tract geometry artifact."
+            )
+        county_membership = read_metro_county_membership(
+            definition_version=definition_version,
+            base_dir=data_root,
+        )
+        tracts = pd.read_parquet(tract_path(base_ref.vintage, data_root))
+        tract_col: str | None = None
+        for candidate in ("tract_geoid", "GEOID", "geoid"):
+            if candidate in tracts.columns:
+                tract_col = candidate
+                break
+        if tract_col is None:
+            raise ExecutorError(
+                "Tract geometry artifact is missing a tract identifier column. "
+                f"Expected one of tract_geoid/GEOID/geoid. "
+                f"Available columns: {sorted(tracts.columns)}"
+            )
+        tract_index = tracts[[tract_col]].copy()
+        tract_index["tract_geoid"] = tract_index[tract_col].astype(str)
+        tract_index["county_fips"] = tract_index["tract_geoid"].str[:5]
+        xwalk = county_membership.merge(tract_index, on="county_fips", how="inner")
+        xwalk["area_share"] = 1.0
+        return xwalk[["metro_id", "tract_geoid", "area_share", "definition_version"]]
+
+    raise ExecutorError(
+        f"Metro transforms currently support tract, county, or coc bases; "
+        f"got '{base_ref.type}'."
+    )
+
+
+def _materialize_generated_metro_transform(
+    transform_id: str,
+    recipe: RecipeV1,
+    project_root: Path,
+) -> Path:
+    """Generate and persist a metro transform artifact for recipe execution."""
+    transform = _get_transform(recipe, transform_id)
+
+    metro_ref, base_ref = _identify_metro_and_base(transform.from_, transform.to)
+    if metro_ref is None:
+        raise ExecutorError(
+            f"Transform '{transform_id}' does not target metro geometry."
+        )
+
+    output_path = _generated_metro_transform_path(
+        transform_id,
+        metro_ref=metro_ref,
+        base_ref=base_ref,
+        project_root=project_root,
+    )
+    if output_path.exists():
+        return output_path
+
+    xwalk = _resolve_metro_transform_df(
+        metro_ref=metro_ref,
+        base_ref=base_ref,
+        project_root=project_root,
+    )
+    provenance = ProvenanceBlock(
+        geo_type="metro",
+        definition_version=metro_ref.source,
+        tract_vintage=(
+            str(base_ref.vintage)
+            if base_ref.type == "tract" and base_ref.vintage is not None
+            else None
+        ),
+        county_vintage=(
+            str(base_ref.vintage)
+            if base_ref.type == "county" and base_ref.vintage is not None
+            else None
+        ),
+        extra={
+            "dataset_type": "recipe_transform",
+            "transform_id": transform_id,
+            "from_type": transform.from_.type,
+            "to_type": transform.to.type,
+        },
+    )
+    write_parquet_with_provenance(xwalk, output_path, provenance)
+    return output_path
