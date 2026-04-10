@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-import numpy as np
 import pandas as pd
 
 from coclab.panel.finalize import finalize_panel
@@ -31,8 +30,9 @@ from coclab.recipe.executor_manifest import (
     _target_geometry_metadata,
 )
 from coclab.recipe.executor_panel_policies import (
+    DEFAULT_APPLIERS,
+    PanelPolicyApplier,
     PolicyApplication,
-    ZoriPolicyApplier,
 )
 from coclab.recipe.planner import ExecutionPlan
 from coclab.recipe.recipe_schema import (
@@ -130,11 +130,6 @@ def apply_cohort_selector(
     return panel[panel[geo_id_col].isin(selected)].reset_index(drop=True)
 
 
-# Module-level applier registry.  Ordering matters: ZORI renames/cleans
-# columns that the ACS1 and LAUS appliers (added in step 6) later inspect.
-_ZORI_APPLIER = ZoriPolicyApplier()
-
-
 @dataclass
 class AssembledPanel:
     """Result of assembling a panel from joined intermediates.
@@ -166,6 +161,7 @@ def assemble_panel(
     ctx: ExecutionContext,
     *,
     step_kind: str = "persist",
+    appliers: tuple[PanelPolicyApplier, ...] = DEFAULT_APPLIERS,
 ) -> AssembledPanel | StepResult:
     """Collect joined intermediates, canonicalize, and apply cohort selector.
 
@@ -214,73 +210,22 @@ def assemble_panel(
     extras: list[str] = []
     policy_artifacts: dict[str, PolicyApplication] = {}
 
-    # -----------------------------------------------------------------
-    # ZORI eligibility, rent_to_income, and provenance (coclab-gude.2)
-    # -----------------------------------------------------------------
-    if _ZORI_APPLIER.applies_to(target_geo_type=target_geo_type, policy=policy):
-        application = _ZORI_APPLIER.apply(
+    # Apply each policy branch (ZORI → ACS1 → LAUS) through its strategy
+    # object.  ``DEFAULT_APPLIERS`` captures the ordering invariant, so
+    # adding a new policy is one applier class plus one tuple entry.
+    for applier in appliers:
+        if not applier.applies_to(target_geo_type=target_geo_type, policy=policy):
+            continue
+        application = applier.apply(
             panel,
             policy=policy,  # type: ignore[arg-type]
             target_geo_type=target_geo_type,
         )
         panel = application.panel
         extras.extend(application.extra_columns)
-        policy_artifacts[_ZORI_APPLIER.name] = application
-
-    # -----------------------------------------------------------------
-    # ACS 1-year provenance columns (coclab-gude.3)
-    # -----------------------------------------------------------------
-    if (
-        target_geo_type == "metro"
-        and policy is not None
-        and policy.acs1 is not None
-        and policy.acs1.include
-    ):
-        has_acs1_data = (
-            "unemployment_rate_acs1" in panel.columns
-            and panel["unemployment_rate_acs1"].notna().any()
-        )
-        if has_acs1_data:
-            # The recipe pipeline normalises every dataset's year_column to
-            # the universe year during resample (acs1_vintage → year).  The
-            # panel "year" therefore IS the resolved ACS1 vintage, not a PIT
-            # year that needs a lag offset.
-            panel["acs1_vintage_used"] = panel["year"].astype(str)
-            panel["acs_products_used"] = "acs5,acs1"
-            # Null out vintage for rows where ACS1 data is missing.
-            acs1_missing = panel["unemployment_rate_acs1"].isna()
-            if acs1_missing.any():
-                panel.loc[acs1_missing, "acs1_vintage_used"] = pd.NA
-        else:
-            panel["acs1_vintage_used"] = pd.NA
-            panel["acs_products_used"] = "acs5"
-            if "unemployment_rate_acs1" not in panel.columns:
-                panel["unemployment_rate_acs1"] = np.nan
-
-    # -----------------------------------------------------------------
-    # BLS LAUS metro provenance columns
-    # -----------------------------------------------------------------
-    if (
-        target_geo_type == "metro"
-        and policy is not None
-        and policy.laus is not None
-        and policy.laus.include
-    ):
-        has_laus_data = (
-            "unemployment_rate" in panel.columns
-            and panel["unemployment_rate"].notna().any()
-        )
-        if has_laus_data:
-            # LAUS is year-aligned: each panel row's year is the LAUS reference year.
-            panel["laus_vintage_used"] = panel["year"].astype(str)
-            laus_missing = panel["unemployment_rate"].isna()
-            if laus_missing.any():
-                panel.loc[laus_missing, "laus_vintage_used"] = pd.NA
-        else:
-            panel["laus_vintage_used"] = pd.NA
-            for col in ["labor_force", "employed", "unemployed", "unemployment_rate"]:
-                if col not in panel.columns:
-                    panel[col] = np.nan
+        policy_artifacts[applier.name] = application
+        for note in application.notes:
+            _echo(ctx, f"  [{applier.name}] {note}")
 
     # Shared finalization: boundary detection, column ordering, dtypes,
     # source labeling, and column aliases.

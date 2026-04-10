@@ -20,6 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol
 
+import numpy as np
 import pandas as pd
 
 from coclab.recipe.recipe_schema import PanelPolicy
@@ -169,3 +170,116 @@ class ZoriPolicyApplier:
             extra_columns=extra_columns,
             provenance=prov,
         )
+
+
+@dataclass
+class Acs1PolicyApplier:
+    """Add ACS 1-year provenance columns to a metro panel.
+
+    Mirrors the ACS1 branch previously inlined in ``assemble_panel``.
+    The recipe pipeline already normalises every dataset's
+    ``year_column`` to the universe year during resample, so the panel
+    ``year`` column is the resolved ACS1 vintage — no PIT lag is
+    required here.
+    """
+
+    name: str = field(default="acs1", init=False)
+
+    def applies_to(
+        self,
+        *,
+        target_geo_type: str,
+        policy: PanelPolicy | None,
+    ) -> bool:
+        return (
+            target_geo_type == "metro"
+            and policy is not None
+            and policy.acs1 is not None
+            and policy.acs1.include
+        )
+
+    def apply(
+        self,
+        panel: pd.DataFrame,
+        *,
+        policy: PanelPolicy,
+        target_geo_type: str,
+    ) -> PolicyApplication:
+        has_acs1_data = (
+            "unemployment_rate_acs1" in panel.columns
+            and panel["unemployment_rate_acs1"].notna().any()
+        )
+        if has_acs1_data:
+            panel["acs1_vintage_used"] = panel["year"].astype(str)
+            panel["acs_products_used"] = "acs5,acs1"
+            # Null out vintage for rows where ACS1 data is missing.
+            acs1_missing = panel["unemployment_rate_acs1"].isna()
+            if acs1_missing.any():
+                panel.loc[acs1_missing, "acs1_vintage_used"] = pd.NA
+        else:
+            panel["acs1_vintage_used"] = pd.NA
+            panel["acs_products_used"] = "acs5"
+            if "unemployment_rate_acs1" not in panel.columns:
+                panel["unemployment_rate_acs1"] = np.nan
+        return PolicyApplication(name=self.name, panel=panel)
+
+
+@dataclass
+class LausPolicyApplier:
+    """Add BLS LAUS provenance columns to a metro panel.
+
+    Mirrors the LAUS branch previously inlined in ``assemble_panel``.
+    LAUS is year-aligned: each panel row's year is the LAUS reference
+    year, so ``laus_vintage_used`` is a direct copy of ``year``.
+    """
+
+    name: str = field(default="laus", init=False)
+
+    def applies_to(
+        self,
+        *,
+        target_geo_type: str,
+        policy: PanelPolicy | None,
+    ) -> bool:
+        return (
+            target_geo_type == "metro"
+            and policy is not None
+            and policy.laus is not None
+            and policy.laus.include
+        )
+
+    def apply(
+        self,
+        panel: pd.DataFrame,
+        *,
+        policy: PanelPolicy,
+        target_geo_type: str,
+    ) -> PolicyApplication:
+        has_laus_data = (
+            "unemployment_rate" in panel.columns
+            and panel["unemployment_rate"].notna().any()
+        )
+        if has_laus_data:
+            panel["laus_vintage_used"] = panel["year"].astype(str)
+            laus_missing = panel["unemployment_rate"].isna()
+            if laus_missing.any():
+                panel.loc[laus_missing, "laus_vintage_used"] = pd.NA
+        else:
+            panel["laus_vintage_used"] = pd.NA
+            for col in ("labor_force", "employed", "unemployed", "unemployment_rate"):
+                if col not in panel.columns:
+                    panel[col] = np.nan
+        return PolicyApplication(name=self.name, panel=panel)
+
+
+# Applier order is load-bearing: the ZORI applier renames and drops
+# columns (zori → zori_coc, drops method/geo_count) that later appliers
+# must not inspect, and ACS1 / LAUS each stamp their own vintage column
+# without interfering with one another.  Keep this tuple in sync with
+# the pre-split inline ordering; reordering changes the set of columns
+# visible at finalize_panel time.
+DEFAULT_APPLIERS: tuple[PanelPolicyApplier, ...] = (
+    ZoriPolicyApplier(),
+    Acs1PolicyApplier(),
+    LausPolicyApplier(),
+)
