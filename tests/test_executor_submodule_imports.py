@@ -33,6 +33,9 @@ EXECUTOR_SUBMODULES: list[str] = [
     "coclab.recipe.executor_inputs",
     "coclab.recipe.executor_ct_alignment",
     "coclab.recipe.executor_resample",
+    "coclab.recipe.executor_panel",
+    "coclab.recipe.executor_panel_policies",
+    "coclab.recipe.executor_persistence",
 ]
 
 

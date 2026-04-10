@@ -15,10 +15,14 @@ in coclab-anb0; the step-by-step extraction plan lives in
 from __future__ import annotations
 
 import json
+import sys
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from coclab.panel.conformance import PanelRequest, run_conformance
+from coclab.panel.diagnostics import generate_diagnostics_report
+from coclab.panel.zori_eligibility import summarize_zori_eligibility
 from coclab.recipe.executor_core import (
     ExecutionContext,
     ExecutorError,
@@ -94,8 +98,6 @@ def persist_outputs(
     # Run conformance checks on the assembled panel.  All panel-policy
     # reads are centralised in ``collect_conformance_flags`` so assembly
     # and persistence share a single policy-read path.
-    from coclab.panel.conformance import PanelRequest, run_conformance
-
     _, persist_target = _resolve_pipeline_target(ctx.recipe, plan.pipeline_id)
     conformance_flags = collect_conformance_flags(
         recipe=ctx.recipe,
@@ -114,8 +116,6 @@ def persist_outputs(
     )
     conformance_report = run_conformance(panel, panel_request)
     if not ctx.quiet:
-        import sys
-
         print(conformance_report.summary(), file=sys.stderr)
 
     # Build provenance and write with metadata
@@ -142,8 +142,6 @@ def persist_outputs(
     # Embed ZORI provenance and summary (coclab-gude.2).
     if assembled.zori_provenance is not None:
         provenance["zori"] = assembled.zori_provenance.to_dict()
-        from coclab.panel.zori_eligibility import summarize_zori_eligibility
-
         zori_summary = summarize_zori_eligibility(panel)
         if zori_summary.get("zori_integrated"):
             provenance["zori_summary"] = zori_summary
@@ -185,8 +183,6 @@ def persist_diagnostics(
     alongside the panel output.  The diagnostics file uses the same
     base name as the panel with a ``__diagnostics.json`` suffix.
     """
-    from coclab.panel.diagnostics import generate_diagnostics_report
-
     assembled = assemble_panel(plan, ctx, step_kind="persist_diagnostics")
     if isinstance(assembled, StepResult):
         return assembled
