@@ -31,13 +31,11 @@ from coclab.recipe.executor_manifest import (
     _resolve_panel_output_file,
     _resolve_pipeline_target,
 )
-from coclab.recipe.executor_panel import (
-    assemble_panel,
-    resolve_panel_aliases,
-)
+from coclab.recipe.executor_panel import assemble_panel
+from coclab.recipe.executor_panel_policies import collect_conformance_flags
 from coclab.recipe.manifest import write_manifest
 from coclab.recipe.planner import ExecutionPlan
-from coclab.recipe.recipe_schema import PanelPolicy, expand_year_spec
+from coclab.recipe.recipe_schema import expand_year_spec
 
 
 def persist_outputs(
@@ -93,71 +91,26 @@ def persist_outputs(
             ),
         )
 
-    # Run conformance checks on the assembled panel
-    from coclab.panel.conformance import (
-        ACS_MEASURE_COLUMNS,
-        LAUS_MEASURE_COLUMNS,
-        PanelRequest,
-        run_conformance,
-    )
+    # Run conformance checks on the assembled panel.  All panel-policy
+    # reads are centralised in ``collect_conformance_flags`` so assembly
+    # and persistence share a single policy-read path.
+    from coclab.panel.conformance import PanelRequest, run_conformance
 
-    # Derive measure_columns from recipe datasets so non-ACS schemas
-    # (e.g. PEP) get correct conformance checking (coclab-d0qm).
-    recipe_products = {ds.product for ds in ctx.recipe.datasets.values()}
-    if recipe_products & {"acs", "acs5"}:
-        measure_columns: list[str] | None = None  # ACS default
-    else:
-        # Non-ACS schema: check whichever known measures are in the panel.
-        known = set(ACS_MEASURE_COLUMNS) | {"population"}
-        measure_columns = [c for c in panel.columns if c in known] or None
-
-    # Resolve panel policy for ACS1 and ZORI conformance awareness.
     _, persist_target = _resolve_pipeline_target(ctx.recipe, plan.pipeline_id)
-    persist_policy: PanelPolicy | None = getattr(persist_target, "panel_policy", None)
-
-    # LAUS-aware conformance: determine include_laus before alias translation
-    # so that LAUS columns are included in the alias-translated measure_columns
-    # list (coclab-xt72).
-    include_laus = (
-        persist_policy is not None
-        and persist_policy.laus is not None
-        and persist_policy.laus.include
+    conformance_flags = collect_conformance_flags(
+        recipe=ctx.recipe,
+        target=persist_target,
+        panel=panel,
     )
-
-    # Translate measure_columns through any active column aliases so that
-    # conformance checks look for the renamed names in the finalized panel.
-    # When include_laus is True, LAUS columns are appended to base_cols before
-    # translation so they are not silently dropped by the early-return path in
-    # _effective_measure_columns (coclab-xt72).
-    _panel_aliases = resolve_panel_aliases(persist_target)
-    if _panel_aliases:
-        base_cols = list(ACS_MEASURE_COLUMNS if measure_columns is None else measure_columns)
-        if include_laus:
-            base_cols += [c for c in LAUS_MEASURE_COLUMNS if c not in base_cols]
-        measure_columns = [_panel_aliases.get(c, c) for c in base_cols]
-
-    # ACS1-aware conformance (coclab-gude.3): include acs1 product when
-    # the panel policy requests it and the column is present.
-    acs_products = ["acs5"]
-    if (
-        persist_policy is not None
-        and persist_policy.acs1 is not None
-        and persist_policy.acs1.include
-        and "unemployment_rate_acs1" in panel.columns
-    ):
-        acs_products = ["acs5", "acs1"]
-
-    # ZORI-aware conformance (coclab-gude.2).
-    include_zori = persist_policy is not None and persist_policy.zori is not None
 
     panel_request = PanelRequest(
         start_year=start_year,
         end_year=end_year,
         geo_type=target_geo_type,
-        measure_columns=measure_columns,
-        acs_products=acs_products,
-        include_zori=include_zori,
-        include_laus=include_laus,
+        measure_columns=conformance_flags.measure_columns,
+        acs_products=list(conformance_flags.acs_products),
+        include_zori=conformance_flags.include_zori,
+        include_laus=conformance_flags.include_laus,
     )
     conformance_report = run_conformance(panel, panel_request)
     if not ctx.quiet:

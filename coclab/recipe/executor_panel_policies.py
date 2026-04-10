@@ -23,7 +23,7 @@ from typing import Protocol
 import numpy as np
 import pandas as pd
 
-from coclab.recipe.recipe_schema import PanelPolicy
+from coclab.recipe.recipe_schema import PanelPolicy, RecipeV1
 
 
 @dataclass(frozen=True)
@@ -283,3 +283,93 @@ DEFAULT_APPLIERS: tuple[PanelPolicyApplier, ...] = (
     Acs1PolicyApplier(),
     LausPolicyApplier(),
 )
+
+
+@dataclass(frozen=True)
+class ConformanceFlags:
+    """Policy-derived conformance configuration for a persisted panel.
+
+    This is the one-stop translation of ``target.panel_policy`` for
+    persistence-time conformance, replacing the ~45 lines previously
+    inlined inside ``persist_outputs``.  Assembly and persistence now
+    share the single policy-read path in ``collect_conformance_flags``.
+    """
+
+    include_zori: bool
+    include_laus: bool
+    acs_products: tuple[str, ...]
+    measure_columns: list[str] | None
+
+
+def collect_conformance_flags(
+    *,
+    recipe: RecipeV1,
+    target: object,
+    panel: pd.DataFrame,
+) -> ConformanceFlags:
+    """Resolve panel-policy-driven conformance flags for the given target.
+
+    Mirrors the logic previously inlined in ``persist_outputs``: derives
+    ``measure_columns`` from recipe datasets, translates them through
+    any active column aliases (including LAUS columns when LAUS is
+    active), and decides which ACS products and which optional policy
+    slices conformance should check.  Kept byte-equivalent to the
+    pre-split code so the produced ``PanelRequest`` is identical.
+    """
+    from coclab.panel.conformance import ACS_MEASURE_COLUMNS, LAUS_MEASURE_COLUMNS
+
+    # Derive measure_columns from recipe datasets so non-ACS schemas
+    # (e.g. PEP) get correct conformance checking (coclab-d0qm).
+    recipe_products = {ds.product for ds in recipe.datasets.values()}
+    if recipe_products & {"acs", "acs5"}:
+        measure_columns: list[str] | None = None  # ACS default
+    else:
+        # Non-ACS schema: check whichever known measures are in the panel.
+        known = set(ACS_MEASURE_COLUMNS) | {"population"}
+        measure_columns = [c for c in panel.columns if c in known] or None
+
+    policy: PanelPolicy | None = getattr(target, "panel_policy", None)
+
+    # LAUS-aware conformance: determine include_laus before alias translation
+    # so that LAUS columns are included in the alias-translated measure_columns
+    # list (coclab-xt72).
+    include_laus = (
+        policy is not None
+        and policy.laus is not None
+        and policy.laus.include
+    )
+
+    # Translate measure_columns through any active column aliases so that
+    # conformance checks look for the renamed names in the finalized panel.
+    # When include_laus is True, LAUS columns are appended to base_cols before
+    # translation so they are not silently dropped by the early-return path in
+    # _effective_measure_columns (coclab-xt72).
+    aliases: dict[str, str] = {}
+    if policy is not None and policy.column_aliases:
+        aliases = dict(policy.column_aliases)
+    if aliases:
+        base_cols = list(ACS_MEASURE_COLUMNS if measure_columns is None else measure_columns)
+        if include_laus:
+            base_cols += [c for c in LAUS_MEASURE_COLUMNS if c not in base_cols]
+        measure_columns = [aliases.get(c, c) for c in base_cols]
+
+    # ACS1-aware conformance (coclab-gude.3): include acs1 product when
+    # the panel policy requests it and the column is present.
+    acs_products: tuple[str, ...] = ("acs5",)
+    if (
+        policy is not None
+        and policy.acs1 is not None
+        and policy.acs1.include
+        and "unemployment_rate_acs1" in panel.columns
+    ):
+        acs_products = ("acs5", "acs1")
+
+    # ZORI-aware conformance (coclab-gude.2).
+    include_zori = policy is not None and policy.zori is not None
+
+    return ConformanceFlags(
+        include_zori=include_zori,
+        include_laus=include_laus,
+        acs_products=acs_products,
+        measure_columns=measure_columns,
+    )
