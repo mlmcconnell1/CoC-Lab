@@ -1,18 +1,20 @@
 version: 1
-name: glynn_fox_metro_panel_2023_laus
+name: glynn_fox_metro_panel_2015_2023_laus
 description: >
-  Build a metro-year panel for the 25 Glynn/Fox metros including BLS LAUS
-  annual-average labor-market data.  LAUS estimates are published natively at
+  Build a metro-year panel for the 25 Glynn/Fox metros for 2015-2023 using
+  metro-native recipe transforms plus BLS LAUS annual-average labor-market
+  data. This starts from the base metro25-glynnfox pipeline, keeps PIT counts,
+  county PEP population totals, and tract-level ACS5 measures aggregated to
+  the Glynn/Fox metro definition, and replaces the January county ZORI add-on
+  with metro-native LAUS measures. LAUS estimates are published natively at
   metro (CBSA) geography, so the resample step uses identity (no crosswalk
-  needed).  This recipe extends the base metro25-glynnfox pipeline with the
-  labor_force, employed, unemployed, and unemployment_rate measures from the
-  BLS Local Area Unemployment Statistics (LAUS) program.
+  needed).
 
   Before running this recipe, ingest LAUS data for the required year(s):
-      coclab ingest laus-metro --year 2023
+      coclab ingest laus-metro --start-year 2015 --end-year 2023
 
 universe:
-  years: [2023]
+  range: "2015-2023"
 
 targets:
   - id: metro_panel
@@ -34,8 +36,7 @@ datasets:
     product: pit
     version: 1
     native_geometry: { type: coc }
-    years:
-      years: [2023]
+    years: "2015-2023"
     year_column: pit_year
     geo_column: coc_id
     params:
@@ -48,14 +49,19 @@ datasets:
     product: pep
     version: 1
     native_geometry: { type: county, vintage: 2020, source: tiger }
-    years:
-      years: [2023]
     year_column: year
     geo_column: county_fips
     params:
       series: postcensal
-      vintage: 2024
-    path: data/curated/pep/pep_county__v2024.parquet
+    file_set:
+      path_template: "data/curated/pep/pep_county__v{pep_vintage}.parquet"
+      segments:
+        - years: "2015-2020"
+          geometry: { type: county, vintage: 2020, source: tiger }
+          constants: { pep_vintage: 2020 }
+        - years: "2021-2023"
+          geometry: { type: county, vintage: 2020, source: tiger }
+          constants: { pep_vintage: 2024 }
 
   laus_metro:
     provider: bls
@@ -64,11 +70,14 @@ datasets:
     native_geometry:
       type: metro
       source: glynn_fox_v1
-    years:
-      years: [2023]
     year_column: year
     geo_column: metro_id
-    path: "data/curated/laus/laus_metro__A2023@Dglynnfoxv1.parquet"
+    file_set:
+      path_template: "data/curated/laus/laus_metro__A{year}@Dglynnfoxv1.parquet"
+      segments:
+        - years: "2015-2023"
+          geometry: { type: metro, source: glynn_fox_v1 }
+          constants: {}
 
   acs_tract:
     provider: census
@@ -79,7 +88,11 @@ datasets:
     file_set:
       path_template: "data/curated/acs/acs5_tracts__A{acs_end}xT{tract}.parquet"
       segments:
-        - years: "2023-2023"
+        - years: "2015-2019"
+          geometry: { type: tract, vintage: 2010 }
+          constants: { tract: 2010 }
+          year_offsets: { acs_end: 0 }
+        - years: "2020-2023"
           geometry: { type: tract, vintage: 2020 }
           constants: { tract: 2020 }
           year_offsets: { acs_end: 0 }
@@ -111,12 +124,20 @@ transforms:
       weighting:
         scheme: area
 
+  - id: tract_to_metro_2010
+    type: crosswalk
+    from: { type: tract, vintage: 2010 }
+    to: { type: metro, source: glynn_fox_v1 }
+    spec:
+      weighting:
+        scheme: area
+
 pipelines:
   - id: build_metro_panel
     target: metro_panel
     steps:
       - materialize:
-          transforms: [coc_to_metro, county_to_metro, tract_to_metro_2020]
+          transforms: [coc_to_metro, county_to_metro, tract_to_metro_2010, tract_to_metro_2020]
 
       - resample:
           dataset: pit
@@ -138,7 +159,7 @@ pipelines:
           dataset: acs_tract
           to_geometry: { type: metro, source: glynn_fox_v1 }
           method: aggregate
-          via: tract_to_metro_2020
+          via: auto
           measures:
             total_population: { aggregation: sum }
             adult_population: { aggregation: sum }
@@ -163,6 +184,13 @@ pipelines:
       - join:
           datasets: [pit, pep_county, acs_tract, laus_metro]
           join_on: [geo_id, year]
+
+filters:
+  pep_county:
+    type: temporal
+    column: reference_date
+    method: interpolate_to_month
+    month: 1
 
 validation:
   crosswalk_coverage:

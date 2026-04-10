@@ -73,6 +73,25 @@ LA_SERIES_IDS = {
 #: Expected series ID for Washington DC (GF07, state_fips=11, cbsa=47900).
 DC_UNEMPLOYMENT_RATE_SERIES = "LAUMT114790000000003"
 
+LAUS_RECIPE_YEARS = tuple(range(2015, 2024))
+
+LAUS_RECIPE_ACS_TRANSFORM_BY_YEAR = {
+    2015: "tract_to_metro_2010",
+    2019: "tract_to_metro_2010",
+    2020: "tract_to_metro_2020",
+    2023: "tract_to_metro_2020",
+}
+
+LAUS_RECIPE_PEP_PATH_BY_YEAR = {
+    2015: "data/curated/pep/pep_county__v2020.parquet",
+    2023: "data/curated/pep/pep_county__v2024.parquet",
+}
+
+LAUS_RECIPE_DATASET_PATH_BY_YEAR = {
+    2015: "data/curated/laus/laus_metro__A2015@Dglynnfoxv1.parquet",
+    2023: "data/curated/laus/laus_metro__A2023@Dglynnfoxv1.parquet",
+}
+
 
 class TestLausSeriesIds:
     @pytest.mark.parametrize("measure,expected", list(NY_SERIES_IDS.items()))
@@ -1038,7 +1057,7 @@ class TestValidateBLSLaus:
             recipe_dict = yaml.safe_load(f)
 
         recipe = load_recipe(recipe_dict)
-        assert recipe.name == "glynn_fox_metro_panel_2023_laus"
+        assert recipe.name == "glynn_fox_metro_panel_2015_2023_laus"
 
         # Verify bls/laus dataset present
         assert "laus_metro" in recipe.datasets
@@ -1051,6 +1070,46 @@ class TestValidateBLSLaus:
         assert target.panel_policy is not None
         assert target.panel_policy.laus is not None
         assert target.panel_policy.laus.include is True
+
+    def test_laus_recipe_plan_resolves_2015_2023_multiyear_inputs(self):
+        """The committed LAUS recipe should resolve the full 2015-2023 window."""
+        import yaml
+        from coclab.recipe.loader import load_recipe
+        from coclab.recipe.planner import resolve_plan
+
+        recipe_path = Path(__file__).parent.parent / "recipes" / "metro25-glynnfox-laus.yaml"
+        with open(recipe_path) as f:
+            recipe_dict = yaml.safe_load(f)
+
+        recipe = load_recipe(recipe_dict)
+        plan = resolve_plan(recipe, "build_metro_panel")
+
+        assert [task.year for task in plan.join_tasks] == list(LAUS_RECIPE_YEARS)
+        assert tuple(plan.join_tasks[0].datasets) == (
+            "pit",
+            "pep_county",
+            "acs_tract",
+            "laus_metro",
+        )
+
+        acs_tasks = {
+            task.year: task for task in plan.resample_tasks if task.dataset_id == "acs_tract"
+        }
+        pep_tasks = {
+            task.year: task for task in plan.resample_tasks if task.dataset_id == "pep_county"
+        }
+        laus_tasks = {
+            task.year: task for task in plan.resample_tasks if task.dataset_id == "laus_metro"
+        }
+
+        for year, transform_id in LAUS_RECIPE_ACS_TRANSFORM_BY_YEAR.items():
+            assert acs_tasks[year].transform_id == transform_id
+
+        for year, input_path in LAUS_RECIPE_PEP_PATH_BY_YEAR.items():
+            assert pep_tasks[year].input_path == input_path
+
+        for year, input_path in LAUS_RECIPE_DATASET_PATH_BY_YEAR.items():
+            assert laus_tasks[year].input_path == input_path
 
     def test_laus_recipe_validates_no_adapter_errors(self):
         """The LAUS example recipe should pass adapter validation with no errors."""
