@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from coclab.recipe.executor import (
+from coclab.recipe.executor_core import (
     ExecutionContext,
     ExecutorError,
     _classify_path,

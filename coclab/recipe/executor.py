@@ -8,7 +8,7 @@ deterministic order.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -17,18 +17,64 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import typer
 
-from coclab.config import StorageConfig, load_config
-from coclab.geo.ct_planning_regions import (
-    CT_LEGACY_COUNTY_VINTAGE,
-    CtPlanningRegionCrosswalk,
-)
+from coclab.config import StorageConfig
+from coclab.geo.ct_planning_regions import CT_LEGACY_COUNTY_VINTAGE
 from coclab.panel.finalize import (
     finalize_panel,
 )
 from coclab.recipe.cache import RecipeCache
+from coclab.recipe.executor_core import (
+    ExecutionContext,
+    ExecutorError,
+    PipelineResult,
+    StepResult,
+    _classify_path,
+    _echo,
+    _get_transform,
+    _record_step_note,
+)
+from coclab.recipe.executor_ct_alignment import (
+    _load_ct_county_alignment_crosswalk,
+    _needs_ct_planning_to_legacy_alignment,
+    _translate_ct_planning_values_to_legacy,
+)
+from coclab.recipe.executor_inputs import (
+    _apply_temporal_filter,
+    _filter_to_year,
+    _load_support_dataset_for_year,
+    _reject_implicit_static_broadcast,
+    _resolve_geo_column,
+    _resolve_year_column,
+    _validate_columns,
+)
+from coclab.recipe.executor_manifest import (
+    _build_manifest,
+    _build_provenance,
+    _deduplicate_assets,
+    _recipe_output_dirname,
+    _resolve_panel_output_file,
+    _resolve_pipeline_target,
+    _target_geometry_metadata,
+    resolve_pipeline_artifacts,
+)
+from coclab.recipe.executor_resample import (
+    _XWALK_JOIN_KEYS,
+    _XWALK_NON_GEO_COLS,
+    _attach_dynamic_pop_share,
+    _detect_xwalk_target_col,
+    _resample_aggregate,
+    _resample_allocate,
+    _resample_identity,
+)
+from coclab.recipe.executor_transforms import (
+    _generated_metro_transform_path,
+    _identify_coc_and_base,
+    _identify_metro_and_base,
+    _materialize_generated_metro_transform,
+    _resolve_metro_transform_df,
+    _resolve_transform_path,
+)
 from coclab.recipe.manifest import (
-    ROOT_ASSET_STORE,
-    ROOT_OUTPUT,
     AssetRecord,
     write_manifest,
 )
@@ -49,196 +95,55 @@ from coclab.recipe.recipe_schema import (
     expand_year_spec,
 )
 
-
-class ExecutorError(Exception):
-    """Raised when recipe execution fails at runtime.
-
-    Attributes
-    ----------
-    partial_results : list[PipelineResult]
-        Results collected before (and including) the failure.  When
-        ``execute_recipe`` encounters pipeline errors it continues
-        through all remaining pipelines so callers can inspect what
-        succeeded and what failed.
-    """
-
-    partial_results: list[PipelineResult]
-
-    def __init__(self, message: str, *, partial_results: list[PipelineResult] | None = None):
-        super().__init__(message)
-        self.partial_results = partial_results or []
-
-
-@dataclass
-class StepResult:
-    """Outcome of a single execution step."""
-
-    step_kind: str
-    detail: str
-    success: bool
-    error: str | None = None
-    notes: list[str] = field(default_factory=list)
-
-
-@dataclass
-class PipelineResult:
-    """Aggregate outcome for one pipeline execution."""
-
-    pipeline_id: str
-    steps: list[StepResult] = field(default_factory=list)
-
-    @property
-    def success(self) -> bool:
-        return all(s.success for s in self.steps)
-
-    @property
-    def error_count(self) -> int:
-        return sum(1 for s in self.steps if not s.success)
-
-
-@dataclass
-class ExecutionContext:
-    """Shared mutable state across step executions within a pipeline."""
-
-    project_root: Path
-    recipe: RecipeV1
-    # transform_id → resolved file path on disk
-    transform_paths: dict[str, Path] = field(default_factory=dict)
-    # (dataset_id, year) → resampled DataFrame
-    intermediates: dict[tuple[str, int], pd.DataFrame] = field(
-        default_factory=dict,
-    )
-    # Asset cache for avoiding redundant reads
-    cache: RecipeCache = field(default_factory=RecipeCache)
-    # Cached CT county bridge overlays keyed by (legacy_vintage, planning_vintage)
-    ct_county_alignment_cache: dict[tuple[int, int], CtPlanningRegionCrosswalk] = field(
-        default_factory=dict,
-    )
-    # Assets consumed during execution (for provenance manifest)
-    consumed_assets: list[AssetRecord] = field(default_factory=list)
-    # Storage roots (asset store, output) — resolved from config precedence
-    storage_config: StorageConfig | None = None
-    # Suppress progress output (for --json mode)
-    quiet: bool = False
-    # Cache: dataset_id → number of distinct resolved paths (for broadcast check)
-    _distinct_paths_cache: dict[str, int | None] = field(
-        default_factory=dict,
-    )
-
-
-def _classify_path(
-    file_path: Path,
-    ctx: ExecutionContext,
-) -> tuple[str | None, str]:
-    """Classify a file path to its logical root and compute the relative path.
-
-    Returns ``(root, relative_path)`` where *root* is ``"asset_store"``,
-    ``"output"``, or ``None`` (fallback to project-relative).
-    """
-    cfg = ctx.storage_config or load_config(project_root=ctx.project_root)
-    resolved = file_path.resolve()
-
-    # Check output root first (it may be nested inside asset store)
-    try:
-        rel = resolved.relative_to(cfg.output_root.resolve())
-        return ROOT_OUTPUT, str(rel)
-    except ValueError:
-        pass
-
-    try:
-        rel = resolved.relative_to(cfg.asset_store_root.resolve())
-        return ROOT_ASSET_STORE, str(rel)
-    except ValueError:
-        pass
-
-    # Fallback: project-relative
-    try:
-        return None, str(resolved.relative_to(ctx.project_root.resolve()))
-    except ValueError:
-        return None, str(file_path)
-
-
-def _echo(ctx: ExecutionContext, message: str) -> None:
-    """Print progress message unless quiet mode is active."""
-    if not ctx.quiet:
-        typer.echo(message)
-
-
-def _record_step_note(
-    ctx: ExecutionContext,
-    step_notes: list[str] | None,
-    message: str,
-) -> None:
-    """Attach a human- and machine-visible note to the current step."""
-    if step_notes is None or message in step_notes:
-        return
-    step_notes.append(message)
-    _echo(ctx, f"    note: {message}")
-
-
-def _get_transform(recipe: RecipeV1, transform_id: str):
-    """Return a transform by id or raise an ExecutorError."""
-    for transform in recipe.transforms:
-        if transform.id == transform_id:
-            return transform
-    raise ExecutorError(
-        f"Transform '{transform_id}' referenced in materialize step "
-        "but not found in recipe transforms."
-    )
-
-
-# The submodule re-exports below are deliberately placed *after* the
-# ExecutorError class, ExecutionContext dataclass, and the _classify_path /
-# _record_step_note / _get_transform helpers so the extracted submodules can
-# import those names back from this partially-loaded module without a cycle.
-# Each block lets the orchestration code further down (and external test
-# imports) keep referencing the moved helpers from coclab.recipe.executor.
-
-# isort: off
-# Transform artifact resolution: executor_transforms (lazy probe import in
-# coclab.recipe.probes also resolves through this re-export).
-from coclab.recipe.executor_transforms import (  # noqa: E402, F401
-    _generated_metro_transform_path,
-    _identify_coc_and_base,
-    _identify_metro_and_base,
-    _materialize_generated_metro_transform,
-    _resolve_metro_transform_df,
-    _resolve_transform_path,
-)
-
-# Connecticut planning-region → legacy-county alignment helpers.
-from coclab.recipe.executor_ct_alignment import (  # noqa: E402, F401
-    _load_ct_county_alignment_crosswalk,
-    _needs_ct_planning_to_legacy_alignment,
-    _translate_ct_planning_values_to_legacy,
-)
-
-# Dataset input prep: column resolution, year filtering, temporal filters,
-# support-dataset loading.  tests/test_recipe.py imports _apply_temporal_filter
-# directly from coclab.recipe.executor.
-from coclab.recipe.executor_inputs import (  # noqa: E402, F401
-    _apply_temporal_filter,
-    _filter_to_year,
-    _load_support_dataset_for_year,
-    _reject_implicit_static_broadcast,
-    _resolve_geo_column,
-    _resolve_year_column,
-    _validate_columns,
-)
-
-# Resample algorithms (identity / aggregate / allocate plus pop_share
-# enrichment and the crosswalk target-column detector).  Test files import
-# _detect_xwalk_target_col and _resample_identity from coclab.recipe.executor.
-from coclab.recipe.executor_resample import (  # noqa: E402, F401
-    _XWALK_JOIN_KEYS,
-    _XWALK_NON_GEO_COLS,
-    _attach_dynamic_pop_share,
-    _detect_xwalk_target_col,
-    _resample_aggregate,
-    _resample_allocate,
-    _resample_identity,
-)
-# isort: on
+# Re-export the core primitives so ``from coclab.recipe.executor import
+# ExecutorError`` (and similar imports used by tests, the CLI, and third-
+# party callers) keep resolving.  The canonical home is ``executor_core``;
+# importing from there avoids the partial-initialization cycle that used
+# to hit direct submodule imports (coclab-l6be).
+__all__ = [
+    "ExecutionContext",
+    "ExecutorError",
+    "PipelineResult",
+    "StepResult",
+    "_classify_path",
+    "_echo",
+    "_get_transform",
+    "_record_step_note",
+    # Submodule re-exports preserved for backwards compatibility.
+    "_XWALK_JOIN_KEYS",
+    "_XWALK_NON_GEO_COLS",
+    "_apply_temporal_filter",
+    "_attach_dynamic_pop_share",
+    "_build_manifest",
+    "_build_provenance",
+    "_deduplicate_assets",
+    "_detect_xwalk_target_col",
+    "_filter_to_year",
+    "_generated_metro_transform_path",
+    "_identify_coc_and_base",
+    "_identify_metro_and_base",
+    "_load_ct_county_alignment_crosswalk",
+    "_load_support_dataset_for_year",
+    "_materialize_generated_metro_transform",
+    "_needs_ct_planning_to_legacy_alignment",
+    "_recipe_output_dirname",
+    "_reject_implicit_static_broadcast",
+    "_resample_aggregate",
+    "_resample_allocate",
+    "_resample_identity",
+    "_resolve_geo_column",
+    "_resolve_metro_transform_df",
+    "_resolve_panel_output_file",
+    "_resolve_pipeline_target",
+    "_resolve_transform_path",
+    "_resolve_year_column",
+    "_target_geometry_metadata",
+    "_translate_ct_planning_values_to_legacy",
+    "_validate_columns",
+    # Orchestration entry points defined in this module.
+    "execute_recipe",
+    "resolve_pipeline_artifacts",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -640,19 +545,10 @@ def _execute_join(
 # Output persistence
 # ---------------------------------------------------------------------------
 
-# Manifest, provenance, and output-path helpers live in executor_manifest.
-# Re-export them so legacy callers (CLI command, manual docs, tests that
-# import _recipe_output_dirname) keep working unchanged.
-from coclab.recipe.executor_manifest import (  # noqa: E402, F401
-    _build_manifest,
-    _build_provenance,
-    _deduplicate_assets,
-    _recipe_output_dirname,
-    _resolve_panel_output_file,
-    _resolve_pipeline_target,
-    _target_geometry_metadata,
-    resolve_pipeline_artifacts,
-)
+# Manifest, provenance, and output-path helpers live in ``executor_manifest``
+# and are re-exported from this module's top-level import block so legacy
+# callers (CLI command, manual docs, tests that import _recipe_output_dirname)
+# keep working unchanged.
 
 
 def _apply_cohort_selector(

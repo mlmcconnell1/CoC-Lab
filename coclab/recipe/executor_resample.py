@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 
 from coclab.geo.ct_planning_regions import CT_LEGACY_COUNTY_VINTAGE
-from coclab.recipe.executor import (
+from coclab.recipe.executor_core import (
     ExecutionContext,
     ExecutorError,
     _get_transform,

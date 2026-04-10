@@ -15,7 +15,7 @@ from pathlib import Path
 
 from coclab.config import StorageConfig, load_config
 from coclab.naming import geo_panel_filename
-from coclab.recipe.executor import (
+from coclab.recipe.executor_core import (
     ExecutionContext,
     ExecutorError,
     _classify_path,

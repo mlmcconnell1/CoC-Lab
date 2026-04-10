@@ -22,7 +22,7 @@ from coclab.geo.ct_planning_regions import (
     translate_weights_planning_to_legacy,
 )
 from coclab.naming import county_path
-from coclab.recipe.executor import ExecutionContext, ExecutorError
+from coclab.recipe.executor_core import ExecutionContext, ExecutorError
 
 
 def _ct_county_alignment_cache_key(legacy_vintage: int) -> tuple[int, int]:

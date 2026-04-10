@@ -19,7 +19,7 @@ from coclab.naming import (
     tract_xwalk_path,
 )
 from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
-from coclab.recipe.executor import ExecutorError, _get_transform
+from coclab.recipe.executor_core import ExecutorError, _get_transform
 from coclab.recipe.recipe_schema import GeometryRef, RecipeV1
 
 _RECIPE_TRANSFORM_DIR = Path(".recipe_cache") / "transforms"
