@@ -93,6 +93,15 @@ LAUS_RECIPE_DATASET_PATH_BY_YEAR = {
     2023: "data/curated/laus/laus_metro__A2023@Dglynnfoxv1.parquet",
 }
 
+#: Expected ACS5 tract input paths for representative years after applying the
+#: ACS lag rule (acs_vintage = PIT_year - 1).  One entry from each tract era:
+#: 2010-era tracts cover PIT years 2015-2019; 2020-era tracts cover 2020-2023.
+#: With acs_end: -1 in the recipe, year 2015 → A2014xT2010, year 2023 → A2022xT2020.
+LAUS_RECIPE_ACS_PATH_BY_YEAR = {
+    2015: "data/curated/acs/acs5_tracts__A2014xT2010.parquet",  # 2010-era tracts
+    2023: "data/curated/acs/acs5_tracts__A2022xT2020.parquet",  # 2020-era tracts
+}
+
 
 class TestLausSeriesIds:
     @pytest.mark.parametrize("measure,expected", list(NY_SERIES_IDS.items()))
@@ -1325,6 +1334,36 @@ class TestValidateBLSLaus:
 
         for year, input_path in LAUS_RECIPE_DATASET_PATH_BY_YEAR.items():
             assert laus_tasks[year].input_path == input_path
+
+    def test_laus_recipe_plan_resolves_acs_lag_offsets(self):
+        """ACS5 inputs must use PIT-year-1 vintage (ACS lag rule, coclab-ua3i).
+
+        Regression: the recipe formerly used acs_end: 0, which resolved A2015 for
+        panel year 2015 instead of the correct A2014.  With acs_end: -1 the planner
+        must produce lag-offset paths for representative years in each tract era.
+        """
+        import yaml
+        from coclab.recipe.loader import load_recipe
+        from coclab.recipe.planner import resolve_plan
+
+        recipe_path = Path(__file__).parent.parent / "recipes" / "metro25-glynnfox-laus.yaml"
+        with open(recipe_path) as f:
+            recipe_dict = yaml.safe_load(f)
+
+        recipe = load_recipe(recipe_dict)
+        plan = resolve_plan(recipe, "build_metro_panel")
+
+        acs_tasks = {
+            task.year: task
+            for task in plan.resample_tasks
+            if task.dataset_id == "acs_tract"
+        }
+
+        for year, expected_path in LAUS_RECIPE_ACS_PATH_BY_YEAR.items():
+            assert acs_tasks[year].input_path == expected_path, (
+                f"ACS path for year {year}: expected {expected_path!r}, "
+                f"got {acs_tasks[year].input_path!r} — check acs_end year_offset in recipe"
+            )
 
     def test_laus_recipe_validates_no_adapter_errors(self):
         """The LAUS example recipe should pass adapter validation with no errors."""

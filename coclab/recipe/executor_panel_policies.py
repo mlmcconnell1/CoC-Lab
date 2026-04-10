@@ -352,6 +352,14 @@ def collect_conformance_flags(
         if include_laus:
             base_cols += [c for c in LAUS_MEASURE_COLUMNS if c not in base_cols]
         measure_columns = [aliases.get(c, c) for c in base_cols]
+    elif include_laus and measure_columns is not None:
+        # No aliases, but non-ACS path explicitly set measure_columns.
+        # _effective_measure_columns() returns measure_columns directly when it
+        # is non-None, so LAUS columns must be added here for LAUS-only recipes
+        # that have no column aliases (coclab-d9d3).
+        for col in LAUS_MEASURE_COLUMNS:
+            if col not in measure_columns:
+                measure_columns.append(col)
 
     # ACS1-aware conformance (coclab-gude.3): include acs1 product when
     # the panel policy requests it and the column is present.

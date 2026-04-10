@@ -807,6 +807,102 @@ class TestMetroPanelParity:
 
 
 # ===========================================================================
+# LAUS-only conformance flags  (coclab-d9d3)
+# ===========================================================================
+
+
+class TestLausOnlyConformanceFlags:
+    """Regression for coclab-d9d3: LAUS-only recipes without column aliases must
+    include all LAUS measure columns in collect_conformance_flags output."""
+
+    def _make_laus_only_recipe(self):
+        """Minimal RecipeV1-like object with only a BLS/LAUS dataset."""
+        from dataclasses import dataclass
+
+        @dataclass
+        class _DS:
+            product: str
+
+        @dataclass
+        class _Recipe:
+            datasets: dict
+
+        return _Recipe(datasets={"laus_metro": _DS(product="laus")})
+
+    def _make_laus_target(self, *, with_aliases: bool = False):
+        """Minimal target with panel_policy.laus.include=True."""
+        from coclab.recipe.recipe_schema import LausPolicy, PanelPolicy
+
+        aliases = (
+            {"total_population": "total_population_acs5"} if with_aliases else {}
+        )
+        policy = PanelPolicy(laus=LausPolicy(include=True), column_aliases=aliases)
+
+        from dataclasses import dataclass
+
+        @dataclass
+        class _Target:
+            panel_policy: PanelPolicy
+
+        return _Target(panel_policy=policy)
+
+    def _laus_panel(self):
+        """Minimal panel DataFrame with all four LAUS columns."""
+        import pandas as pd
+
+        return pd.DataFrame({
+            "geo_id": ["GF01", "GF01"],
+            "year": [2022, 2023],
+            "labor_force": [100_000, 101_000],
+            "employed": [95_000, 96_000],
+            "unemployed": [5_000, 5_000],
+            "unemployment_rate": [5.0, 4.95],
+        })
+
+    def test_no_aliases_includes_all_laus_columns(self):
+        """Without aliases, collect_conformance_flags must include all four LAUS
+        measure columns even when no ACS products are present (coclab-d9d3)."""
+        from coclab.panel.conformance import LAUS_MEASURE_COLUMNS
+        from coclab.recipe.executor_panel_policies import collect_conformance_flags
+
+        flags = collect_conformance_flags(
+            recipe=self._make_laus_only_recipe(),
+            target=self._make_laus_target(with_aliases=False),
+            panel=self._laus_panel(),
+        )
+
+        assert flags.include_laus is True
+        assert flags.measure_columns is not None, (
+            "measure_columns must not be None for a non-ACS LAUS-only recipe"
+        )
+        for col in LAUS_MEASURE_COLUMNS:
+            assert col in flags.measure_columns, (
+                f"LAUS column '{col}' missing from measure_columns "
+                f"{flags.measure_columns} (coclab-d9d3 regression)"
+            )
+
+    def test_with_aliases_includes_all_laus_columns(self):
+        """With column aliases, LAUS columns must survive alias translation."""
+        from coclab.panel.conformance import LAUS_MEASURE_COLUMNS
+        from coclab.recipe.executor_panel_policies import collect_conformance_flags
+
+        flags = collect_conformance_flags(
+            recipe=self._make_laus_only_recipe(),
+            target=self._make_laus_target(with_aliases=True),
+            panel=self._laus_panel(),
+        )
+
+        assert flags.include_laus is True
+        assert flags.measure_columns is not None
+        # LAUS columns are not aliased by the fixture, so they appear verbatim.
+        for col in LAUS_MEASURE_COLUMNS:
+            assert col in flags.measure_columns, (
+                f"LAUS column '{col}' missing from aliased measure_columns "
+                f"{flags.measure_columns}"
+            )
+
+
+# ===========================================================================
 # Helpers
 # ===========================================================================
 
