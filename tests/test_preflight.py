@@ -116,6 +116,36 @@ class TestProbeTemporalFilter:
         assert not r.ok
         assert "date" in r.message
 
+    def test_interpolate_requires_year_column(self):
+        filt = TemporalFilter(
+            column="reference_date",
+            method="interpolate_to_month",
+            month=1,
+        )
+        r = probe_temporal_filter(
+            ["reference_date", "population"],
+            filt,
+            "pep",
+        )
+        assert not r.ok
+        assert "requires a year column" in r.message
+
+    def test_interpolate_requires_datetime_column_type(self):
+        filt = TemporalFilter(
+            column="reference_date",
+            method="interpolate_to_month",
+            month=1,
+        )
+        r = probe_temporal_filter(
+            ["reference_date", "year", "population"],
+            filt,
+            "pep",
+            year_column="year",
+            column_types={"reference_date": "int64"},
+        )
+        assert not r.ok
+        assert "requires a datetime column" in r.message
+
 
 class TestProbeStaticBroadcast:
 
@@ -410,6 +440,147 @@ class TestRunPreflight:
         ]
         assert len(measure_findings) >= 1
         assert "pit_total" in measure_findings[0].message
+
+    def test_preflight_warns_on_nonstandard_acs_lag_offset(self, tmp_path: Path):
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(parents=True)
+        pd.DataFrame({
+            "tract_geoid": ["T1"],
+            "year": [2020],
+            "total_population": [100],
+        }).to_parquet(data_dir / "acs_2020.parquet")
+
+        recipe_data = {
+            "version": 1,
+            "name": "acs-offset-warning",
+            "universe": {"years": [2020]},
+            "targets": [
+                {"id": "tract_panel", "geometry": {"type": "tract", "vintage": 2020}},
+            ],
+            "datasets": {
+                "acs": {
+                    "provider": "census",
+                    "product": "acs5",
+                    "version": 1,
+                    "native_geometry": {"type": "tract", "vintage": 2020},
+                    "geo_column": "tract_geoid",
+                    "file_set": {
+                        "path_template": "data/acs_{acs_end}.parquet",
+                        "segments": [
+                            {
+                                "years": {"years": [2020]},
+                                "geometry": {"type": "tract", "vintage": 2020},
+                                "year_offsets": {"acs_end": 0},
+                            },
+                        ],
+                    },
+                },
+            },
+            "transforms": [],
+            "pipelines": [
+                {
+                    "id": "main",
+                    "target": "tract_panel",
+                    "steps": [
+                        {
+                            "resample": {
+                                "dataset": "acs",
+                                "to_geometry": {"type": "tract", "vintage": 2020},
+                                "method": "identity",
+                                "measures": ["total_population"],
+                            },
+                        },
+                        {
+                            "join": {
+                                "datasets": ["acs"],
+                                "join_on": ["geo_id", "year"],
+                            },
+                        },
+                    ],
+                },
+            ],
+        }
+
+        recipe = load_recipe(recipe_data)
+        report = run_preflight(recipe, project_root=tmp_path)
+        lag_findings = [
+            f for f in report.findings
+            if f.kind == FindingKind.TEMPORAL_ALIGNMENT
+        ]
+        assert len(lag_findings) == 1
+        assert lag_findings[0].severity == Severity.WARNING
+        assert "acs_end offset 0" in lag_findings[0].message
+
+    def test_preflight_blocks_bad_interpolate_to_month_source_data(self, tmp_path: Path):
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(parents=True)
+        pd.DataFrame({
+            "county_fips": ["01001", "01001"],
+            "year": [2019, 2020],
+            "reference_date": [7, 7],
+            "population": [1000, 1100],
+        }).to_parquet(data_dir / "pep.parquet")
+
+        recipe_data = {
+            "version": 1,
+            "name": "pep-interpolate-preflight",
+            "universe": {"years": [2020]},
+            "targets": [
+                {"id": "county_panel", "geometry": {"type": "county", "vintage": 2020}},
+            ],
+            "datasets": {
+                "pep": {
+                    "provider": "census",
+                    "product": "pep",
+                    "version": 1,
+                    "native_geometry": {"type": "county", "vintage": 2020},
+                    "path": "data/pep.parquet",
+                    "year_column": "year",
+                    "geo_column": "county_fips",
+                },
+            },
+            "filters": {
+                "pep": {
+                    "type": "temporal",
+                    "column": "reference_date",
+                    "method": "interpolate_to_month",
+                    "month": 1,
+                },
+            },
+            "transforms": [],
+            "pipelines": [
+                {
+                    "id": "main",
+                    "target": "county_panel",
+                    "steps": [
+                        {
+                            "resample": {
+                                "dataset": "pep",
+                                "to_geometry": {"type": "county", "vintage": 2020},
+                                "method": "identity",
+                                "measures": ["population"],
+                            },
+                        },
+                        {
+                            "join": {
+                                "datasets": ["pep"],
+                                "join_on": ["geo_id", "year"],
+                            },
+                        },
+                    ],
+                },
+            ],
+        }
+
+        recipe = load_recipe(recipe_data)
+        report = run_preflight(recipe, project_root=tmp_path)
+        temporal_findings = [
+            f for f in report.findings
+            if f.kind == FindingKind.TEMPORAL_FILTER
+        ]
+        assert len(temporal_findings) >= 1
+        assert "requires a datetime column" in temporal_findings[0].message
+        assert not report.is_ready
 
 
 # ---------------------------------------------------------------------------

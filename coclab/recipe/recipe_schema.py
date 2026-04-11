@@ -831,6 +831,29 @@ class RecipeV1(BaseModel):
                 f"Filters reference unknown dataset(s): {sorted(unknown)}. "
                 f"Available: {sorted(dataset_ids)}"
             )
+        acs_products = {"acs", "acs1", "acs5"}
+        for ds_id, filt in self.filters.items():
+            ds = self.datasets[ds_id]
+            if ds.provider == "census" and ds.product in acs_products:
+                raise ValueError(
+                    f"Dataset '{ds_id}' is {ds.provider}/{ds.product}; ACS "
+                    "estimates are annual and use a rolling reference period, "
+                    "so recipe temporal filters are not supported. Select the "
+                    "desired ACS vintage via file_set/year_offsets instead."
+                )
+            if filt.method == "interpolate_to_month":
+                if not (ds.provider == "census" and ds.product == "pep"):
+                    raise ValueError(
+                        f"Dataset '{ds_id}' is {ds.provider}/{ds.product}; "
+                        "interpolate_to_month is only supported for "
+                        "census/pep datasets."
+                    )
+                if filt.month != 1:
+                    raise ValueError(
+                        f"Dataset '{ds_id}' uses interpolate_to_month with "
+                        f"month={filt.month}; census/pep interpolation must "
+                        "target January (month=1)."
+                    )
         return self
 
     @model_validator(mode="after")

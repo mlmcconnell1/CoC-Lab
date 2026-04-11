@@ -77,11 +77,11 @@ datasets:
         - years: "2015-2019"
           geometry: { type: tract, vintage: 2010 }
           constants: { tract: 2010 }
-          year_offsets: { acs_end: 0 }
+          year_offsets: { acs_end: -1 }
         - years: "2020-2020"
           geometry: { type: tract, vintage: 2020 }
           constants: { tract: 2020 }
-          year_offsets: { acs_end: 0 }
+          year_offsets: { acs_end: -1 }
 
 transforms:
   - id: coc_to_metro

@@ -43,6 +43,7 @@ from coclab.recipe.probes import (
     get_weighted_transform_requirements,
     probe_dataset_schema,
     probe_geo_column,
+    probe_interpolate_to_month_data,
     probe_measures,
     probe_static_broadcast,
     probe_support_dataset,
@@ -81,6 +82,7 @@ class FindingKind(str, enum.Enum):
     SCHEMA_UNREADABLE = "schema_unreadable"
     MISSING_MEASURE = "missing_measure"
     TEMPORAL_FILTER = "temporal_filter"
+    TEMPORAL_ALIGNMENT = "temporal_alignment"
     MISSING_SUPPORT_DATASET = "missing_support_dataset"
     CT_COUNTY_ALIGNMENT = "ct_county_alignment"
 
@@ -370,6 +372,47 @@ def _check_adapter_validation(
     return findings
 
 
+def _check_temporal_alignment_guidance(
+    recipe: RecipeV1,
+) -> list[PreflightFinding]:
+    """Warn on nonstandard recipe lag choices that need review."""
+    findings: list[PreflightFinding] = []
+    for ds_id, ds in recipe.datasets.items():
+        if not (
+            ds.provider == "census"
+            and ds.product in {"acs", "acs5"}
+            and ds.file_set is not None
+        ):
+            continue
+        for seg in ds.file_set.segments:
+            acs_end_offset = seg.year_offsets.get("acs_end")
+            if acs_end_offset is None or acs_end_offset == -1:
+                continue
+            years = expand_year_spec(seg.years)
+            year_label = seg.years.range or seg.years.years
+            findings.append(PreflightFinding(
+                severity=Severity.WARNING,
+                kind=FindingKind.TEMPORAL_ALIGNMENT,
+                message=(
+                    f"Dataset '{ds_id}' segment {year_label} uses "
+                    f"acs_end offset {acs_end_offset}. CoC-Lab's standard "
+                    "ACS lag for PIT/January-aligned panels is acs_end=-1; "
+                    "review this offset against the ACS temporal guidance "
+                    "before building."
+                ),
+                dataset_id=ds_id,
+                years=years,
+                remediation=Remediation(
+                    hint=(
+                        "Use year_offsets: { acs_end: -1 } for the standard "
+                        "PIT/January-aligned ACS lag, or document why a "
+                        "different offset is intentional."
+                    ),
+                ),
+            ))
+    return findings
+
+
 def _check_transforms(
     recipe: RecipeV1,
     project_root: Path,
@@ -464,6 +507,7 @@ def _check_dataset_schemas(
             continue
 
         columns = schema_result.detail["columns"]
+        column_types = schema_result.detail.get("column_types", {})
         ds = recipe.datasets.get(task.dataset_id)
         if ds is None:
             continue
@@ -521,8 +565,17 @@ def _check_dataset_schemas(
         # Temporal filter
         filt = recipe.filters.get(task.dataset_id)
         if filt is not None and isinstance(filt, TemporalFilter):
+            resolved_year_column = (
+                year_result.detail.get("year_column")
+                if year_result.ok and year_result.detail is not None
+                else None
+            )
             tf_result = probe_temporal_filter(
-                columns, filt, task.dataset_id,
+                columns,
+                filt,
+                task.dataset_id,
+                year_column=resolved_year_column,
+                column_types=column_types,
             )
             if not tf_result.ok:
                 findings.append(PreflightFinding(
@@ -534,6 +587,22 @@ def _check_dataset_schemas(
                     ),
                     dataset_id=task.dataset_id,
                 ))
+            elif filt.method == "interpolate_to_month":
+                tf_data_result = probe_interpolate_to_month_data(
+                    full_path,
+                    filt,
+                    task.dataset_id,
+                )
+                if not tf_data_result.ok:
+                    findings.append(PreflightFinding(
+                        severity=Severity.ERROR,
+                        kind=FindingKind.TEMPORAL_FILTER,
+                        message=(
+                            f"Dataset '{task.dataset_id}' ({task.input_path}): "
+                            f"{tf_data_result.message}"
+                        ),
+                        dataset_id=task.dataset_id,
+                    ))
 
         # Static broadcast
         year_col_found = (
@@ -939,6 +1008,8 @@ def run_preflight(
 
     # 2. Resolve plans and collect tasks (before path checks so we
     #    can scope path checking to plan-required dataset-years only)
+    report.findings.extend(_check_temporal_alignment_guidance(recipe))
+
     all_resample_tasks: list[ResampleTask] = []
     pipeline_resample_tasks: list[tuple[str, ResampleTask]] = []
     needed_transforms: set[str] = set()

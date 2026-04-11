@@ -30,3 +30,17 @@ def test_glynn_fox_zori_recipe_covers_2015_2020():
     assert set(plan.join_tasks[0].datasets) == {"pit", "pep_county", "acs_tract", "zori_county"}
     assert raw_recipe["datasets"]["zori_county"]["path"] == "data/curated/zori/zori__county__Z2026.parquet"
     assert raw_recipe["transforms"][0]["from"]["vintage"] == 2020
+
+
+def test_glynn_fox_zori_recipe_uses_lagged_acs_paths():
+    recipe = _load_recipe(ZORI_RECIPE_PATH)
+    plan = resolve_plan(recipe, "build_metro_panel")
+
+    acs_tasks = {
+        task.year: task
+        for task in plan.resample_tasks
+        if task.dataset_id == "acs_tract"
+    }
+
+    assert acs_tasks[2015].input_path == "data/curated/acs/acs5_tracts__A2014xT2010.parquet"
+    assert acs_tasks[2020].input_path == "data/curated/acs/acs5_tracts__A2019xT2020.parquet"

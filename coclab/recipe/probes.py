@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+import pandas as pd
 import pyarrow.parquet as pq
 
 from coclab.recipe.recipe_schema import (
@@ -165,6 +166,9 @@ def probe_temporal_filter(
     columns: list[str],
     filt: TemporalFilter,
     dataset_id: str,
+    *,
+    year_column: str | None = None,
+    column_types: dict[str, str] | None = None,
 ) -> ProbeResult:
     """Check that a temporal filter's column exists in the dataset.
 
@@ -182,6 +186,27 @@ def probe_temporal_filter(
                 f"Available: {sorted(columns)}"
             ),
         )
+    if filt.method == "interpolate_to_month":
+        if year_column is None:
+            return ProbeResult(
+                ok=False,
+                message=(
+                    f"Temporal filter for '{dataset_id}': "
+                    "interpolate_to_month requires a year column. "
+                    "Set year_column on the dataset spec."
+                ),
+            )
+        if column_types is not None:
+            type_name = column_types.get(filt.column, "")
+            if type_name and "timestamp" not in type_name and "date" not in type_name:
+                return ProbeResult(
+                    ok=False,
+                    message=(
+                        f"Temporal filter for '{dataset_id}': "
+                        f"interpolate_to_month requires a datetime column "
+                        f"'{filt.column}', found parquet type '{type_name}'."
+                    ),
+                )
     return ProbeResult(ok=True)
 
 
@@ -363,12 +388,63 @@ def probe_dataset_schema(
     try:
         schema = pq.read_schema(path)
         columns = schema.names
-        return ProbeResult(ok=True, detail={"columns": columns})
+        column_types = {
+            field.name: str(field.type)
+            for field in schema
+        }
+        return ProbeResult(
+            ok=True,
+            detail={
+                "columns": columns,
+                "column_types": column_types,
+            },
+        )
     except Exception as exc:
         return ProbeResult(
             ok=False,
             message=f"Cannot read parquet schema: {exc}",
         )
+
+
+def probe_interpolate_to_month_data(
+    path: Path,
+    filt: TemporalFilter,
+    dataset_id: str,
+) -> ProbeResult:
+    """Validate interpolate_to_month against source data values."""
+    if filt.method != "interpolate_to_month":
+        return ProbeResult(ok=True)
+    try:
+        df = pd.read_parquet(path, columns=[filt.column])
+    except Exception as exc:
+        return ProbeResult(
+            ok=False,
+            message=(
+                f"Temporal filter for '{dataset_id}': cannot read column "
+                f"'{filt.column}' from {path}: {exc}"
+            ),
+        )
+    series = df[filt.column]
+    parsed = pd.to_datetime(series, errors="coerce")
+    non_null = int(series.notna().sum())
+    if non_null == 0 or int(parsed.notna().sum()) != non_null:
+        return ProbeResult(
+            ok=False,
+            message=(
+                f"Temporal filter for '{dataset_id}': "
+                f"interpolate_to_month requires a datetime column '{filt.column}'."
+            ),
+        )
+    source_months = sorted(int(month) for month in parsed.dt.month.dropna().unique())
+    if len(source_months) != 1:
+        return ProbeResult(
+            ok=False,
+            message=(
+                f"Temporal filter for '{dataset_id}': interpolate_to_month "
+                f"expects a single source month but found {source_months}."
+            ),
+        )
+    return ProbeResult(ok=True, detail={"source_month": source_months[0]})
 
 
 # ---------------------------------------------------------------------------

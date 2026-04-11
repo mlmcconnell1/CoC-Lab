@@ -1019,6 +1019,50 @@ class TestMissingDatasetPolicyValidation:
             load_recipe(data)
 
 
+class TestTemporalFilterPolicyValidation:
+
+    def test_acs_temporal_filter_rejected(self):
+        data = _minimal_recipe()
+        data["filters"] = {
+            "acs": {
+                "type": "temporal",
+                "column": "month",
+                "method": "calendar_mean",
+            },
+        }
+        with pytest.raises(RecipeLoadError, match="ACS estimates are annual"):
+            load_recipe(data)
+
+    def test_interpolate_to_month_rejected_for_non_pep_dataset(self):
+        data = _minimal_recipe()
+        data["datasets"]["acs"]["provider"] = "zillow"
+        data["datasets"]["acs"]["product"] = "zori"
+        data["filters"] = {
+            "acs": {
+                "type": "temporal",
+                "column": "date",
+                "method": "interpolate_to_month",
+                "month": 1,
+            },
+        }
+        with pytest.raises(RecipeLoadError, match="only supported for census/pep"):
+            load_recipe(data)
+
+    def test_interpolate_to_month_requires_january_for_pep(self):
+        data = _minimal_recipe()
+        data["datasets"]["acs"]["product"] = "pep"
+        data["filters"] = {
+            "acs": {
+                "type": "temporal",
+                "column": "reference_date",
+                "method": "interpolate_to_month",
+                "month": 7,
+            },
+        }
+        with pytest.raises(RecipeLoadError, match="must target January"):
+            load_recipe(data)
+
+
 # ---------------------------------------------------------------------------
 # Default adapter registration tests
 # ---------------------------------------------------------------------------
