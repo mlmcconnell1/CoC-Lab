@@ -1,0 +1,69 @@
+version: 1
+name: coc-panel-sanity
+description: >
+  Minimal synthetic CoC panel recipe fixture for contract tests against
+  persisted parquet output.
+
+universe:
+  range: "2020-2021"
+
+targets:
+  - id: coc_panel
+    geometry: { type: coc, vintage: 2025 }
+    outputs: [panel]
+
+datasets:
+  pit:
+    provider: hud
+    product: pit
+    version: 1
+    native_geometry: { type: coc }
+    years: "2020-2021"
+    year_column: pit_year
+    geo_column: coc_id
+    path: data/pit.parquet
+
+  acs_tract:
+    provider: census
+    product: acs5
+    version: 1
+    native_geometry: { type: tract, vintage: 2020 }
+    years: "2020-2021"
+    year_column: year
+    geo_column: tract_geoid
+    path: data/acs_tract.parquet
+
+transforms:
+  - id: tract_to_coc
+    type: crosswalk
+    from: { type: tract, vintage: 2020 }
+    to: { type: coc, vintage: 2025 }
+    spec:
+      weighting:
+        scheme: area
+
+pipelines:
+  - id: build_coc_panel
+    target: coc_panel
+    steps:
+      - materialize:
+          transforms: [tract_to_coc]
+
+      - resample:
+          dataset: pit
+          to_geometry: { type: coc, vintage: 2025 }
+          method: identity
+          measures: [pit_total, pit_sheltered, pit_unsheltered]
+
+      - resample:
+          dataset: acs_tract
+          to_geometry: { type: coc, vintage: 2025 }
+          method: aggregate
+          via: tract_to_coc
+          measures:
+            total_population: { aggregation: sum }
+            median_household_income: { aggregation: weighted_mean }
+
+      - join:
+          datasets: [pit, acs_tract]
+          join_on: [geo_id, year]
