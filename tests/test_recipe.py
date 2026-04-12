@@ -29,11 +29,11 @@ from coclab.recipe.executor import (
     _canonicalize_panel_for_target,
     _execute_materialize,
     _execute_resample,
-    _persist_diagnostics,
     _recipe_output_dirname,
     _resolve_transform_path,
     execute_recipe,
 )
+from coclab.recipe.loader import RecipeLoadError, load_recipe
 from coclab.recipe.manifest import (
     AssetRecord,
     RecipeManifest,
@@ -42,17 +42,13 @@ from coclab.recipe.manifest import (
     write_manifest,
 )
 from coclab.recipe.planner import (
-    ExecutionPlan,
     MaterializeTask,
     ResampleTask,
     resolve_plan,
 )
-from coclab.recipe.loader import RecipeLoadError, load_recipe
 from coclab.recipe.recipe_schema import (
     Acs1Policy,
     DatasetSpec,
-    FileSetSegment,
-    FileSetSpec,
     GeometryRef,
     PanelPolicy,
     RecipeV1,
@@ -443,7 +439,11 @@ class TestRecipeCLI:
         assert "acs_2015.parquet" in result.output or "missing" in result.output.lower()
         assert "blocker" in result.output.lower() or "Preflight" in result.output
 
-    def test_existing_path_no_missing_file_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    def test_existing_path_no_missing_file_error(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
         import yaml
 
         monkeypatch.chdir(tmp_path)
@@ -1072,8 +1072,8 @@ class TestDefaultAdapters:
     """Tests for built-in adapter registration."""
 
     def test_register_defaults_idempotent(self):
+        from coclab.recipe.adapters import dataset_registry, geometry_registry
         from coclab.recipe.default_adapters import register_defaults
-        from coclab.recipe.adapters import geometry_registry, dataset_registry
 
         geometry_registry.reset()
         dataset_registry.reset()
@@ -1085,8 +1085,8 @@ class TestDefaultAdapters:
         assert dataset_registry.registered_products() == products_1
 
     def test_geometry_types_registered(self):
-        from coclab.recipe.default_adapters import register_defaults
         from coclab.recipe.adapters import geometry_registry
+        from coclab.recipe.default_adapters import register_defaults
 
         geometry_registry.reset()
         register_defaults()
@@ -1095,8 +1095,8 @@ class TestDefaultAdapters:
         assert "county" in geometry_registry.registered_types()
 
     def test_dataset_products_registered(self):
-        from coclab.recipe.default_adapters import register_defaults
         from coclab.recipe.adapters import dataset_registry
+        from coclab.recipe.default_adapters import register_defaults
 
         dataset_registry.reset()
         register_defaults()
@@ -1220,8 +1220,8 @@ class TestDefaultAdapters:
 
     def test_recipe_integration_no_adapter_errors(self):
         """Full recipe validation with defaults registered produces no errors."""
+        from coclab.recipe.adapters import dataset_registry, geometry_registry
         from coclab.recipe.default_adapters import register_defaults
-        from coclab.recipe.adapters import geometry_registry, dataset_registry
 
         geometry_registry.reset()
         dataset_registry.reset()
@@ -1844,13 +1844,17 @@ class TestPanelPolicy:
         assert recipe.targets[0].panel_policy is None
 
     def test_panel_policy_rejects_extra_fields(self):
-        with pytest.raises(Exception):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
             PanelPolicy(unknown_field="bad")
 
     def test_zori_coverage_bounds(self):
-        with pytest.raises(Exception):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
             ZoriPolicy(min_coverage=1.5)
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             ZoriPolicy(min_coverage=-0.1)
 
     def test_full_panel_policy_round_trip(self):
@@ -4092,6 +4096,7 @@ class TestJoinPersistence:
 
     def test_panel_has_provenance_metadata(self, tmp_path: Path):
         import json as json_mod
+
         import pyarrow.parquet as pq
 
         _setup_pipeline_fixtures(tmp_path)
@@ -4544,6 +4549,7 @@ class TestProvenanceManifest:
     def test_provenance_includes_consumed_assets(self, tmp_path: Path):
         """Parquet metadata provenance includes consumed_assets."""
         import json as json_mod
+
         import pyarrow.parquet as pq
 
         _setup_pipeline_fixtures(tmp_path)
@@ -5209,6 +5215,7 @@ class TestCohortSelectorSchema:
 
     def test_top_n_requires_n(self):
         from pydantic import ValidationError
+
         from coclab.recipe.recipe_schema import CohortSelector
 
         with pytest.raises(ValidationError, match="requires 'n'"):
@@ -5220,6 +5227,7 @@ class TestCohortSelectorSchema:
 
     def test_percentile_requires_threshold(self):
         from pydantic import ValidationError
+
         from coclab.recipe.recipe_schema import CohortSelector
 
         with pytest.raises(ValidationError, match="requires 'threshold'"):
@@ -5265,8 +5273,8 @@ class TestApplyCohortSelector:
         return pd.DataFrame(rows)
 
     def test_top_n(self):
-        from coclab.recipe.recipe_schema import CohortSelector
         from coclab.recipe.executor import _apply_cohort_selector
+        from coclab.recipe.recipe_schema import CohortSelector
 
         panel = self._make_panel()
         cohort = CohortSelector(
@@ -5279,8 +5287,8 @@ class TestApplyCohortSelector:
         assert len(result) == 6
 
     def test_bottom_n(self):
-        from coclab.recipe.recipe_schema import CohortSelector
         from coclab.recipe.executor import _apply_cohort_selector
+        from coclab.recipe.recipe_schema import CohortSelector
 
         panel = self._make_panel()
         cohort = CohortSelector(
@@ -5292,8 +5300,8 @@ class TestApplyCohortSelector:
         assert len(result) == 4
 
     def test_percentile(self):
-        from coclab.recipe.recipe_schema import CohortSelector
         from coclab.recipe.executor import _apply_cohort_selector
+        from coclab.recipe.recipe_schema import CohortSelector
 
         panel = self._make_panel()
         # 0.5 threshold keeps geos >= median (300): G2=500, G5=400, G3=300
@@ -5310,8 +5318,8 @@ class TestApplyCohortSelector:
         assert "G1" not in selected_geos
 
     def test_missing_rank_column_raises(self):
+        from coclab.recipe.executor import ExecutorError, _apply_cohort_selector
         from coclab.recipe.recipe_schema import CohortSelector
-        from coclab.recipe.executor import _apply_cohort_selector, ExecutorError
 
         panel = self._make_panel()
         cohort = CohortSelector(
@@ -5321,8 +5329,8 @@ class TestApplyCohortSelector:
             _apply_cohort_selector(panel, cohort)
 
     def test_empty_reference_year_raises(self):
+        from coclab.recipe.executor import ExecutorError, _apply_cohort_selector
         from coclab.recipe.recipe_schema import CohortSelector
-        from coclab.recipe.executor import _apply_cohort_selector, ExecutorError
 
         panel = self._make_panel()
         cohort = CohortSelector(
