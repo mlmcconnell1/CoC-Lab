@@ -292,7 +292,7 @@ def _apply_temporal_filter(
         result = merged.drop(columns=prev_drop)
 
         # Restore original year column dtype (e.g. string).
-        if original_yr_dtype is object:
+        if pd.api.types.is_object_dtype(original_yr_dtype):
             result[yr_col] = result[yr_col].astype(str)
         elif original_yr_dtype != result[yr_col].dtype:
             result[yr_col] = result[yr_col].astype(original_yr_dtype)
