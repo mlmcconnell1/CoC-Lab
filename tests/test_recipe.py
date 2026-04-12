@@ -3956,6 +3956,72 @@ class TestColumnResolution:
         assert set(df["acs1_vintage"]) == {2022}
         assert list(df["val"]) == [10, 20]
 
+    def test_multi_vintage_acs1_source_errors(self, tmp_path: Path):
+        """ACS1 source with multiple distinct vintages (none matching) should error."""
+        ds_path = tmp_path / "data" / "ds.parquet"
+        ds_path.parent.mkdir(parents=True)
+        pd.DataFrame({
+            "metro_id": ["GF01", "GF02"],
+            "acs1_vintage": [2021, 2022],
+            "val": [10, 20],
+        }).to_parquet(ds_path)
+
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["provider"] = "census"
+        data["datasets"]["pit"]["product"] = "acs1"
+        data["datasets"]["pit"]["year_column"] = "acs1_vintage"
+        data["datasets"]["pit"]["geo_column"] = "metro_id"
+        recipe = load_recipe(data)
+        ctx = ExecutionContext(project_root=tmp_path, recipe=recipe)
+
+        task = ResampleTask(
+            dataset_id="pit",
+            year=2023,
+            input_path="data/ds.parquet",
+            effective_geometry=GeometryRef(type="metro"),
+            method="identity",
+            transform_id=None,
+            to_geometry=GeometryRef(type="metro", source="glynn_fox_v1"),
+            measures=["val"],
+            year_column="acs1_vintage",
+            geo_column="metro_id",
+        )
+        result = _execute_resample(task, ctx)
+        assert not result.success
+        assert "no rows after filtering acs1_vintage==2023" in result.error
+
+    def test_non_acs1_dataset_no_lagged_tolerance(self, tmp_path: Path):
+        """Non-ACS1 dataset with acs1_vintage column should not get lagged tolerance."""
+        ds_path = tmp_path / "data" / "ds.parquet"
+        ds_path.parent.mkdir(parents=True)
+        pd.DataFrame({
+            "coc_id": ["NY-600"],
+            "acs1_vintage": [2022],
+            "val": [10],
+        }).to_parquet(ds_path)
+
+        data = _recipe_with_pipeline()
+        data["datasets"]["pit"]["year_column"] = "acs1_vintage"
+        data["datasets"]["pit"]["geo_column"] = "coc_id"
+        recipe = load_recipe(data)
+        ctx = ExecutionContext(project_root=tmp_path, recipe=recipe)
+
+        task = ResampleTask(
+            dataset_id="pit",
+            year=2023,
+            input_path="data/ds.parquet",
+            effective_geometry=GeometryRef(type="coc"),
+            method="identity",
+            transform_id=None,
+            to_geometry=GeometryRef(type="coc", vintage=2025),
+            measures=["val"],
+            year_column="acs1_vintage",
+            geo_column="coc_id",
+        )
+        result = _execute_resample(task, ctx)
+        assert not result.success
+        assert "no rows after filtering acs1_vintage==2023" in result.error
+
     def test_ambiguous_geo_column_errors(self, tmp_path: Path):
         """Multiple geo-ID candidate columns without declaration should error."""
         ds_path = tmp_path / "data" / "ds.parquet"
