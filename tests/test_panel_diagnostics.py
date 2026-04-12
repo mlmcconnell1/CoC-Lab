@@ -108,6 +108,59 @@ class TestCoverageSummary:
 
         assert result.empty
 
+    def test_falls_back_to_zori_coverage_ratio(self):
+        """Use zori coverage when generic coverage_ratio is unavailable."""
+        df = pd.DataFrame(
+            {
+                "year": [2023, 2023, 2024, 2024],
+                "zori_coverage_ratio": [0.95, 0.85, 0.92, 0.88],
+            }
+        )
+
+        result = coverage_summary(df)
+
+        assert len(result) == 2
+        row_2023 = result[result["year"] == 2023].iloc[0]
+        assert row_2023["count"] == 2
+        assert row_2023["low_coverage_count"] == 1
+        assert row_2023["mean"] == pytest.approx(0.90)
+
+    def test_prefers_generic_coverage_ratio_when_both_exist(self):
+        """Generic coverage_ratio remains the default when both columns exist."""
+        df = pd.DataFrame(
+            {
+                "year": [2024, 2024],
+                "coverage_ratio": [0.80, 0.90],
+                "zori_coverage_ratio": [0.98, 0.99],
+            }
+        )
+
+        result = coverage_summary(df)
+
+        assert len(result) == 1
+        row = result.iloc[0]
+        assert row["mean"] == pytest.approx(0.85)
+        assert row["low_coverage_count"] == 1
+
+    def test_all_null_coverage_skips_without_warning(self, caplog):
+        """No warning should be emitted when a panel simply lacks usable coverage."""
+        df = pd.DataFrame(
+            {
+                "year": [2023, 2024],
+                "coverage_ratio": [None, None],
+                "zori_coverage_ratio": [None, None],
+            }
+        )
+
+        with caplog.at_level("WARNING"):
+            result = coverage_summary(df)
+
+        assert result.empty
+        assert not any(
+            "No non-null coverage_ratio values in panel" in record.message
+            for record in caplog.records
+        )
+
     def test_single_year(self):
         """Test summary with single year."""
         df = pd.DataFrame(

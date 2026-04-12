@@ -41,17 +41,49 @@ from coclab.analysis_geo import infer_geo_type, resolve_geo_col
 
 logger = logging.getLogger(__name__)
 
+_COVERAGE_SUMMARY_COLUMNS: list[str] = [
+    "year",
+    "count",
+    "mean",
+    "std",
+    "min",
+    "q25",
+    "median",
+    "q75",
+    "max",
+    "low_coverage_count",
+]
+
+_COVERAGE_CANDIDATE_COLUMNS: tuple[str, ...] = (
+    "coverage_ratio",
+    "zori_coverage_ratio",
+)
+
+
+def _empty_coverage_summary() -> pd.DataFrame:
+    """Return an empty coverage summary with the canonical schema."""
+    return pd.DataFrame(columns=_COVERAGE_SUMMARY_COLUMNS)
+
+
+def _resolve_coverage_column(panel_df: pd.DataFrame) -> str | None:
+    """Choose the most relevant populated coverage column for diagnostics."""
+    for candidate in _COVERAGE_CANDIDATE_COLUMNS:
+        if candidate in panel_df.columns and panel_df[candidate].notna().any():
+            return candidate
+    return None
+
 
 def coverage_summary(panel_df: pd.DataFrame) -> pd.DataFrame:
     """Compute coverage ratio statistics by year.
 
     Analyzes how well ACS measures cover each CoC over years by computing
-    descriptive statistics of the coverage_ratio column.
+    descriptive statistics of the available coverage column.
 
     Parameters
     ----------
     panel_df : pd.DataFrame
-        Panel DataFrame with columns: year, coverage_ratio.
+        Panel DataFrame with columns: year plus either coverage_ratio or
+        zori_coverage_ratio.
 
     Returns
     -------
@@ -73,66 +105,32 @@ def coverage_summary(panel_df: pd.DataFrame) -> pd.DataFrame:
     If the panel is empty or lacks the required columns, returns an empty
     DataFrame with the expected columns.
     """
-    required_cols = {"year", "coverage_ratio"}
     if panel_df is None or panel_df.empty:
         logger.warning("Empty panel provided to coverage_summary")
-        return pd.DataFrame(
-            columns=[
-                "year",
-                "count",
-                "mean",
-                "std",
-                "min",
-                "q25",
-                "median",
-                "q75",
-                "max",
-                "low_coverage_count",
-            ]
-        )
+        return _empty_coverage_summary()
 
-    if not required_cols.issubset(panel_df.columns):
-        missing = required_cols - set(panel_df.columns)
-        logger.debug(f"Skipping coverage_summary (columns not present: {missing})")
-        return pd.DataFrame(
-            columns=[
-                "year",
-                "count",
-                "mean",
-                "std",
-                "min",
-                "q25",
-                "median",
-                "q75",
-                "max",
-                "low_coverage_count",
-            ]
-        )
+    if "year" not in panel_df.columns:
+        logger.debug("Skipping coverage_summary (column not present: year)")
+        return _empty_coverage_summary()
 
-    # Filter to rows with non-null coverage_ratio
-    df = panel_df[panel_df["coverage_ratio"].notna()].copy()
+    coverage_col = _resolve_coverage_column(panel_df)
+    if coverage_col is None:
+        logger.debug(
+            "Skipping coverage_summary (no populated coverage columns among %s)",
+            _COVERAGE_CANDIDATE_COLUMNS,
+        )
+        return _empty_coverage_summary()
+
+    df = panel_df[panel_df[coverage_col].notna()].copy()
 
     if df.empty:
-        logger.warning("No non-null coverage_ratio values in panel")
-        return pd.DataFrame(
-            columns=[
-                "year",
-                "count",
-                "mean",
-                "std",
-                "min",
-                "q25",
-                "median",
-                "q75",
-                "max",
-                "low_coverage_count",
-            ]
-        )
+        logger.debug("Skipping coverage_summary (no non-null %s values in panel)", coverage_col)
+        return _empty_coverage_summary()
 
     # Compute statistics by year
     results = []
     for year, group in df.groupby("year"):
-        coverage = group["coverage_ratio"]
+        coverage = group[coverage_col]
         results.append(
             {
                 "year": year,
