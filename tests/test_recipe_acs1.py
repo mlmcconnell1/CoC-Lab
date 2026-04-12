@@ -199,6 +199,19 @@ class TestCommittedACS1Recipe:
             == "data/curated/acs/acs5_tracts__A2022xT2020.parquet"
         )
 
+    def test_plan_uses_lagged_acs1_path(self):
+        with ACS1_RECIPE_PATH.open(encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        recipe = load_recipe(data)
+        plan = resolve_plan(recipe, "build_metro_panel")
+
+        acs1_tasks = [t for t in plan.resample_tasks if t.dataset_id == "acs1_metro"]
+        assert len(acs1_tasks) == 1
+        assert (
+            acs1_tasks[0].input_path
+            == "data/curated/acs/acs1_metro__A2022@Dglynnfoxv1.parquet"
+        )
+
     def test_join_includes_acs1(self):
         with ACS1_RECIPE_PATH.open(encoding="utf-8") as f:
             data = yaml.safe_load(f)

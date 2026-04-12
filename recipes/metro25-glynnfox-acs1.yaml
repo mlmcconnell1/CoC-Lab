@@ -60,11 +60,14 @@ datasets:
     native_geometry:
       type: metro
       source: glynn_fox_v1
-    years:
-      years: [2023]
     year_column: acs1_vintage
     geo_column: metro_id
-    path: "data/curated/acs/acs1_metro__A2023@Dglynnfoxv1.parquet"
+    file_set:
+      path_template: "data/curated/acs/acs1_metro__A{acs_end}@Dglynnfoxv1.parquet"
+      segments:
+        - years: "2023-2023"
+          geometry: { type: metro, source: glynn_fox_v1 }
+          year_offsets: { acs_end: -1 }
 
   acs_tract:
     provider: census
