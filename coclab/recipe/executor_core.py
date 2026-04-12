@@ -94,6 +94,10 @@ class ExecutionContext:
     intermediates: dict[tuple[str, int], pd.DataFrame] = field(
         default_factory=dict,
     )
+    # (dataset_id, year) → resolved per-dataset metadata such as ACS vintages
+    dataset_year_metadata: dict[tuple[str, int], dict[str, str]] = field(
+        default_factory=dict,
+    )
     # Asset cache for avoiding redundant reads
     cache: RecipeCache = field(default_factory=RecipeCache)
     # Cached CT county bridge overlays keyed by (legacy_vintage, planning_vintage)

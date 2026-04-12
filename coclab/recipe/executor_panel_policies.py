@@ -20,9 +20,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol
 
-import numpy as np
 import pandas as pd
 
+from coclab.panel.conformance import (
+    ACS1_MEASURE_COLUMNS,
+    ACS_MEASURE_COLUMNS,
+    LAUS_MEASURE_COLUMNS,
+)
 from coclab.recipe.recipe_schema import PanelPolicy, RecipeV1
 
 
@@ -191,12 +195,7 @@ class Acs1PolicyApplier:
         target_geo_type: str,
         policy: PanelPolicy | None,
     ) -> bool:
-        return (
-            target_geo_type == "metro"
-            and policy is not None
-            and policy.acs1 is not None
-            and policy.acs1.include
-        )
+        return target_geo_type == "metro"
 
     def apply(
         self,
@@ -205,23 +204,18 @@ class Acs1PolicyApplier:
         policy: PanelPolicy,
         target_geo_type: str,
     ) -> PolicyApplication:
-        has_acs1_data = (
-            "unemployment_rate_acs1" in panel.columns
-            and panel["unemployment_rate_acs1"].notna().any()
-        )
-        if has_acs1_data:
-            vintage_source = "acs1_vintage" if "acs1_vintage" in panel.columns else "year"
-            panel["acs1_vintage_used"] = panel[vintage_source].astype("string")
-            panel["acs_products_used"] = "acs5,acs1"
-            # Null out vintage for rows where ACS1 data is missing.
+        if (
+            "unemployment_rate_acs1" not in panel.columns
+            and "acs1_vintage" not in panel.columns
+        ):
+            return PolicyApplication(name=self.name, panel=panel)
+
+        vintage_source = "acs1_vintage" if "acs1_vintage" in panel.columns else "year"
+        panel["acs1_vintage_used"] = panel[vintage_source].astype("string")
+        if "unemployment_rate_acs1" in panel.columns:
             acs1_missing = panel["unemployment_rate_acs1"].isna()
             if acs1_missing.any():
                 panel.loc[acs1_missing, "acs1_vintage_used"] = pd.NA
-        else:
-            panel["acs1_vintage_used"] = pd.NA
-            panel["acs_products_used"] = "acs5"
-            if "unemployment_rate_acs1" not in panel.columns:
-                panel["unemployment_rate_acs1"] = np.nan
         if "acs1_vintage" in panel.columns:
             panel = panel.drop(columns=["acs1_vintage"])
         return PolicyApplication(name=self.name, panel=panel)
@@ -244,12 +238,7 @@ class LausPolicyApplier:
         target_geo_type: str,
         policy: PanelPolicy | None,
     ) -> bool:
-        return (
-            target_geo_type == "metro"
-            and policy is not None
-            and policy.laus is not None
-            and policy.laus.include
-        )
+        return target_geo_type == "metro"
 
     def apply(
         self,
@@ -258,20 +247,14 @@ class LausPolicyApplier:
         policy: PanelPolicy,
         target_geo_type: str,
     ) -> PolicyApplication:
-        has_laus_data = (
-            "unemployment_rate" in panel.columns
-            and panel["unemployment_rate"].notna().any()
-        )
-        if has_laus_data:
-            panel["laus_vintage_used"] = panel["year"].astype(str)
-            laus_missing = panel["unemployment_rate"].isna()
-            if laus_missing.any():
-                panel.loc[laus_missing, "laus_vintage_used"] = pd.NA
-        else:
-            panel["laus_vintage_used"] = pd.NA
-            for col in ("labor_force", "employed", "unemployed", "unemployment_rate"):
-                if col not in panel.columns:
-                    panel[col] = np.nan
+        laus_cols = [col for col in LAUS_MEASURE_COLUMNS if col in panel.columns]
+        if not laus_cols:
+            return PolicyApplication(name=self.name, panel=panel)
+
+        panel["laus_vintage_used"] = panel["year"].astype("string")
+        laus_missing = panel[laus_cols].isna().all(axis=1)
+        if laus_missing.any():
+            panel.loc[laus_missing, "laus_vintage_used"] = pd.NA
         return PolicyApplication(name=self.name, panel=panel)
 
 
@@ -319,16 +302,22 @@ def collect_conformance_flags(
     slices conformance should check.  Kept byte-equivalent to the
     pre-split code so the produced ``PanelRequest`` is identical.
     """
-    from coclab.panel.conformance import ACS_MEASURE_COLUMNS, LAUS_MEASURE_COLUMNS
-
     # Derive measure_columns from recipe datasets so non-ACS schemas
     # (e.g. PEP) get correct conformance checking (coclab-d0qm).
     recipe_products = {ds.product for ds in recipe.datasets.values()}
-    if recipe_products & {"acs", "acs5"}:
-        measure_columns: list[str] | None = None  # ACS default
+    acs_products: tuple[str, ...] = tuple(
+        product
+        for product in ("acs5", "acs1")
+        if (
+            (product == "acs5" and recipe_products & {"acs", "acs5"})
+            or (product == "acs1" and "acs1" in recipe_products)
+        )
+    )
+    if acs_products:
+        measure_columns: list[str] | None = None
     else:
         # Non-ACS schema: check whichever known measures are in the panel.
-        known = set(ACS_MEASURE_COLUMNS) | {"population"}
+        known = set(ACS_MEASURE_COLUMNS) | set(ACS1_MEASURE_COLUMNS) | {"population"}
         measure_columns = [c for c in panel.columns if c in known] or None
 
     policy: PanelPolicy | None = getattr(target, "panel_policy", None)
@@ -351,7 +340,14 @@ def collect_conformance_flags(
     if policy is not None and policy.column_aliases:
         aliases = dict(policy.column_aliases)
     if aliases:
-        base_cols = list(ACS_MEASURE_COLUMNS if measure_columns is None else measure_columns)
+        if measure_columns is None:
+            base_cols: list[str] = []
+            if "acs5" in acs_products:
+                base_cols.extend(ACS_MEASURE_COLUMNS)
+            if "acs1" in acs_products:
+                base_cols.extend(ACS1_MEASURE_COLUMNS)
+        else:
+            base_cols = list(measure_columns)
         if include_laus:
             base_cols += [c for c in LAUS_MEASURE_COLUMNS if c not in base_cols]
         measure_columns = [aliases.get(c, c) for c in base_cols]
@@ -363,17 +359,6 @@ def collect_conformance_flags(
         for col in LAUS_MEASURE_COLUMNS:
             if col not in measure_columns:
                 measure_columns.append(col)
-
-    # ACS1-aware conformance (coclab-gude.3): include acs1 product when
-    # the panel policy requests it and the column is present.
-    acs_products: tuple[str, ...] = ("acs5",)
-    if (
-        policy is not None
-        and policy.acs1 is not None
-        and policy.acs1.include
-        and "unemployment_rate_acs1" in panel.columns
-    ):
-        acs_products = ("acs5", "acs1")
 
     # ZORI-aware conformance (coclab-gude.2).
     include_zori = policy is not None and policy.zori is not None

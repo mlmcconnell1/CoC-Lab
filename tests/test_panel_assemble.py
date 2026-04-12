@@ -481,7 +481,7 @@ class TestBuildPanel:
 
         # Default policy: boundary = year, acs = year - 1
         assert result["boundary_vintage_used"].iloc[0] == "2024"
-        assert result["acs_vintage_used"].iloc[0] == "2023"
+        assert result["acs5_vintage_used"].iloc[0] == "2023"
         assert result["alignment_type"].iloc[0] == "period_faithful"
         assert result["weighting_method"].iloc[0] == "population"
 
@@ -639,7 +639,7 @@ class TestSavePanel:
                 "pit_sheltered": [800, 850, 30000, 32000],
                 "pit_unsheltered": [400, 450, 15000, 16000],
                 "boundary_vintage_used": ["2023", "2024", "2023", "2024"],
-                "acs_vintage_used": ["2022", "2023", "2022", "2023"],
+                "acs5_vintage_used": ["2022", "2023", "2022", "2023"],
                 "alignment_type": ["period_faithful"] * 4,
                 "weighting_method": ["population"] * 4,
                 "total_population": [500000, 505000, 10000000, 10100000],
@@ -725,7 +725,7 @@ class TestPanelColumns:
             "pit_sheltered",
             "pit_unsheltered",
             "boundary_vintage_used",
-            "acs_vintage_used",
+            "acs5_vintage_used",
             "alignment_type",
             "weighting_method",
             "total_population",

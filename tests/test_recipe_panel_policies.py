@@ -225,6 +225,7 @@ def _setup_acs1_policy_fixtures(tmp_path: Path) -> None:
     pd.DataFrame({
         "metro_id": ["GF01", "GF02"],
         "year": [2023, 2023],
+        "acs_vintage": [2022, 2022],
         "total_population": [5000000, 3000000],
         "median_household_income": [70000.0, 55000.0],
     }).to_parquet(data_dir / "metro_acs5.parquet")
@@ -257,6 +258,17 @@ class TestZoriPanelPolicy:
         assert "zori_is_eligible" in panel.columns
         assert "zori_excluded_reason" in panel.columns
         assert "rent_to_income" in panel.columns
+
+    def test_zori_recipe_omits_unused_acs_provenance(self, tmp_path: Path):
+        """Recipes without ACS inputs should not emit ACS provenance columns."""
+        _setup_zori_fixtures(tmp_path)
+        recipe = load_recipe(_zori_recipe_dict())
+        execute_recipe(recipe, project_root=tmp_path)
+
+        panel = pd.read_parquet(_find_panel_output(tmp_path))
+
+        assert "acs5_vintage_used" not in panel.columns
+        assert "acs1_vintage_used" not in panel.columns
 
     def test_zori_eligibility_applied_correctly(self, tmp_path: Path):
         """COC1 (coverage 0.95) eligible, COC2 (coverage 0.50) ineligible at 0.80 threshold."""
@@ -519,8 +531,8 @@ class TestZoriCountyNativeAggregatePath:
 class TestAcs1PanelPolicy:
     """Recipe executor populates ACS1 provenance when panel_policy.acs1 is set."""
 
-    def test_acs_products_used_set(self, tmp_path: Path):
-        """acs_products_used is 'acs5,acs1' when ACS1 data is present."""
+    def test_acs5_vintage_used_set(self, tmp_path: Path):
+        """acs5_vintage_used matches the resolved ACS5 input vintage."""
         _setup_acs1_policy_fixtures(tmp_path)
         recipe = load_recipe(_acs1_policy_recipe_dict())
         results = execute_recipe(recipe, project_root=tmp_path)
@@ -529,8 +541,8 @@ class TestAcs1PanelPolicy:
         panel_path = _find_panel_output(tmp_path)
         panel = pd.read_parquet(panel_path)
 
-        assert "acs_products_used" in panel.columns
-        assert (panel["acs_products_used"] == "acs5,acs1").all()
+        assert "acs5_vintage_used" in panel.columns
+        assert (panel["acs5_vintage_used"] == "2022").all()
 
     def test_acs1_vintage_used_set(self, tmp_path: Path):
         """acs1_vintage_used matches the resolved ACS1 input vintage."""
@@ -592,7 +604,7 @@ class TestAcs1PanelPolicy:
         # GF01 has ACS1 data, GF02 does not
         assert gf01["acs1_vintage_used"].notna().all()
         assert gf02["acs1_vintage_used"].isna().all()
-        assert (panel["acs_products_used"] == "acs5,acs1").all()
+        assert (panel["acs5_vintage_used"] == "2022").all()
 
     def test_acs1_vintage_matches_input_not_lag(self, tmp_path: Path):
         """acs1_vintage_used reflects the resolved ACS1 input vintage,
@@ -712,25 +724,37 @@ def _setup_coc_parity_fixtures(tmp_path: Path) -> None:
     pd.DataFrame({
         "coc_id": ["COC1", "COC2", "COC1", "COC2"],
         "year": [2020, 2020, 2021, 2021],
+        "acs_vintage": [2019, 2019, 2020, 2020],
         "total_population": [50000, 80000, 51000, 82000],
         "median_household_income": [60000.0, 48000.0, 62000.0, 50000.0],
     }).to_parquet(data_dir / "acs.parquet")
 
 
 class TestCocPanelParity:
-    """Recipe-native CoC panel matches legacy build_panel output contract."""
+    """Recipe-native CoC panel uses a recipe-driven schema."""
 
     def test_coc_panel_columns_present(self, tmp_path: Path):
-        """Canonical CoC columns are present in recipe-built panel."""
-        from coclab.panel.finalize import COC_PANEL_COLUMNS
+        """Only recipe-driven columns are present in recipe-built panel."""
 
         _setup_coc_parity_fixtures(tmp_path)
         recipe = load_recipe(_coc_recipe_dict())
         execute_recipe(recipe, project_root=tmp_path)
 
         panel = pd.read_parquet(_find_panel_output(tmp_path))
-        for col in COC_PANEL_COLUMNS:
-            assert col in panel.columns, f"Missing canonical column: {col}"
+        expected = {
+            "coc_id",
+            "geo_type",
+            "geo_id",
+            "year",
+            "pit_total",
+            "boundary_vintage_used",
+            "acs5_vintage_used",
+            "total_population",
+            "median_household_income",
+            "boundary_changed",
+            "source",
+        }
+        assert set(panel.columns) == expected
 
     def test_coc_panel_shape(self, tmp_path: Path):
         """2 CoCs x 2 years = 4 rows."""
@@ -779,21 +803,33 @@ class TestCocPanelParity:
 
 
 class TestMetroPanelParity:
-    """Recipe-native metro panel matches legacy build_panel output contract."""
+    """Recipe-native metro panel uses a recipe-driven schema."""
 
     def test_metro_panel_columns_present(self, tmp_path: Path):
-        """Canonical metro columns are present in recipe-built panel."""
-        from coclab.panel.finalize import METRO_PANEL_COLUMNS
+        """Only recipe-driven metro columns are present."""
 
         _setup_acs1_policy_fixtures(tmp_path)
         recipe = load_recipe(_acs1_policy_recipe_dict())
         execute_recipe(recipe, project_root=tmp_path)
 
         panel = pd.read_parquet(_find_panel_output(tmp_path))
-        for col in METRO_PANEL_COLUMNS:
-            assert col in panel.columns, (
-                f"Missing canonical metro column: {col}"
-            )
+        expected = {
+            "metro_id",
+            "metro_name",
+            "geo_type",
+            "geo_id",
+            "year",
+            "pit_total",
+            "definition_version_used",
+            "acs5_vintage_used",
+            "total_population",
+            "median_household_income",
+            "unemployment_rate_acs1",
+            "acs1_vintage_used",
+            "boundary_changed",
+            "source",
+        }
+        assert set(panel.columns) == expected
 
     def test_metro_geo_metadata(self, tmp_path: Path):
         """Metro panel has geo_type, metro_id, metro_name columns."""

@@ -18,7 +18,11 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
-from coclab.panel.finalize import finalize_panel
+from coclab.panel.finalize import (
+    ZORI_COLUMNS,
+    ZORI_PROVENANCE_COLUMNS,
+    finalize_panel,
+)
 from coclab.recipe.executor_core import (
     ExecutionContext,
     ExecutorError,
@@ -156,6 +160,160 @@ class AssembledPanel:
         return app.provenance if app is not None else None
 
 
+_RECIPE_COC_COLUMN_ORDER: list[str] = [
+    "coc_id",
+    "geo_type",
+    "geo_id",
+    "year",
+    "pit_total",
+    "pit_sheltered",
+    "pit_unsheltered",
+    "boundary_vintage_used",
+    "acs5_vintage_used",
+    "tract_vintage_used",
+    "alignment_type",
+    "weighting_method",
+    "total_population",
+    "adult_population",
+    "population_below_poverty",
+    "median_household_income",
+    "median_gross_rent",
+    "population",
+    "coverage_ratio",
+    "boundary_changed",
+    "source",
+]
+
+_RECIPE_METRO_COLUMN_ORDER: list[str] = [
+    "metro_id",
+    "metro_name",
+    "geo_type",
+    "geo_id",
+    "year",
+    "pit_total",
+    "pit_sheltered",
+    "pit_unsheltered",
+    "definition_version_used",
+    "acs5_vintage_used",
+    "acs1_vintage_used",
+    "tract_vintage_used",
+    "laus_vintage_used",
+    "alignment_type",
+    "weighting_method",
+    "total_population",
+    "adult_population",
+    "population_below_poverty",
+    "median_household_income",
+    "median_gross_rent",
+    "population",
+    "unemployment_rate_acs1",
+    "labor_force",
+    "employed",
+    "unemployed",
+    "unemployment_rate",
+    "coverage_ratio",
+    "boundary_changed",
+    "source",
+]
+
+
+def _recipe_column_order(
+    *,
+    geo_type: str,
+    include_zori: bool,
+    extra_columns: list[str] | None,
+) -> list[str]:
+    """Return the preferred recipe output column order."""
+    columns = (
+        list(_RECIPE_METRO_COLUMN_ORDER)
+        if geo_type == "metro"
+        else list(_RECIPE_COC_COLUMN_ORDER)
+    )
+    if include_zori:
+        columns += ZORI_COLUMNS + ZORI_PROVENANCE_COLUMNS
+    if extra_columns:
+        for col in extra_columns:
+            if col not in columns:
+                columns.append(col)
+    return columns
+
+
+def _resolve_single_product_value(
+    *,
+    values: set[str],
+    label: str,
+    year: int,
+) -> str:
+    """Return the single product value for a year or raise on conflicts."""
+    if not values:
+        raise ExecutorError(
+            f"Year {year}: no resolved value found for required {label}. "
+            "Use a canonical curated filename or include the source vintage "
+            f"column so {label} can be derived."
+        )
+    if len(values) > 1:
+        raise ExecutorError(
+            f"Year {year}: multiple distinct {label} values contribute to one panel "
+            f"slice: {sorted(values)}. Use a single product vintage per year."
+        )
+    return next(iter(values))
+
+
+def _stamp_recipe_acs5_provenance(
+    panel: pd.DataFrame,
+    *,
+    plan: ExecutionPlan,
+    ctx: ExecutionContext,
+) -> pd.DataFrame:
+    """Annotate recipe-built rows with ACS5 and tract vintages when present."""
+    if panel.empty or "year" not in panel.columns:
+        return panel
+
+    result = panel.copy()
+    join_map = {task.year: task.datasets for task in plan.join_tasks}
+    resample_map = {(task.dataset_id, task.year): task for task in plan.resample_tasks}
+
+    for year, datasets in join_map.items():
+        acs5_vintages: set[str] = set()
+        tract_vintages: set[str] = set()
+        saw_acs5 = False
+
+        for dataset_id in datasets:
+            ds = ctx.recipe.datasets.get(dataset_id)
+            if ds is None or ds.provider != "census" or ds.product not in {"acs", "acs5"}:
+                continue
+            saw_acs5 = True
+            metadata = ctx.dataset_year_metadata.get((dataset_id, year), {})
+            acs5_vintage = metadata.get("acs5_vintage_used")
+            if acs5_vintage is not None:
+                acs5_vintages.add(acs5_vintage)
+            task = resample_map.get((dataset_id, year))
+            if (
+                task is not None
+                and task.effective_geometry.type == "tract"
+                and task.effective_geometry.vintage is not None
+            ):
+                tract_vintages.add(str(task.effective_geometry.vintage))
+
+        if not saw_acs5:
+            continue
+
+        year_mask = result["year"] == year
+        result.loc[year_mask, "acs5_vintage_used"] = _resolve_single_product_value(
+            values=acs5_vintages,
+            label="acs5_vintage_used",
+            year=year,
+        )
+        if tract_vintages:
+            result.loc[year_mask, "tract_vintage_used"] = _resolve_single_product_value(
+                values=tract_vintages,
+                label="tract_vintage_used",
+                year=year,
+            )
+
+    return result
+
+
 def assemble_panel(
     plan: ExecutionPlan,
     ctx: ExecutionContext,
@@ -197,6 +355,15 @@ def assemble_panel(
 
     panel = pd.concat(frames, ignore_index=True)
     panel = canonicalize_panel_for_target(panel, target.geometry)
+    try:
+        panel = _stamp_recipe_acs5_provenance(panel, plan=plan, ctx=ctx)
+    except ExecutorError as exc:
+        return StepResult(
+            step_kind=step_kind,
+            detail=f"{step_kind}",
+            success=False,
+            error=str(exc),
+        )
 
     target_geo_type, boundary_vintage, definition_version = _target_geometry_metadata(
         target.geometry,
@@ -236,6 +403,12 @@ def assemble_panel(
         source_label=source_label,
         column_aliases=aliases,
         extra_columns=extras or None,
+        canonical_columns=_recipe_column_order(
+            geo_type=target_geo_type,
+            include_zori=include_zori,
+            extra_columns=extras or None,
+        ),
+        ensure_canonical_columns=False,
     )
 
     if target.cohort is not None:

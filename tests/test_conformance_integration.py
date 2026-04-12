@@ -55,7 +55,7 @@ def _make_panel(
                 "pit_sheltered": 60,
                 "pit_unsheltered": 40,
                 "boundary_vintage_used": "2024",
-                "acs_vintage_used": "2023",
+                "acs5_vintage_used": "2023",
                 "tract_vintage_used": "2020",
                 "alignment_type": "retrospective",
                 "weighting_method": "population",

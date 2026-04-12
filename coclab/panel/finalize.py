@@ -34,7 +34,7 @@ COC_PANEL_COLUMNS: list[str] = [
     "pit_sheltered",
     "pit_unsheltered",
     "boundary_vintage_used",
-    "acs_vintage_used",
+    "acs5_vintage_used",
     "tract_vintage_used",
     "alignment_type",
     "weighting_method",
@@ -59,7 +59,7 @@ METRO_PANEL_COLUMNS: list[str] = [
     "pit_sheltered",
     "pit_unsheltered",
     "definition_version_used",
-    "acs_vintage_used",
+    "acs5_vintage_used",
     "tract_vintage_used",
     "alignment_type",
     "weighting_method",
@@ -69,10 +69,14 @@ METRO_PANEL_COLUMNS: list[str] = [
     "median_household_income",
     "median_gross_rent",
     "unemployment_rate_acs1",
+    "labor_force",
+    "employed",
+    "unemployed",
+    "unemployment_rate",
     "coverage_ratio",
     "boundary_changed",
     "acs1_vintage_used",
-    "acs_products_used",
+    "laus_vintage_used",
     "source",
 ]
 
@@ -134,7 +138,7 @@ _PANEL_DTYPE_SPEC: dict[str, str | type] = {
     # Vintage metadata
     "boundary_vintage_used": "str",
     "definition_version_used": "str",
-    "acs_vintage_used": "str",
+    "acs5_vintage_used": "str",
     "tract_vintage_used": "string",
     "alignment_type": "string",
     "weighting_method": "str",
@@ -144,7 +148,7 @@ _PANEL_DTYPE_SPEC: dict[str, str | type] = {
     "source": "str",
     # ACS1 metro extras
     "acs1_vintage_used": "string",
-    "acs_products_used": "str",
+    "laus_vintage_used": "string",
 }
 
 
@@ -207,14 +211,17 @@ def _resolve_column_order(
     geo_type: str,
     include_zori: bool,
     extra_columns: list[str] | None,
+    canonical_columns: list[str] | None = None,
 ) -> list[str]:
     """Return the canonical column list for the given panel type."""
-    if geo_type == GEO_TYPE_METRO:
+    if canonical_columns is not None:
+        columns = list(canonical_columns)
+    elif geo_type == GEO_TYPE_METRO:
         columns = list(METRO_PANEL_COLUMNS)
     else:
         columns = list(COC_PANEL_COLUMNS)
 
-    if include_zori:
+    if include_zori and canonical_columns is None:
         columns += ZORI_COLUMNS + ZORI_PROVENANCE_COLUMNS
 
     if extra_columns:
@@ -251,6 +258,8 @@ def finalize_panel(
     add_boundary_changed: bool = True,
     column_aliases: dict[str, str] | None = None,
     extra_columns: list[str] | None = None,
+    canonical_columns: list[str] | None = None,
+    ensure_canonical_columns: bool = True,
 ) -> pd.DataFrame:
     """Apply canonical panel finalization.
 
@@ -283,6 +292,14 @@ def finalize_panel(
     extra_columns : list[str], optional
         Additional columns to preserve beyond the canonical set
         (e.g. ``"zori_max_geo_contribution"``).
+    canonical_columns : list[str], optional
+        Override the default canonical ordering for the given
+        ``geo_type``. Useful for recipe outputs that want a preferred
+        order without inheriting the legacy union schema.
+    ensure_canonical_columns : bool
+        When True (default), create any missing canonical columns and
+        fill them with ``NA``. When False, only existing columns are
+        reordered.
 
     Returns
     -------
@@ -307,10 +324,16 @@ def finalize_panel(
         result["source"] = source_label or _default_source_label(geo_type)
 
     # 3. Resolve canonical column order and ensure all exist
-    canonical = _resolve_column_order(geo_type, include_zori, extra_columns)
-    for col in canonical:
-        if col not in result.columns:
-            result[col] = pd.NA
+    canonical = _resolve_column_order(
+        geo_type,
+        include_zori,
+        extra_columns,
+        canonical_columns=canonical_columns,
+    )
+    if ensure_canonical_columns:
+        for col in canonical:
+            if col not in result.columns:
+                result[col] = pd.NA
 
     # 4. Reorder: canonical columns first, then any remaining columns
     canonical_present = [col for col in canonical if col in result.columns]

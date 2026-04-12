@@ -106,7 +106,7 @@ def _make_coc_panel() -> pd.DataFrame:
         "pit_sheltered": [80, 90],
         "pit_unsheltered": [20, 20],
         "boundary_vintage_used": ["2020", "2020"],
-        "acs_vintage_used": ["2019", "2020"],
+        "acs5_vintage_used": ["2019", "2020"],
         "weighting_method": ["area", "area"],
         "source": ["coclab_panel", "coclab_panel"],
         "total_population": [50000.0, 51000.0],
@@ -126,7 +126,7 @@ def _make_metro_panel() -> pd.DataFrame:
         "pit_sheltered": [400, 410],
         "pit_unsheltered": [100, 100],
         "definition_version_used": ["v1", "v1"],
-        "acs_vintage_used": ["2019", "2020"],
+        "acs5_vintage_used": ["2019", "2020"],
         "weighting_method": ["area", "area"],
         "source": ["metro_panel", "metro_panel"],
         "total_population": [100000.0, 101000.0],
@@ -194,11 +194,46 @@ class TestFinalizePanel:
             "source": ["coclab_panel"],
             "weighting_method": ["area"],
             "boundary_vintage_used": ["2020"],
-            "acs_vintage_used": ["2019"],
+            "acs5_vintage_used": ["2019"],
         })
         panel = finalize_panel(df, geo_type="coc")
         for col in COC_PANEL_COLUMNS:
             assert col in panel.columns, f"Missing canonical column: {col}"
+
+    def test_recipe_mode_skips_missing_canonical_columns(self):
+        df = pd.DataFrame({
+            "coc_id": ["C-500"],
+            "geo_type": ["coc"],
+            "geo_id": ["C-500"],
+            "year": [2020],
+            "pit_total": [100],
+            "boundary_vintage_used": ["2020"],
+            "acs5_vintage_used": ["2019"],
+        })
+        panel = finalize_panel(
+            df,
+            geo_type="coc",
+            canonical_columns=[
+                "coc_id",
+                "geo_type",
+                "geo_id",
+                "year",
+                "pit_total",
+                "acs5_vintage_used",
+                "source",
+            ],
+            ensure_canonical_columns=False,
+        )
+        assert "pit_sheltered" not in panel.columns
+        assert "tract_vintage_used" not in panel.columns
+        assert list(panel.columns[:6]) == [
+            "coc_id",
+            "geo_type",
+            "geo_id",
+            "year",
+            "pit_total",
+            "acs5_vintage_used",
+        ]
 
     def test_preserves_extra_columns(self):
         df = _make_coc_panel()

@@ -370,7 +370,7 @@ def _effective_measure_columns(request: PanelRequest) -> list[str]:
     # ACS_MEASURE_COLUMNS and LAUS_MEASURE_COLUMNS; only validate it once.
     seen: set[str] = set()
     result: list[str] = []
-    for col in columns or list(ACS_MEASURE_COLUMNS):
+    for col in columns:
         if col not in seen:
             seen.add(col)
             result.append(col)
@@ -446,6 +446,8 @@ def check_schema_measures(
     (e.g., ``["population"]``).
     """
     expected = _effective_measure_columns(request)
+    if not expected:
+        return []
     present = [c for c in expected if c in panel_df.columns]
     missing = [c for c in expected if c not in panel_df.columns]
 

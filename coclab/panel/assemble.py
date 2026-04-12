@@ -13,7 +13,7 @@ Panel Schema (Canonical Columns)
 - pit_sheltered: Sheltered count (nullable)
 - pit_unsheltered: Unsheltered count (nullable)
 - boundary_vintage_used: Which boundary vintage was used
-- acs_vintage_used: Which ACS vintage was used
+- acs5_vintage_used: Which ACS5 vintage was used
 - tract_vintage_used: Which tract vintage was used for crosswalk
 - alignment_type: period_faithful, retrospective, or custom
 - weighting_method: "area" or "population"
@@ -99,7 +99,7 @@ PANEL_COLUMNS = [
     "pit_sheltered",
     "pit_unsheltered",
     "boundary_vintage_used",
-    "acs_vintage_used",
+    "acs5_vintage_used",
     "tract_vintage_used",
     "alignment_type",
     "weighting_method",
@@ -124,7 +124,7 @@ METRO_PANEL_COLUMNS = [
     "pit_sheltered",
     "pit_unsheltered",
     "definition_version_used",
-    "acs_vintage_used",
+    "acs5_vintage_used",
     "tract_vintage_used",
     "alignment_type",
     "weighting_method",
@@ -143,7 +143,6 @@ METRO_PANEL_COLUMNS = [
     "boundary_changed",
     "acs1_vintage_used",   # Which ACS1 vintage contributed (nullable)
     "laus_vintage_used",   # Which LAUS reference year contributed (nullable)
-    "acs_products_used",   # Comma-separated: "acs5" or "acs5,acs1"
     "source",
 ]
 
@@ -1145,7 +1144,7 @@ def build_panel(
                 GEO_TYPE_METRO,
                 geo_id_source_col=geo_col,
             )
-        year_df["acs_vintage_used"] = acs_vintage
+        year_df["acs5_vintage_used"] = acs_vintage
         year_df["tract_vintage_used"] = tract_vintage
         year_df["alignment_type"] = (
             _determine_alignment_type(year, boundary_vintage)
@@ -1189,7 +1188,6 @@ def build_panel(
             if acs1_df is not None and not acs1_df.empty:
                 year_df = year_df.merge(acs1_df, on="metro_id", how="left")
                 year_df["acs1_vintage_used"] = acs1_vintage
-                year_df["acs_products_used"] = "acs5,acs1"
                 logger.info(
                     f"Year {year}: merged ACS1 data (vintage {acs1_vintage}), "
                     f"{year_df['unemployment_rate_acs1'].notna().sum()} matched"
@@ -1200,11 +1198,9 @@ def build_panel(
                 )
                 year_df["unemployment_rate_acs1"] = np.nan
                 year_df["acs1_vintage_used"] = pd.NA
-                year_df["acs_products_used"] = "acs5"
         elif geo_type == GEO_TYPE_METRO:
             year_df["unemployment_rate_acs1"] = np.nan
             year_df["acs1_vintage_used"] = pd.NA
-            year_df["acs_products_used"] = "acs5"
 
         # -----------------------------------------------------------------
         # BLS LAUS metro integration (when requested)
@@ -1494,7 +1490,7 @@ def save_panel(
 
     # Extract remaining vintages from data
     if not df.empty:
-        acs_vintages = df["acs_vintage_used"].unique()
+        acs_vintages = df["acs5_vintage_used"].unique()
         if len(acs_vintages) == 1:
             acs_vintage = str(acs_vintages[0])
 

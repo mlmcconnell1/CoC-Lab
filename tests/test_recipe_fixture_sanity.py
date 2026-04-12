@@ -14,7 +14,6 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from coclab.panel.finalize import COC_PANEL_COLUMNS
 from coclab.recipe.executor import execute_recipe
 from coclab.recipe.loader import load_recipe
 
@@ -102,12 +101,21 @@ XWALK_ROWS: tuple[dict[str, object], ...] = (
     },
 )
 
-EXPECTED_EXTRA_COLUMNS: tuple[str, ...] = ("geo_id", "geo_type")
-EXPECTED_NULL_COLUMNS: tuple[str, ...] = (
-    "adult_population",
-    "population_below_poverty",
-    "median_gross_rent",
-    "unemployment_rate",
+RECIPE_COC_PANEL_COLUMNS: tuple[str, ...] = (
+    "coc_id",
+    "geo_type",
+    "geo_id",
+    "year",
+    "pit_total",
+    "pit_sheltered",
+    "pit_unsheltered",
+    "boundary_vintage_used",
+    "acs5_vintage_used",
+    "tract_vintage_used",
+    "total_population",
+    "median_household_income",
+    "boundary_changed",
+    "source",
 )
 
 
@@ -121,6 +129,8 @@ class PanelTruthRow:
     total_population: float
     median_household_income: float
     boundary_vintage_used: str
+    acs5_vintage_used: str
+    tract_vintage_used: str
     source: str
 
 
@@ -166,6 +176,8 @@ def _expected_panel_truth_table() -> tuple[PanelTruthRow, ...]:
                 total_population=total_population,
                 median_household_income=income_numerator / income_denominator,
                 boundary_vintage_used="2025",
+                acs5_vintage_used=str(year),
+                tract_vintage_used="2020",
                 source="coclab_panel",
             ))
 
@@ -215,14 +227,10 @@ def test_coc_panel_sanity_recipe_writes_expected_panel_schema(
     panel = executed_coc_panel.panel
 
     assert executed_coc_panel.output_path.exists()
-    assert tuple(panel.columns[:len(COC_PANEL_COLUMNS)]) == tuple(COC_PANEL_COLUMNS)
-    assert set(panel.columns) == set(COC_PANEL_COLUMNS + list(EXPECTED_EXTRA_COLUMNS))
+    assert tuple(panel.columns) == RECIPE_COC_PANEL_COLUMNS
     assert len(panel) == len(EXPECTED_PANEL_TRUTH_TABLE)
     assert set(panel["geo_type"]) == {"coc"}
     assert panel["boundary_changed"].tolist() == [False, False, False, False]
-
-    for column in EXPECTED_NULL_COLUMNS:
-        assert panel[column].isna().all(), f"Expected all-null canonical column: {column}"
 
 
 @pytest.mark.parametrize(
@@ -250,4 +258,6 @@ def test_coc_panel_sanity_recipe_writes_expected_truth_table(
         expected.median_household_income,
     )
     assert row["boundary_vintage_used"] == expected.boundary_vintage_used
+    assert row["acs5_vintage_used"] == expected.acs5_vintage_used
+    assert row["tract_vintage_used"] == expected.tract_vintage_used
     assert row["source"] == expected.source

@@ -9,7 +9,7 @@ Tests cover:
 - Default behavior (include_acs1=False) leaves ACS1 columns as NaN
 - ACS1 artifact discovery and merge when include_acs1=True
 - Partial ACS1 coverage (some years but not all)
-- acs_products_used column values
+- acs5_vintage_used column values
 - acs1_vintage_used column values
 - include_acs1=False skips discovery even when artifacts exist
 """
@@ -156,10 +156,10 @@ class TestMetroPanelWithoutAcs1:
 
         assert "unemployment_rate_acs1" in result.columns
         assert result["unemployment_rate_acs1"].isna().all()
+        assert "acs5_vintage_used" in result.columns
+        assert (result["acs5_vintage_used"] == "2019").all()
         assert "acs1_vintage_used" in result.columns
         assert result["acs1_vintage_used"].isna().all()
-        assert "acs_products_used" in result.columns
-        assert (result["acs_products_used"] == "acs5").all()
 
 
 class TestMetroPanelWithAcs1:
@@ -223,19 +223,19 @@ class TestMetroPanelPartialAcs1:
         # Year 2020 (ACS vintage 2019) should have ACS1 data
         year_2020 = result[result["year"] == 2020]
         assert year_2020["unemployment_rate_acs1"].notna().all()
-        assert (year_2020["acs_products_used"] == "acs5,acs1").all()
+        assert (year_2020["acs5_vintage_used"] == "2019").all()
 
         # Year 2021 (ACS vintage 2020) should NOT have ACS1 data
         year_2021 = result[result["year"] == 2021]
         assert year_2021["unemployment_rate_acs1"].isna().all()
-        assert (year_2021["acs_products_used"] == "acs5").all()
+        assert (year_2021["acs5_vintage_used"] == "2020").all()
 
 
-class TestAcsProductsUsedColumn:
-    """Verify acs_products_used column values."""
+class TestAcs5VintageUsedColumn:
+    """Verify acs5_vintage_used column values."""
 
-    def test_acs_products_used_with_acs1(self, metro_base_dir, policy_fixed):
-        """Should be 'acs5,acs1' when ACS1 data is merged."""
+    def test_acs5_vintage_used_with_acs1(self, metro_base_dir, policy_fixed):
+        """acs5_vintage_used reflects the ACS5 vintage when ACS1 is merged."""
         result = build_panel(
             start_year=2020,
             end_year=2020,
@@ -247,10 +247,10 @@ class TestAcsProductsUsedColumn:
             include_acs1=True,
             acs1_dir=metro_base_dir["acs_dir"],
         )
-        assert (result["acs_products_used"] == "acs5,acs1").all()
+        assert (result["acs5_vintage_used"] == "2019").all()
 
-    def test_acs_products_used_without_acs1(self, metro_base_dir, policy_fixed):
-        """Should be 'acs5' when ACS1 not requested."""
+    def test_acs5_vintage_used_without_acs1(self, metro_base_dir, policy_fixed):
+        """acs5_vintage_used is present even when ACS1 is not requested."""
         result = build_panel(
             start_year=2020,
             end_year=2020,
@@ -261,10 +261,10 @@ class TestAcsProductsUsedColumn:
             definition_version="glynn_fox_v1",
             include_acs1=False,
         )
-        assert (result["acs_products_used"] == "acs5").all()
+        assert (result["acs5_vintage_used"] == "2019").all()
 
-    def test_acs_products_used_missing_artifact(self, metro_base_dir, policy_fixed):
-        """Should be 'acs5' when ACS1 requested but artifact missing."""
+    def test_acs5_vintage_used_missing_acs1_artifact(self, metro_base_dir, policy_fixed):
+        """acs5_vintage_used is unaffected when ACS1 artifact is missing."""
         result = build_panel(
             start_year=2021,
             end_year=2021,
@@ -276,8 +276,7 @@ class TestAcsProductsUsedColumn:
             include_acs1=True,
             acs1_dir=metro_base_dir["acs_dir"],
         )
-        # Vintage 2020 artifact does not exist
-        assert (result["acs_products_used"] == "acs5").all()
+        assert (result["acs5_vintage_used"] == "2020").all()
 
 
 class TestAcs1VintageUsedColumn:
@@ -349,5 +348,5 @@ class TestIncludeAcs1FalseSkipsDiscovery:
             acs1_dir=metro_base_dir["acs_dir"],  # Dir provided but flag is False
         )
         assert result["unemployment_rate_acs1"].isna().all()
+        assert (result["acs5_vintage_used"] == "2019").all()
         assert result["acs1_vintage_used"].isna().all()
-        assert (result["acs_products_used"] == "acs5").all()

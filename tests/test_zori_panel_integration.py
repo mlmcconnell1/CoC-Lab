@@ -960,7 +960,7 @@ class TestPanelAssemblyWithoutZori:
 
         # Check vintage columns are populated
         assert panel_df["boundary_vintage_used"].notna().all()
-        assert panel_df["acs_vintage_used"].notna().all()
+        assert panel_df["acs5_vintage_used"].notna().all()
         assert panel_df["weighting_method"].notna().all()
 
     def test_baseline_panel_boundary_changed_detection(self, baseline_data_dirs):

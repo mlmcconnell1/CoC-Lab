@@ -1532,6 +1532,7 @@ class TestExecutor:
         )
         panel = pd.read_parquet(panel_path).sort_values(["geo_id", "year"])
         assert list(panel["total_population"]) == [100.0, 100.0, 200.0, 200.0]
+        assert list(panel["acs5_vintage_used"]) == ["2020", "2021", "2020", "2021"]
 
     def test_execute_recipe_allows_yearless_file_set_with_distinct_paths(
         self, tmp_path: Path,
@@ -1570,6 +1571,7 @@ class TestExecutor:
         )
         panel = pd.read_parquet(panel_path).sort_values(["geo_id", "year"])
         assert list(panel["total_population"]) == [100.0, 110.0, 200.0, 210.0]
+        assert list(panel["acs5_vintage_used"]) == ["2020", "2021", "2020", "2021"]
 
     def test_execute_recipe_rejects_file_set_reusing_same_static_path(
         self, tmp_path: Path,

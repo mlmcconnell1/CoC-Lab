@@ -218,9 +218,9 @@ def test_metro_panel_columns_includes_acs1_provenance() -> None:
     assert "acs1_vintage_used" in METRO_PANEL_COLUMNS
 
 
-def test_metro_panel_columns_includes_acs_products_used() -> None:
-    """METRO_PANEL_COLUMNS includes the acs_products_used provenance column."""
-    assert "acs_products_used" in METRO_PANEL_COLUMNS
+def test_metro_panel_columns_includes_acs5_provenance() -> None:
+    """METRO_PANEL_COLUMNS includes the ACS5 provenance column."""
+    assert "acs5_vintage_used" in METRO_PANEL_COLUMNS
 
 
 def test_metro_panel_columns_source_is_last() -> None:
@@ -229,12 +229,14 @@ def test_metro_panel_columns_source_is_last() -> None:
 
 
 def test_metro_panel_columns_provenance_before_source() -> None:
-    """ACS1 provenance columns appear before source."""
+    """ACS provenance columns appear before source."""
     source_idx = METRO_PANEL_COLUMNS.index("source")
+    acs5_vintage_idx = METRO_PANEL_COLUMNS.index("acs5_vintage_used")
     acs1_vintage_idx = METRO_PANEL_COLUMNS.index("acs1_vintage_used")
-    products_idx = METRO_PANEL_COLUMNS.index("acs_products_used")
+    laus_vintage_idx = METRO_PANEL_COLUMNS.index("laus_vintage_used")
+    assert acs5_vintage_idx < source_idx
     assert acs1_vintage_idx < source_idx
-    assert products_idx < source_idx
+    assert laus_vintage_idx < source_idx
 
 
 # ============================================================================

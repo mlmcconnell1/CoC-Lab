@@ -771,8 +771,8 @@ class TestAlignmentPolicies:
             policy=DEFAULT_POLICY,
         )
 
-        # All rows should have acs_vintage_used = "2023" for PIT year 2024
-        assert all(panel["acs_vintage_used"] == "2023")
+        # All rows should have acs5_vintage_used = "2023" for PIT year 2024
+        assert all(panel["acs5_vintage_used"] == "2023")
 
     def test_custom_policy_applied(self, full_test_setup):
         """Custom alignment policy is correctly applied."""
@@ -791,7 +791,7 @@ class TestAlignmentPolicies:
         )
 
         # Custom policy: PIT 2024 -> ACS 2022, weighting=area
-        assert all(panel["acs_vintage_used"] == "2022")
+        assert all(panel["acs5_vintage_used"] == "2022")
         assert all(panel["weighting_method"] == "area")
 
     def test_policy_serializable(self):

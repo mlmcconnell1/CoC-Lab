@@ -202,7 +202,7 @@ class TestDiagnosticsPanelJson:
             "year": [2023, 2024],
             "pit_total": [100, 110],
             "boundary_vintage_used": ["2023", "2024"],
-            "acs_vintage_used": ["2022", "2023"],
+            "acs5_vintage_used": ["2022", "2023"],
             "weighting_method": ["area", "area"],
             "total_population": [50000, 51000],
             "coverage_ratio": [0.95, 0.96],
