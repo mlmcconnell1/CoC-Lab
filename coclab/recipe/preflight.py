@@ -1141,7 +1141,8 @@ def _check_ct_county_alignment(
             years=sorted(years),
         ))
 
-    for (pipeline_id, transform_id, dataset_id, legacy_vintage), years in sorted(support_events.items()):
+    for key, years in sorted(support_events.items()):
+        pipeline_id, transform_id, dataset_id, legacy_vintage = key
         findings.append(PreflightFinding(
             severity=Severity.WARNING,
             kind=FindingKind.CT_COUNTY_ALIGNMENT,

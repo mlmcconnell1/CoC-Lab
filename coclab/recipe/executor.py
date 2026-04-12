@@ -353,7 +353,12 @@ def _execute_resample(
         if filtered_df.empty:
             ds = ctx.recipe.datasets.get(task.dataset_id)
             unique_year_values: list[str] = []
-            if ds is not None and ds.provider == "census" and ds.product == "acs1" and year_col == "acs1_vintage":
+            if (
+                ds is not None
+                and ds.provider == "census"
+                and ds.product == "acs1"
+                and year_col == "acs1_vintage"
+            ):
                 source_years = df[year_col].dropna()
                 if not source_years.empty:
                     numeric_years = pd.to_numeric(source_years, errors="coerce")
