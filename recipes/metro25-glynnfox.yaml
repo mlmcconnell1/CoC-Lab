@@ -6,7 +6,10 @@ description: >
   uses PIT counts, county PEP population totals, and January county ZORI
   aggregated to the Glynn/Fox metro definition. PEP totals are interpolated to
   January to align with the PIT count timing, and the CoC crosswalk uses 2020
-  boundaries to stay close to the 2015-2020 analysis window. The year range
+  boundaries to stay close to the 2015-2020 analysis window. ACS5 inputs stay
+  source-faithful across the full panel: with the year-1 lag, every ACS
+  vintage used here ends in 2014-2019 and is therefore aggregated from native
+  2010-era tracts rather than translated to 2020 tracts first. The year range
   covers 2015-2020, starting when the curated ZORI artifact begins (January
   2015) and extending through 2020.
 
@@ -71,16 +74,17 @@ datasets:
     version: 1
     native_geometry: { type: tract }
     geo_column: tract_geoid
+    # Source-faithful tract policy:
+    # PIT years 2015-2020 use lagged ACS vintages ending 2014-2019, all of
+    # which are natively 2010-era tract data. Glynn/Fox metros are synthetic
+    # county/CoC geographies, so we aggregate directly from T2010 here instead
+    # of adding a 2010->2020 tract translation step.
     file_set:
       path_template: "data/curated/acs/acs5_tracts__A{acs_end}xT{tract}.parquet"
       segments:
-        - years: "2015-2019"
+        - years: "2015-2020"
           geometry: { type: tract, vintage: 2010 }
           constants: { tract: 2010 }
-          year_offsets: { acs_end: -1 }
-        - years: "2020-2020"
-          geometry: { type: tract, vintage: 2020 }
-          constants: { tract: 2020 }
           year_offsets: { acs_end: -1 }
 
 transforms:
@@ -110,20 +114,12 @@ transforms:
       weighting:
         scheme: area
 
-  - id: tract_to_metro_2020
-    type: crosswalk
-    from: { type: tract, vintage: 2020 }
-    to: { type: metro, source: glynn_fox_v1 }
-    spec:
-      weighting:
-        scheme: area
-
 pipelines:
   - id: build_metro_panel
     target: metro_panel
     steps:
       - materialize:
-          transforms: [coc_to_metro, county_to_metro, tract_to_metro_2010, tract_to_metro_2020]
+          transforms: [coc_to_metro, county_to_metro, tract_to_metro_2010]
 
       - resample:
           dataset: pit

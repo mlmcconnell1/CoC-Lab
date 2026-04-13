@@ -43,4 +43,6 @@ def test_glynn_fox_zori_recipe_uses_lagged_acs_paths():
     }
 
     assert acs_tasks[2015].input_path == "data/curated/acs/acs5_tracts__A2014xT2010.parquet"
-    assert acs_tasks[2020].input_path == "data/curated/acs/acs5_tracts__A2019xT2020.parquet"
+    assert acs_tasks[2020].input_path == "data/curated/acs/acs5_tracts__A2019xT2010.parquet"
+    assert acs_tasks[2020].effective_geometry.vintage == 2010
+    assert acs_tasks[2020].transform_id == "tract_to_metro_2010"
