@@ -553,7 +553,7 @@ class TestBuildPanel:
             assert col in result.columns, f"Missing column: {col}"
 
     def test_build_sets_source_column(self, data_dirs):
-        """Test that source column is set to coclab_panel."""
+        """Test that source column is set to hhplab_panel."""
         result = build_panel(
             2024,
             2024,
@@ -561,7 +561,7 @@ class TestBuildPanel:
             measures_dir=data_dirs["measures_dir"],
         )
 
-        assert all(result["source"] == "coclab_panel")
+        assert all(result["source"] == "hhplab_panel")
 
     def test_build_boundary_changed_detection(self, data_dirs):
         """Test that boundary_changed column is computed."""
@@ -649,7 +649,7 @@ class TestSavePanel:
                 "median_gross_rent": [1200, 1250, 1800, 1850],
                 "coverage_ratio": [0.95, 0.95, 0.98, 0.98],
                 "boundary_changed": [False, True, False, True],
-                "source": ["coclab_panel"] * 4,
+                "source": ["hhplab_panel"] * 4,
             }
         )
 

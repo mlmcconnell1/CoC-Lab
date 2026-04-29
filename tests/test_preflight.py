@@ -33,7 +33,7 @@ runner = CliRunner()
 STALE_TRANSLATED_ACS_PATH = "data/curated/acs/acs5_tracts__A2019xT2020.parquet"
 STALE_TRANSLATED_ACS_VINTAGE = "2015-2019"
 STALE_TRANSLATED_ACS_REBUILD = (
-    "coclab ingest acs5-tract --acs 2015-2019 --tracts 2020 --force"
+    "hhplab ingest acs5-tract --acs 2015-2019 --tracts 2020 --force"
 )
 
 
@@ -1085,7 +1085,7 @@ class TestPreflightReport:
         assert d["kind"] == "missing_transform"
         assert d["transform_id"] == "x"
         assert "remediation" in d
-        assert d["remediation"]["command"] == "coclab generate xwalks"
+        assert d["remediation"]["command"] == "hhplab generate xwalks"
 
     def test_blocking_findings(self):
         report = PreflightReport(
@@ -1114,7 +1114,7 @@ def _make_remediation():
     from hhplab.recipe.preflight import Remediation
     return Remediation(
         hint="Generate crosswalk artifacts.",
-        command="coclab generate xwalks",
+        command="hhplab generate xwalks",
     )
 
 

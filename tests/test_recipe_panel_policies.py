@@ -335,7 +335,7 @@ class TestZoriPanelPolicy:
         metadata = pq.read_metadata(panel_path)
         schema_metadata = metadata.schema.to_arrow_schema().metadata
 
-        provenance = json.loads(schema_metadata[b"coclab_provenance"])
+        provenance = json.loads(schema_metadata[b"hhplab_provenance"])
         assert "zori" in provenance
         assert provenance["zori"]["rent_metric"] == "ZORI"
         assert provenance["zori"]["zori_min_coverage"] == 0.80
@@ -576,7 +576,7 @@ class TestAcs1PanelPolicy:
         panel_path = _find_panel_output(tmp_path)
         metadata = pq.read_metadata(panel_path)
         schema_metadata = metadata.schema.to_arrow_schema().metadata
-        provenance = json.loads(schema_metadata[b"coclab_provenance"])
+        provenance = json.loads(schema_metadata[b"hhplab_provenance"])
 
         # The conformance report should exist in provenance
         assert "conformance" in provenance
@@ -787,7 +787,7 @@ class TestCocPanelParity:
         assert panel["source"].notna().all()
 
     def test_provenance_in_parquet(self, tmp_path: Path):
-        """coclab_provenance metadata exists in the output parquet."""
+        """hhplab_provenance metadata exists in the output parquet."""
         _setup_coc_parity_fixtures(tmp_path)
         recipe = load_recipe(_coc_recipe_dict())
         execute_recipe(recipe, project_root=tmp_path)
@@ -795,9 +795,9 @@ class TestCocPanelParity:
         panel_path = _find_panel_output(tmp_path)
         metadata = pq.read_metadata(panel_path)
         schema_metadata = metadata.schema.to_arrow_schema().metadata
-        assert b"coclab_provenance" in schema_metadata
+        assert b"hhplab_provenance" in schema_metadata
 
-        provenance = json.loads(schema_metadata[b"coclab_provenance"])
+        provenance = json.loads(schema_metadata[b"hhplab_provenance"])
         assert "conformance" in provenance
         assert "target_geometry" in provenance
 

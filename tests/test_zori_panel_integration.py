@@ -956,7 +956,7 @@ class TestPanelAssemblyWithoutZori:
         )
 
         # Check source column
-        assert (panel_df["source"] == "coclab_panel").all()
+        assert (panel_df["source"] == "hhplab_panel").all()
 
         # Check vintage columns are populated
         assert panel_df["boundary_vintage_used"].notna().all()

@@ -92,9 +92,9 @@ def list_measures(
 
     Examples:
 
-        coclab list measures
+        hhplab list measures
 
-        coclab list measures --dir /path/to/measures
+        hhplab list measures --dir /path/to/measures
     """
     if dir is None:
         dir = curated_dir("measures")

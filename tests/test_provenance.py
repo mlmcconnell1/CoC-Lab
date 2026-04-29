@@ -28,7 +28,7 @@ def full_block():
         geo_type="coc",
         definition_version="glynn_fox_v1",
         created_at="2025-01-15T12:00:00+00:00",
-        coclab_version="0.1.0",
+        hhplab_version="0.1.0",
         extra={"source_url": "https://example.com", "note": "test run"},
     )
 
@@ -64,7 +64,7 @@ class TestDictRoundTrip:
         assert restored.geo_type == full_block.geo_type
         assert restored.definition_version == full_block.definition_version
         assert restored.created_at == full_block.created_at
-        assert restored.coclab_version == full_block.coclab_version
+        assert restored.hhplab_version == full_block.hhplab_version
         assert restored.extra == full_block.extra
 
     def test_to_dict_omits_none_and_empty(self, minimal_block):
@@ -231,7 +231,7 @@ class TestEdgeCases:
     def test_all_none_optional_fields(self, minimal_block):
         d = minimal_block.to_dict()
         assert "created_at" in d
-        assert "coclab_version" in d
+        assert "hhplab_version" in d
         expected_absent = {
             "boundary_vintage",
             "tract_vintage",

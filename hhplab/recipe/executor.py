@@ -344,7 +344,7 @@ def _execute_materialize(
                     else (
                         f"Transform '{tid}' artifact not found at "
                         f"{path.relative_to(ctx.project_root)}. "
-                        "Run 'coclab generate xwalks' to build CoC crosswalks "
+                        "Run 'hhplab generate xwalks' to build CoC crosswalks "
                         "first, or ensure the metro definition artifacts exist "
                         "for metro transforms."
                     )

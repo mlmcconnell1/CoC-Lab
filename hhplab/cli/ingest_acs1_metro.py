@@ -52,11 +52,11 @@ def ingest_acs1_metro(
 
     Examples:
 
-        coclab ingest acs1-metro --vintage 2023
+        hhplab ingest acs1-metro --vintage 2023
 
-        coclab ingest acs1-metro --vintage 2022 --json
+        hhplab ingest acs1-metro --vintage 2022 --json
 
-        coclab ingest acs1-metro --vintage 2023 --api-key YOUR_KEY
+        hhplab ingest acs1-metro --vintage 2023 --api-key YOUR_KEY
     """
     import pandas as pd
 

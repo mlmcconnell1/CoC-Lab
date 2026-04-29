@@ -1,4 +1,4 @@
-"""CLI module for CoC Lab."""
+"""CLI module for HHP-Lab."""
 
 from hhplab.cli.main import app
 

@@ -1,5 +1,5 @@
 """
-coclab recipe schema (v1) - Pydantic v2 models
+hhplab recipe schema (v1) - Pydantic v2 models
 
 Goal:
 - Represent a declarative build recipe that can target multiple geometries
@@ -399,7 +399,7 @@ class PanelPolicy(BaseModel):
 
     source_label: str | None = Field(
         default=None,
-        description="Override the default source label for the panel (e.g. 'coclab_panel').",
+        description="Override the default source label for the panel (e.g. 'hhplab_panel').",
     )
     zori: ZoriPolicy | None = Field(
         default=None,

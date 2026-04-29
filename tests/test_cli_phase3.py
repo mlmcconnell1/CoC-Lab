@@ -303,11 +303,11 @@ class TestPhase3HelpOutput:
         result = runner.invoke(app, ["ingest", "pit", "--help"])
 
         assert result.exit_code == 0
-        assert "coclab ingest pit --year 2024" in result.output
+        assert "hhplab ingest pit --year 2024" in result.output
 
     def test_panel_diagnostics_help_shows_examples(self):
         """Panel-diagnostics help should show examples."""
         result = runner.invoke(app, ["diagnostics", "panel", "--help"])
 
         assert result.exit_code == 0
-        assert "coclab diagnostics panel --panel" in result.output
+        assert "hhplab diagnostics panel --panel" in result.output

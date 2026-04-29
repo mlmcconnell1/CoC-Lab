@@ -148,7 +148,7 @@ def persist_outputs(
 
     table = pa.Table.from_pandas(panel)
     metadata = table.schema.metadata or {}
-    metadata[b"coclab_provenance"] = json.dumps(provenance).encode()
+    metadata[b"hhplab_provenance"] = json.dumps(provenance).encode()
     table = table.replace_schema_metadata(metadata)
     pq.write_table(table, output_file)
 

@@ -3,7 +3,7 @@
 Provides Typer commands for:
 - ingest pep: Download and normalize PEP county population data
 
-Aggregation of PEP data to CoC geography is handled by ``coclab aggregate pep``.
+Aggregation of PEP data to CoC geography is handled by ``hhplab aggregate pep``.
 """
 
 from pathlib import Path
@@ -91,11 +91,11 @@ def ingest_pep(
 
     Examples:
 
-        coclab ingest pep --series auto
+        hhplab ingest pep --series auto
 
-        coclab ingest pep --series postcensal --vintage 2024
+        hhplab ingest pep --series postcensal --vintage 2024
 
-        coclab ingest pep --series postcensal --vintage 2024 --start 2015 --end 2020
+        hhplab ingest pep --series postcensal --vintage 2024 --start 2015 --end 2020
     """
     if output_dir is None:
         output_dir = curated_dir("pep")

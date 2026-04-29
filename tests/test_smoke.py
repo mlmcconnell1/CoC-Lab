@@ -1,4 +1,4 @@
-"""End-to-end smoke tests for the CoC Lab pipeline.
+"""End-to-end smoke tests for the HHP-Lab pipeline.
 
 This module tests the complete workflow:
 1. Ingest boundary data (using fixtures for offline CI)

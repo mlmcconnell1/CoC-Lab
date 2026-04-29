@@ -1,4 +1,4 @@
-"""Tests for the coclab CLI."""
+"""Tests for the hhplab CLI."""
 
 from pathlib import Path
 from unittest.mock import patch
@@ -443,7 +443,7 @@ class TestRetiredCommandRegression:
                 app, ["aggregate", "pit", "--build", "nonexistent"]
             )
             assert result.exit_code == 2
-            assert "coclab build create" not in result.output
+            assert "hhplab build create" not in result.output
 
     def test_aggregate_works_without_build(self):
         """Aggregate commands should require --years when --build is omitted."""

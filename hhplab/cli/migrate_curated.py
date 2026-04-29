@@ -41,11 +41,11 @@ def migrate_curated_cmd(
 
     Examples:
 
-        coclab migrate curated-layout
+        hhplab migrate curated-layout
 
-        coclab migrate curated-layout --apply
+        hhplab migrate curated-layout --apply
 
-        coclab migrate curated-layout --json
+        hhplab migrate curated-layout --json
     """
     if base_dir is None:
         base_dir = curated_root()

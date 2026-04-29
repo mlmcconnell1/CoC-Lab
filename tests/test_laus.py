@@ -892,7 +892,7 @@ def _make_mock_ingest_fn(tmp_path: Path, year_override: int | None = None) -> An
 
 
 class TestCliLausMetro:
-    """CLI tests for `coclab ingest laus-metro`."""
+    """CLI tests for `hhplab ingest laus-metro`."""
 
     def _runner(self):
         from typer.testing import CliRunner

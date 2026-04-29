@@ -71,11 +71,11 @@ def list_curated(
 
     Examples:
 
-        coclab list curated
+        hhplab list curated
 
-        coclab list curated --subdir pit
+        hhplab list curated --subdir pit
 
-        coclab list curated --subdir acs --json
+        hhplab list curated --subdir acs --json
     """
     if directory is None:
         directory = curated_root()

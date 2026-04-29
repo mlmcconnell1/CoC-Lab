@@ -410,7 +410,7 @@ def _dataset_remediation(ds_id: str, ds, *, years: list[int] | None = None) -> R
         hint=(
             f"Ingest {provider}/{product} data for dataset '{ds_id}'."
         ),
-        command=f"coclab ingest {product}" if product else None,
+        command=f"hhplab ingest {product}" if product else None,
     )
 
 
@@ -456,7 +456,7 @@ def _check_temporal_alignment_guidance(
                     kind=FindingKind.TEMPORAL_ALIGNMENT,
                     message=(
                         f"Dataset '{ds_id}' segment {year_label} uses "
-                        f"acs_end offset {acs_end_offset}. CoC-Lab's standard "
+                        f"acs_end offset {acs_end_offset}. HHP-Lab's standard "
                         "ACS lag for PIT/January-aligned panels is acs_end=-1; "
                         "review this offset against the ACS temporal guidance "
                         "before building."
@@ -703,7 +703,7 @@ def _check_transforms(
                      or transform.to.type == "metro")
             )
             if is_metro:
-                cmd = "coclab generate metro"
+                cmd = "hhplab generate metro"
                 missing_inputs = (
                     result.detail.get("missing_inputs", [])
                     if result.detail else []
@@ -719,7 +719,7 @@ def _check_transforms(
                         f"Ensure metro definition artifacts exist."
                     )
             else:
-                cmd = "coclab generate xwalks"
+                cmd = "hhplab generate xwalks"
                 hint = (
                     f"Generate crosswalk artifacts for transform '{tid}'."
                 )
@@ -945,7 +945,7 @@ def _check_support_datasets(
                 f"for the required years."
             )
             remediation_command = (
-                f"coclab ingest {recipe.datasets[population_source].product}"
+                f"hhplab ingest {recipe.datasets[population_source].product}"
                 if population_source in recipe.datasets
                 and recipe.datasets[population_source].product
                 else None
@@ -1145,7 +1145,7 @@ def _check_ct_county_alignment(
                                 "Materialize the CT planning-region county geometry "
                                 "before running this recipe so the bridge can be built."
                             ),
-                            command="coclab ingest tiger --year 2023 --type counties",
+                            command="hhplab ingest tiger --year 2023 --type counties",
                         ),
                     ))
 
@@ -1200,7 +1200,7 @@ def _check_ct_county_alignment(
                             "Materialize the CT planning-region county geometry "
                             "before running this recipe so the bridge can be built."
                         ),
-                        command="coclab ingest tiger --year 2023 --type counties",
+                        command="hhplab ingest tiger --year 2023 --type counties",
                     ),
                 ))
 

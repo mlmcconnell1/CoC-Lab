@@ -181,7 +181,7 @@ def load_zori(
     if path is None or not path.exists():
         raise FileNotFoundError(
             f"ZORI data file not found. "
-            f"Run 'coclab ingest zori --geography {geography}' first."
+            f"Run 'hhplab ingest zori --geography {geography}' first."
         )
 
     logger.info(f"Loading ZORI data from {path}")
@@ -261,7 +261,7 @@ def load_crosswalk(
     if not path.exists():
         raise FileNotFoundError(
             f"CoC-county crosswalk not found: {path}. "
-            f"Run 'coclab generate xwalks --boundary {boundary} --counties {counties}' first."
+            f"Run 'hhplab generate xwalks --boundary {boundary} --counties {counties}' first."
         )
 
     logger.info(f"Loading crosswalk from {path}")
@@ -810,7 +810,7 @@ def aggregate_zori_to_coc(
                 logger.info(f"ZORI not found in {output_dir}, using global {zori_source_path}")
         if zori_source_path is None:
             raise FileNotFoundError(
-                f"ZORI data not found. Run 'coclab ingest zori --geography {geography}' first."
+                f"ZORI data not found. Run 'hhplab ingest zori --geography {geography}' first."
             )
 
     # Load input data using resolved path

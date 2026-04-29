@@ -69,13 +69,13 @@ def ingest_laus_metro(
 
     Examples:
 
-        coclab ingest laus-metro --year 2023
+        hhplab ingest laus-metro --year 2023
 
-        coclab ingest laus-metro --start-year 2015 --end-year 2023
+        hhplab ingest laus-metro --start-year 2015 --end-year 2023
 
-        coclab ingest laus-metro --year 2022 --json
+        hhplab ingest laus-metro --year 2022 --json
 
-        coclab ingest laus-metro --year 2023 --api-key YOUR_KEY
+        hhplab ingest laus-metro --year 2023 --api-key YOUR_KEY
     """
     import pandas as pd
 

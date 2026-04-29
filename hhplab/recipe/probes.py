@@ -105,7 +105,7 @@ def probe_acs5_tract_translation_provenance(
     source_tract_vintage = get_source_tract_vintage(acs_vintage)
     display_path = path_label or path.as_posix()
     remediation_command = (
-        f"coclab ingest acs5-tract --acs {acs_vintage} "
+        f"hhplab ingest acs5-tract --acs {acs_vintage} "
         f"--tracts {target_tract_vintage} --force"
     )
 

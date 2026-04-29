@@ -456,8 +456,8 @@ class TestPanelUniquenessAndNonNull:
     def test_base_panel_column_never_null(self, base_panel, col):
         assert base_panel[col].notna().all()
 
-    def test_source_always_coclab_panel(self, base_panel):
-        assert (base_panel["source"] == "coclab_panel").all()
+    def test_source_always_hhplab_panel(self, base_panel):
+        assert (base_panel["source"] == "hhplab_panel").all()
 
     def test_zori_panel_no_duplicate_coc_year(self, zori_panel):
         """ZORI panel also has no duplicate (coc_id, year) pairs."""

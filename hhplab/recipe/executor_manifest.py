@@ -3,7 +3,7 @@
 Builds the provenance dict embedded in panel parquet files and the
 sidecar :class:`RecipeManifest` written next to each output, plus the
 canonical path resolution helpers used by both the executor and the
-CLI's ``coclab build recipe`` command.  These helpers are imported back
+CLI's ``hhplab build recipe`` command.  These helpers are imported back
 into ``hhplab.recipe.executor`` so legacy callers (CLI, tests, manual
 docs) keep working unchanged.
 """

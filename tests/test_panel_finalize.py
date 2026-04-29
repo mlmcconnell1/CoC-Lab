@@ -108,7 +108,7 @@ def _make_coc_panel() -> pd.DataFrame:
         "boundary_vintage_used": ["2020", "2020"],
         "acs5_vintage_used": ["2019", "2020"],
         "weighting_method": ["area", "area"],
-        "source": ["coclab_panel", "coclab_panel"],
+        "source": ["hhplab_panel", "hhplab_panel"],
         "total_population": [50000.0, 51000.0],
         "coverage_ratio": [0.95, 0.96],
     })
@@ -165,7 +165,7 @@ class TestFinalizePanel:
     def test_source_labeling_default(self):
         df = _make_coc_panel().drop(columns=["source"])
         panel = finalize_panel(df, geo_type="coc")
-        assert (panel["source"] == "coclab_panel").all()
+        assert (panel["source"] == "hhplab_panel").all()
 
     def test_source_labeling_metro_default(self):
         df = _make_metro_panel().drop(columns=["source"])
@@ -191,7 +191,7 @@ class TestFinalizePanel:
             "coc_id": ["C-500"],
             "year": [2020],
             "pit_total": [100],
-            "source": ["coclab_panel"],
+            "source": ["hhplab_panel"],
             "weighting_method": ["area"],
             "boundary_vintage_used": ["2020"],
             "acs5_vintage_used": ["2019"],

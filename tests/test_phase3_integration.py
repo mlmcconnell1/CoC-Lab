@@ -1,4 +1,4 @@
-"""Phase 3 Integration Tests for CoC Lab (legacy build path).
+"""Phase 3 Integration Tests for HHP-Lab (legacy build path).
 
 .. deprecated::
     These tests exercise the legacy ``build_panel``/``save_panel`` path.

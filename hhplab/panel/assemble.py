@@ -1,4 +1,4 @@
-"""Panel assembly engine for CoC Lab Phase 3.
+"""Panel assembly engine for HHP-Lab Phase 3.
 
 This module builds analysis-ready analysis-geography x year panels by joining
 PIT counts with ACS measures according to explicit alignment policies.
@@ -24,7 +24,7 @@ Panel Schema (Canonical Columns)
 - median_gross_rent: From ACS measures (nullable)
 - coverage_ratio: From ACS diagnostics (0-1)
 - boundary_changed: bool - did boundary change from prior year?
-- source: = "coclab_panel"
+- source: = "hhplab_panel"
 
 ZORI-Extended Columns (when --include-zori is enabled)
 ------------------------------------------------------
@@ -641,7 +641,7 @@ def _load_acs_measures(
             raise ValueError(
                 f"ACS measures file {measures_path.name} has no rows for "
                 f"weighting={weighting}; available weightings: {available}. "
-                f"Re-run 'coclab aggregate acs' with --weighting {weighting}, "
+                f"Re-run 'hhplab aggregate acs' with --weighting {weighting}, "
                 f"or use --weighting {available[0]} for this panel."
             )
         df = df_weighted
@@ -1091,7 +1091,7 @@ def build_panel(
         if zori_df is None:
             raise ValueError(
                 "ZORI integration requested but no ZORI yearly data available. "
-                "Run 'coclab aggregate zori --build <BUILD>' first, or provide "
+                "Run 'hhplab aggregate zori --build <BUILD>' first, or provide "
                 "--zori-yearly-path explicitly."
             )
 
@@ -1152,7 +1152,7 @@ def build_panel(
             else _align_label(geo_type)
         )
         year_df["weighting_method"] = weighting
-        year_df["source"] = "coclab_panel" if geo_type == GEO_TYPE_COC else "metro_panel"
+        year_df["source"] = "hhplab_panel" if geo_type == GEO_TYPE_COC else "metro_panel"
 
         # Left join with ACS measures (PIT is anchor)
         if not acs_df.empty:
@@ -1223,7 +1223,7 @@ def build_panel(
                 logger.warning(
                     f"Year {year}: no LAUS metro artifact for year {year} "
                     f"(definition={definition_version}). "
-                    f"Run 'coclab ingest laus-metro --year {year}' first."
+                    f"Run 'hhplab ingest laus-metro --year {year}' first."
                 )
                 for col in ["labor_force", "employed", "unemployed", "unemployment_rate"]:
                     year_df[col] = np.nan

@@ -254,13 +254,13 @@ class TestConfigIntegrationWithPaths:
 
     def test_env_vars_override_defaults(self, tmp_path: Path, monkeypatch):
         """Environment variables take precedence over defaults."""
-        monkeypatch.setenv("COCLAB_ASSET_STORE_ROOT", str(tmp_path / "env-assets"))
+        monkeypatch.setenv("HHPLAB_ASSET_STORE_ROOT", str(tmp_path / "env-assets"))
         cfg = load_config(project_root=tmp_path)
         assert cfg.asset_store_root == Path(tmp_path / "env-assets")
 
     def test_cli_overrides_env_and_defaults(self, tmp_path: Path, monkeypatch):
         """CLI flags take precedence over everything."""
-        monkeypatch.setenv("COCLAB_OUTPUT_ROOT", "/env/outputs")
+        monkeypatch.setenv("HHPLAB_OUTPUT_ROOT", "/env/outputs")
         cfg = load_config(
             output_root=tmp_path / "cli-outputs",
             project_root=tmp_path,

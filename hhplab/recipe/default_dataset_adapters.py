@@ -215,13 +215,13 @@ def _validate_bls_laus(spec: DatasetSpec) -> list[ValidationDiagnostic]:
 
     BLS LAUS annual-average metro datasets must have metro native geometry
     and should reference a pre-materialized curated artifact (path is
-    required because LAUS is fetched separately via 'coclab ingest laus-metro').
+    required because LAUS is fetched separately via 'hhplab ingest laus-metro').
 
     The expected path pattern is:
         data/curated/laus/laus_metro__A{year}@D{definition}.parquet
 
     Run the ingest command before using LAUS in a recipe:
-        coclab ingest laus-metro --year YEAR
+        hhplab ingest laus-metro --year YEAR
     """
     diags: list[ValidationDiagnostic] = []
     if spec.version != 1:
@@ -253,7 +253,7 @@ def _validate_bls_laus(spec: DatasetSpec) -> list[ValidationDiagnostic]:
             ValidationDiagnostic(
                 "warning",
                 "bls/laus: no path set. LAUS data must be ingested before "
-                "recipe execution. Run: coclab ingest laus-metro --year YEAR",
+                "recipe execution. Run: hhplab ingest laus-metro --year YEAR",
             )
         )
     known_params: set[str] = set()

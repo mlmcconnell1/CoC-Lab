@@ -93,7 +93,7 @@ def _create_extract(year: int, geo_type: str = "tracts"):
 
     extract = AggregateDataExtract(
         collection="nhgis",
-        description=f"Census {geo_type} {year} for CoC Lab",
+        description=f"Census {geo_type} {year} for HHP-Lab",
         shapefiles=[shapefile_name],
     )
 

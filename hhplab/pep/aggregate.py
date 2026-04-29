@@ -84,7 +84,7 @@ def load_crosswalk(
     if not xwalk_path.exists():
         raise FileNotFoundError(
             f"Crosswalk not found: {xwalk_path}\n"
-            f"Run: coclab generate xwalks --boundary {boundary_vintage} --counties {county_vintage}"
+            f"Run: hhplab generate xwalks --boundary {boundary_vintage} --counties {county_vintage}"
         )
 
     df = pd.read_parquet(xwalk_path)
@@ -140,7 +140,7 @@ def load_pep_county(
     if not vintage_files:
         raise FileNotFoundError(
             f"PEP county data not found in {pep_dir}\n"
-            f"Run: coclab ingest pep"
+            f"Run: hhplab ingest pep"
         )
 
     frames = [pd.read_parquet(f) for f in vintage_files]

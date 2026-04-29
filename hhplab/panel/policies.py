@@ -1,4 +1,4 @@
-"""Panel assembly policies for CoC Lab Phase 3.
+"""Panel assembly policies for HHP-Lab Phase 3.
 
 This module defines explicit alignment rules for constructing CoC x year panels.
 These policies determine how PIT years align with boundary vintages and ACS vintages.

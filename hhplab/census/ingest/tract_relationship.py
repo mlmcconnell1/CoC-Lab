@@ -43,7 +43,7 @@ class TractRelationshipNotFoundError(FileNotFoundError):
             "This file is required for translating ACS data between "
             "2010 and 2020 tract geographies.\n\n"
             "To download it, run:\n"
-            "  coclab ingest-tract-relationship"
+            "  hhplab ingest-tract-relationship"
         )
         if path:
             message = (

@@ -67,12 +67,12 @@ def diagnostics(
 
     Examples:
 
-        coclab diagnostics xwalk --crosswalk data/curated/xwalks/coc_tract_xwalk__2025__2023.parquet
+        hhplab diagnostics xwalk --crosswalk data/curated/xwalks/coc_tract_xwalk__2025__2023.parquet
 
-        coclab diagnostics xwalk -x data/curated/xwalks/coc_tract_xwalk__2025__2023.parquet \
+        hhplab diagnostics xwalk -x data/curated/xwalks/coc_tract_xwalk__2025__2023.parquet \
             --show-problems
 
-        coclab diagnostics xwalk -x crosswalk.parquet --coverage-threshold 0.90 -o diagnostics.csv
+        hhplab diagnostics xwalk -x crosswalk.parquet --coverage-threshold 0.90 -o diagnostics.csv
     """
     # Validate crosswalk file exists
     if not crosswalk.exists():

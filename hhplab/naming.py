@@ -1,6 +1,6 @@
 """Centralized filename generation using temporal shorthand notation.
 
-This module provides canonical filename generation for all CoC Lab datasets.
+This module provides canonical filename generation for all HHP-Lab datasets.
 All filenames follow the pattern: {dataset}__{temporal-notation}.parquet
 
 Temporal notation uses single-letter prefixes:

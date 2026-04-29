@@ -51,9 +51,9 @@ def ingest_acs_population(
 
     Examples:
 
-        coclab ingest acs5-tract --acs 2019-2023 --tracts 2023
+        hhplab ingest acs5-tract --acs 2019-2023 --tracts 2023
 
-        coclab ingest acs5-tract --acs 2015-2019 --tracts 2023
+        hhplab ingest acs5-tract --acs 2015-2019 --tracts 2023
     """
     import pandas as pd
 

@@ -83,9 +83,9 @@ def registry_rebuild(
 
     Examples:
 
-        coclab registry rebuild
+        hhplab registry rebuild
 
-        coclab registry rebuild --dry-run
+        hhplab registry rebuild --dry-run
     """
     if registry_path is None:
         registry_path = curated_root() / "source_registry.parquet"
@@ -185,7 +185,7 @@ def registry_rebuild(
 
         non_interactive = (
             on_hash_mismatch != "prompt"
-            or os.environ.get("COCLAB_NON_INTERACTIVE") == "1"
+            or os.environ.get("HHPLAB_NON_INTERACTIVE") == "1"
         )
 
         if non_interactive:

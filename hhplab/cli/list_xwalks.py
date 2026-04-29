@@ -118,11 +118,11 @@ def list_xwalks(
 
     Examples:
 
-        coclab list xwalks
+        hhplab list xwalks
 
-        coclab list xwalks --type tract
+        hhplab list xwalks --type tract
 
-        coclab list xwalks --dir /path/to/xwalks
+        hhplab list xwalks --dir /path/to/xwalks
     """
     if directory is None:
         directory = curated_dir("xwalks")

@@ -40,11 +40,11 @@ def generate_metro(
 
     Examples:
 
-        coclab generate metro
+        hhplab generate metro
 
-        coclab generate metro --definition-version glynn_fox_v1
+        hhplab generate metro --definition-version glynn_fox_v1
 
-        coclab generate metro --force
+        hhplab generate metro --force
     """
     import json as json_mod
 

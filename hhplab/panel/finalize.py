@@ -246,7 +246,7 @@ def _apply_dtype_spec(df: pd.DataFrame) -> pd.DataFrame:
 
 def _default_source_label(geo_type: str) -> str:
     """Return the default source label for a geo type."""
-    return "metro_panel" if geo_type == GEO_TYPE_METRO else "coclab_panel"
+    return "metro_panel" if geo_type == GEO_TYPE_METRO else "hhplab_panel"
 
 
 def finalize_panel(

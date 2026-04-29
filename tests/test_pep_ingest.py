@@ -218,7 +218,7 @@ class TestIntegration:
         """Get path to PEP data if it exists."""
         path = Path("data/curated/pep/pep_county__v2024.parquet")
         if not path.exists():
-            pytest.skip("PEP data not available - run 'coclab ingest pep' first")
+            pytest.skip("PEP data not available - run 'hhplab ingest pep' first")
         return path
 
     def test_loaded_data_has_expected_columns(self, pep_data_path):

@@ -730,7 +730,7 @@ class TestGenerateDiagnosticsReport:
                 "median_gross_rent": [1200, 1800, 2200] * 3,
                 "coverage_ratio": [0.95, 0.98, 0.99, 0.92, 0.85, 0.98, 0.96, 0.97, None],
                 "boundary_changed": [False] * 3 + [True] * 3 + [True] * 3,
-                "source": ["coclab_panel"] * 9,
+                "source": ["hhplab_panel"] * 9,
             }
         )
 
@@ -928,7 +928,7 @@ class TestIntegration:
                         "median_gross_rent": 1000 + j * 200,
                         "coverage_ratio": 0.90 + (i + j) % 10 * 0.01,
                         "boundary_changed": i > 0 and (i + j) % 2 == 0,
-                        "source": "coclab_panel",
+                        "source": "hhplab_panel",
                     }
                 )
 

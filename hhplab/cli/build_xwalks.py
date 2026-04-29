@@ -96,22 +96,22 @@ def build_xwalks(
     Examples:
 
         # Area-only (default)
-        coclab generate xwalks --boundary 2025 --tracts 2023
+        hhplab generate xwalks --boundary 2025 --tracts 2023
 
         # With population weights
-        coclab generate xwalks --boundary 2025 --tracts 2023 --population-weights
+        hhplab generate xwalks --boundary 2025 --tracts 2023 --population-weights
 
         # Auto-fetch population data if missing
-        coclab generate xwalks --boundary 2025 --tracts 2023 --population-weights --auto-fetch
+        hhplab generate xwalks --boundary 2025 --tracts 2023 --population-weights --auto-fetch
 
         # Build only county crosswalk
-        coclab generate xwalks --boundary 2025 --type counties --counties 2020
+        hhplab generate xwalks --boundary 2025 --type counties --counties 2020
 
         # Build only tract crosswalk
-        coclab generate xwalks --boundary 2025 --type tracts --tracts 2023
+        hhplab generate xwalks --boundary 2025 --type tracts --tracts 2023
 
         # Build crosswalks inside a named build directory
-        coclab generate xwalks --build demo --boundary 2025 --tracts 2023
+        hhplab generate xwalks --build demo --boundary 2025 --tracts 2023
     """
     # Determine what to build
     build_tracts = xwalk_type in ("tracts", "all")
@@ -142,7 +142,7 @@ def build_xwalks(
         boundary = latest_vintage()
         if boundary is None:
             typer.echo(
-                "Error: No boundary vintages found in registry. Run 'coclab ingest' first.",
+                "Error: No boundary vintages found in registry. Run 'hhplab ingest' first.",
                 err=True,
             )
             raise typer.Exit(1)
@@ -167,7 +167,7 @@ def build_xwalks(
     if not boundary_path.exists():
         typer.echo(
             f"Error: Boundary file not found: {boundary_path}. "
-            f"Run 'coclab ingest boundaries --source hud_exchange --vintage {boundary}' first.",
+            f"Run 'hhplab ingest boundaries --source hud_exchange --vintage {boundary}' first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -217,7 +217,7 @@ def build_xwalks(
             else:
                 typer.echo(
                     f"Error: Tract file not found: {tract_path}. "
-                    f"Run 'coclab ingest tiger --year {tracts} --type tracts' first.",
+                    f"Run 'hhplab ingest tiger --year {tracts} --type tracts' first.",
                     err=True,
                 )
                 raise typer.Exit(1)
@@ -376,7 +376,7 @@ def _apply_population_weights(
         typer.echo(
             f"Warning: Population data not found for ACS {acs_vintage}. "
             f"Use --auto-fetch to download, or run:\n"
-            f"  coclab ingest acs5-tract --acs {acs_vintage} "
+            f"  hhplab ingest acs5-tract --acs {acs_vintage} "
             f"--tracts {tract_vintage}",
             err=True,
         )

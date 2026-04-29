@@ -47,13 +47,13 @@ def panel_diagnostics(
 
     Examples:
 
-        coclab diagnostics panel --panel outputs/my-recipe/panel__Y2018-2024@B2025.parquet
+        hhplab diagnostics panel --panel outputs/my-recipe/panel__Y2018-2024@B2025.parquet
 
-        coclab diagnostics panel --panel panel.parquet --output-dir ./diagnostics/
+        hhplab diagnostics panel --panel panel.parquet --output-dir ./diagnostics/
 
-        coclab diagnostics panel --panel panel.parquet --format csv
+        hhplab diagnostics panel --panel panel.parquet --format csv
 
-        coclab diagnostics panel --panel panel.parquet --format text
+        hhplab diagnostics panel --panel panel.parquet --format text
     """
     import pandas as pd
 

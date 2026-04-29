@@ -1,4 +1,4 @@
-"""Year coverage and schema conformance checks for CoC Lab panels.
+"""Year coverage and schema conformance checks for HHP-Lab panels.
 
 Tests for coclab-2jtk/coclab-d0qm: check_year_coverage, check_schema_measures, check_schema_zori.
 

@@ -99,7 +99,7 @@ def read_metro_coc_membership(
     except FileNotFoundError:
         raise FileNotFoundError(
             f"Metro membership artifact not found at {path}. "
-            f"Run: coclab generate metro --definition-version {definition_version}"
+            f"Run: hhplab generate metro --definition-version {definition_version}"
         ) from None
 
 

@@ -178,7 +178,7 @@ def _expected_panel_truth_table() -> tuple[PanelTruthRow, ...]:
                 boundary_vintage_used="2025",
                 acs5_vintage_used=str(year),
                 tract_vintage_used="2020",
-                source="coclab_panel",
+                source="hhplab_panel",
             ))
 
     return tuple(truth_rows)

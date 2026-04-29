@@ -42,12 +42,12 @@ import pyarrow.parquet as pq
 logger = logging.getLogger(__name__)
 
 # Metadata key used in Parquet schema
-PROVENANCE_KEY = b"coclab_provenance"
+PROVENANCE_KEY = b"hhplab_provenance"
 
 
 @dataclass
 class ProvenanceBlock:
-    """Extensible provenance metadata for CoC Lab datasets.
+    """Extensible provenance metadata for HHP-Lab datasets.
 
     Attributes
     ----------
@@ -71,8 +71,8 @@ class ProvenanceBlock:
         Used for metro and other non-polygonal geography families.
     created_at : str
         ISO 8601 timestamp of dataset creation (auto-generated).
-    coclab_version : str
-        Version of CoC Lab that produced this dataset.
+    hhplab_version : str
+        Version of HHP-Lab that produced this dataset.
     extra : dict
         Additional extensible metadata fields.
     """
@@ -86,7 +86,7 @@ class ProvenanceBlock:
     geo_type: str | None = None
     definition_version: str | None = None
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
-    coclab_version: str = "0.1.0"
+    hhplab_version: str = "0.1.0"
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -149,7 +149,7 @@ class ProvenanceBlock:
             "geo_type",
             "definition_version",
             "created_at",
-            "coclab_version",
+            "hhplab_version",
             "extra",
         }
         kwargs = {k: v for k, v in data.items() if k in known_fields}

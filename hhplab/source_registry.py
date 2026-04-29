@@ -1,7 +1,7 @@
 """Unified source data registry for tracking external data ingestion.
 
 This module provides a centralized registry for tracking all external data sources
-ingested into the CoC Lab pipeline. It records:
+ingested into the HHP-Lab pipeline. It records:
 - Source URL and type
 - Download timestamps
 - Raw content hashes (SHA-256)

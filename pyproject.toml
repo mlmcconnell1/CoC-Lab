@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.scripts]
-coclab = "hhplab.cli.main:app"
+hhplab = "hhplab.cli.main:app"
 
 [project.optional-dependencies]
 dev = [

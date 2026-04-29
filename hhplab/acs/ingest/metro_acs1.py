@@ -96,7 +96,7 @@ def fetch_acs1_cbsa_data(
             f"Census did not publish ACS 1-year estimates for {vintage} due to "
             f"COVID-19 data collection disruptions. "
             f"For labor-market measures in {vintage}, consider BLS LAUS data "
-            f"('coclab ingest laus-metro --year {vintage}') instead."
+            f"('hhplab ingest laus-metro --year {vintage}') instead."
         )
 
     if vintage < ACS1_FIRST_RELIABLE_YEAR:

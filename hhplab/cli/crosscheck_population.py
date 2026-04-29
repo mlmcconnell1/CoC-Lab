@@ -79,13 +79,13 @@ def _run_population_validation(
 
     Examples:
 
-        coclab validate population
+        hhplab validate population
 
-        coclab validate population --boundary 2025 --acs 2019-2023
+        hhplab validate population --boundary 2025 --acs 2019-2023
 
-        coclab validate population --by-state
+        hhplab validate population --by-state
 
-        coclab validate population --warn-threshold 0.10
+        hhplab validate population --warn-threshold 0.10
     """
     if xwalk_dir is None:
         xwalk_dir = curated_dir("xwalks")

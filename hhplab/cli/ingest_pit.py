@@ -51,11 +51,11 @@ def ingest_pit(
 
     Examples:
 
-        coclab ingest pit --year 2024
+        hhplab ingest pit --year 2024
 
-        coclab ingest pit --year 2024 --force
+        hhplab ingest pit --year 2024 --force
 
-        coclab ingest pit --year 2024 --parse-only
+        hhplab ingest pit --year 2024 --parse-only
     """
     from hhplab.pit.ingest import (
         download_pit_data,

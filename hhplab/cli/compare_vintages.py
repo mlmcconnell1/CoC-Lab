@@ -53,11 +53,11 @@ def compare_vintages(
 
     Examples:
 
-        coclab show vintage-diffs --vintage1 2024 --vintage2 2025
+        hhplab show vintage-diffs --vintage1 2024 --vintage2 2025
 
-        coclab show vintage-diffs -v1 2024 -v2 2025 --show-unchanged
+        hhplab show vintage-diffs -v1 2024 -v2 2025 --show-unchanged
 
-        coclab show vintage-diffs -v1 2024 -v2 2025 -o diff_report.csv
+        hhplab show vintage-diffs -v1 2024 -v2 2025 -o diff_report.csv
     """
     # Look up vintage paths in registry
     vintages = list_boundaries()

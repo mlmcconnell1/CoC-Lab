@@ -40,11 +40,11 @@ def ingest_tiger(
 
     Examples:
 
-        coclab ingest tiger --year 2023
+        hhplab ingest tiger --year 2023
 
-        coclab ingest tiger --year 2023 --type tracts
+        hhplab ingest tiger --year 2023 --type tracts
 
-        coclab ingest tiger --year 2023 --type counties --force
+        hhplab ingest tiger --year 2023 --type counties --force
     """
     # Validate type option
     valid_types = {"tracts", "counties", "all"}

@@ -1,4 +1,4 @@
-"""Tests for coclab list curated CLI command."""
+"""Tests for hhplab list curated CLI command."""
 
 import json
 from pathlib import Path

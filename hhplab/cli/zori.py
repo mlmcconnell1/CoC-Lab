@@ -92,11 +92,11 @@ def ingest_zori(
 
     Examples:
 
-        coclab ingest zori --geography county
+        hhplab ingest zori --geography county
 
-        coclab ingest zori --geography county --force
+        hhplab ingest zori --geography county --force
 
-        coclab ingest zori --geography county --start 2020-01-01 --end 2024-12-31
+        hhplab ingest zori --geography county --start 2020-01-01 --end 2024-12-31
     """
     if output_dir is None:
         output_dir = _curated_dir("zori")
@@ -251,10 +251,10 @@ def aggregate_zori(
     using area-weighted crosswalks and ACS-based demographic weights.
 
     Prerequisite commands:
-    - coclab ingest boundaries --source hud_exchange --vintage <boundary>
-    - coclab ingest tiger --year <counties> --type counties
-    - coclab generate xwalks --boundary <boundary> --counties <counties>
-    - coclab ingest zori --geography county
+    - hhplab ingest boundaries --source hud_exchange --vintage <boundary>
+    - hhplab ingest tiger --year <counties> --type counties
+    - hhplab generate xwalks --boundary <boundary> --counties <counties>
+    - hhplab ingest zori --geography county
 
     Exit codes:
     - 0: Success
@@ -263,7 +263,7 @@ def aggregate_zori(
 
     Examples:
 
-        coclab aggregate zori --build demo --boundary 2025 --counties 2023 --acs 2019-2023
+        hhplab aggregate zori --build demo --boundary 2025 --counties 2023 --acs 2019-2023
     """
     if output_dir is None:
         output_dir = _curated_dir("zori")
@@ -309,7 +309,7 @@ def aggregate_zori(
     if xwalk_path is not None and not Path(xwalk_path).exists():
         typer.echo(f"Error: Crosswalk not found: {xwalk_path}", err=True)
         typer.echo(
-            f"Run: coclab generate xwalks --boundary {boundary} --counties {counties}",
+            f"Run: hhplab generate xwalks --boundary {boundary} --counties {counties}",
             err=True,
         )
         raise typer.Exit(2)
@@ -365,10 +365,10 @@ def aggregate_zori(
         typer.echo(f"Error: Missing input file: {e}", err=True)
         typer.echo("")
         typer.echo("Ensure you have run the prerequisite commands:")
-        typer.echo(f"  coclab ingest boundaries --source hud_exchange --vintage {boundary}")
-        typer.echo(f"  coclab ingest tiger --year {counties} --type counties")
-        typer.echo(f"  coclab generate xwalks --boundary {boundary} --counties {counties}")
-        typer.echo(f"  coclab ingest zori --geography {geography}")
+        typer.echo(f"  hhplab ingest boundaries --source hud_exchange --vintage {boundary}")
+        typer.echo(f"  hhplab ingest tiger --year {counties} --type counties")
+        typer.echo(f"  hhplab generate xwalks --boundary {boundary} --counties {counties}")
+        typer.echo(f"  hhplab ingest zori --geography {geography}")
         raise typer.Exit(2) from e
 
     except ValueError as e:
@@ -423,9 +423,9 @@ def zori_diagnostics(
 
     Examples:
 
-        coclab diagnostics zori --coc-zori coc_zori__county__b2025.parquet
+        hhplab diagnostics zori --coc-zori coc_zori__county__b2025.parquet
 
-        coclab diagnostics zori --coc-zori coc_zori.parquet --output diagnostics.csv
+        hhplab diagnostics zori --coc-zori coc_zori.parquet --output diagnostics.csv
     """
     # Validate input file exists
     if not coc_zori.exists():

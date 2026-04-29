@@ -1,4 +1,4 @@
-"""Analysis geography model for CoC Lab.
+"""Analysis geography model for HHP-Lab.
 
 This module introduces the canonical analysis geography abstraction used
 across build, aggregate, panel, and conformance layers. It separates the

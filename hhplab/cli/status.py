@@ -208,7 +208,7 @@ def _check_prerequisites(assets: dict) -> list[dict]:
             "severity": "error",
             "area": "boundaries",
             "message": "No curated boundary files found.",
-            "hint": "Run: coclab ingest boundaries --source hud_exchange --vintage <YEAR>",
+            "hint": "Run: hhplab ingest boundaries --source hud_exchange --vintage <YEAR>",
         })
 
     census = assets["census"]
@@ -217,7 +217,7 @@ def _check_prerequisites(assets: dict) -> list[dict]:
             "severity": "error",
             "area": "census",
             "message": "No TIGER census geometry files found.",
-            "hint": "Run: coclab ingest tiger --year <YEAR>",
+            "hint": "Run: hhplab ingest tiger --year <YEAR>",
         })
 
     xwalks = assets["crosswalks"]
@@ -226,7 +226,7 @@ def _check_prerequisites(assets: dict) -> list[dict]:
             "severity": "warning",
             "area": "crosswalks",
             "message": "No crosswalk files found.",
-            "hint": "Run: coclab generate xwalks --boundary <YEAR> --census <YEAR>",
+            "hint": "Run: hhplab generate xwalks --boundary <YEAR> --census <YEAR>",
         })
 
     if assets["pit"]["count"] == 0:
@@ -234,7 +234,7 @@ def _check_prerequisites(assets: dict) -> list[dict]:
             "severity": "warning",
             "area": "pit",
             "message": "No PIT count files found.",
-            "hint": "Run: coclab ingest pit --year <YEAR>",
+            "hint": "Run: hhplab ingest pit --year <YEAR>",
         })
 
     return issues
@@ -271,11 +271,11 @@ def status_cmd(
 
     Examples:
 
-        coclab status
+        hhplab status
 
-        coclab status --json
+        hhplab status --json
 
-        coclab status --data-dir /path/to/data
+        hhplab status --data-dir /path/to/data
     """
     curated = data_dir / "curated"
 
@@ -308,7 +308,7 @@ def status_cmd(
         return
 
     # Human-readable output
-    typer.echo("CoC Lab Status Report")
+    typer.echo("HHP-Lab Status Report")
     typer.echo("=" * 50)
 
     # Boundaries

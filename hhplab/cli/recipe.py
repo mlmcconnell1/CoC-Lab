@@ -148,8 +148,8 @@ def recipe_cmd(
     recipe, runs validation, runs the readiness preflight, and then
     executes the pipelines when all prerequisites are satisfied.
 
-    Use ``coclab build recipe-preflight`` when you want the readiness
-    report without executing. Use ``coclab build recipe-plan`` when you
+    Use ``hhplab build recipe-preflight`` when you want the readiness
+    report without executing. Use ``hhplab build recipe-plan`` when you
     need to inspect the resolved task graph while authoring or debugging
     a recipe. Use ``--dry-run`` to run the same validation/preflight
     path without execution.
@@ -160,14 +160,14 @@ def recipe_cmd(
     Examples:
 
         # Normal human workflow
-        coclab build recipe --recipe my_build.yaml
+        hhplab build recipe --recipe my_build.yaml
 
         # Automation / CI
-        coclab build recipe-preflight --recipe my_build.yaml --json
-        coclab build recipe --recipe my_build.yaml --json
+        hhplab build recipe-preflight --recipe my_build.yaml --json
+        hhplab build recipe --recipe my_build.yaml --json
 
         # Inspect resolved tasks while authoring/debugging
-        coclab build recipe-plan --recipe my_build.yaml --json
+        hhplab build recipe-plan --recipe my_build.yaml --json
     """
     # 0. Ensure built-in adapters are registered
     register_defaults()
@@ -261,7 +261,7 @@ def recipe_cmd(
                                 err=True,
                             )
                 typer.echo(
-                    "\nRun 'coclab build recipe-preflight --recipe "
+                    "\nRun 'hhplab build recipe-preflight --recipe "
                     f"{recipe}' for details.",
                     err=True,
                 )
@@ -368,13 +368,13 @@ def recipe_plan_cmd(
 
     This command does not perform the full readiness checks used by
     ``recipe-preflight``. For a no-execute readiness gate, use
-    ``coclab build recipe-preflight`` instead.
+    ``hhplab build recipe-preflight`` instead.
 
     Examples:
 
-        coclab build recipe-plan --recipe my_build.yaml
+        hhplab build recipe-plan --recipe my_build.yaml
 
-        coclab build recipe-plan --recipe my_build.yaml --json
+        hhplab build recipe-plan --recipe my_build.yaml --json
     """
     register_defaults()
 
@@ -487,7 +487,7 @@ def recipe_provenance_cmd(
 
     Examples:
 
-        coclab build recipe-provenance \\
+        hhplab build recipe-provenance \\
             --manifest panel__Y2020-2021@B2025.manifest.json
     """
     if not manifest.exists():
@@ -562,7 +562,7 @@ def recipe_export_cmd(
 
     Examples:
 
-        coclab build recipe-export \\
+        hhplab build recipe-export \\
             --manifest panel.manifest.json --destination /tmp/bundle
     """
     if not manifest.exists():
@@ -688,7 +688,7 @@ def recipe_preflight_cmd(
             "--non-interactive",
             help=(
                 "Accept the documented automation flag when invoking "
-                "'coclab build recipe-preflight' directly."
+                "'hhplab build recipe-preflight' directly."
             ),
         ),
     ] = False,
@@ -708,11 +708,11 @@ def recipe_preflight_cmd(
 
     Examples:
 
-        coclab build recipe-preflight --recipe my_build.yaml
+        hhplab build recipe-preflight --recipe my_build.yaml
 
-        coclab build recipe-preflight --recipe my_build.yaml --json
+        hhplab build recipe-preflight --recipe my_build.yaml --json
 
-        coclab build recipe-preflight --recipe my_build.yaml --gaps
+        hhplab build recipe-preflight --recipe my_build.yaml --gaps
     """
     _ = non_interactive
     register_defaults()

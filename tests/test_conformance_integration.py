@@ -66,7 +66,7 @@ def _make_panel(
                 "median_gross_rent": 1200,
                 "coverage_ratio": 0.95,
                 "boundary_changed": False,
-                "source": "coclab_panel",
+                "source": "hhplab_panel",
             })
     return pd.DataFrame(rows)
 

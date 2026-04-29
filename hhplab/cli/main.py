@@ -1,4 +1,4 @@
-"""CLI commands for CoC Lab using Typer.
+"""CLI commands for HHP-Lab using Typer.
 
 Provides commands for ingesting CoC boundary data, building crosswalks,
 computing measures, and visualizing boundaries.
@@ -61,7 +61,7 @@ warnings.filterwarnings(
 
 def _is_non_interactive(ctx: typer.Context | None = None) -> bool:
     """Return True when CLI should avoid all interactive prompts."""
-    env = os.getenv("COCLAB_NON_INTERACTIVE", "").strip().lower()
+    env = os.getenv("HHPLAB_NON_INTERACTIVE", "").strip().lower()
     env_true = env in {"1", "true", "yes", "on"}
     argv_flag = "--non-interactive" in sys.argv[1:]
 
@@ -72,7 +72,7 @@ def _is_non_interactive(ctx: typer.Context | None = None) -> bool:
 
 
 def _check_working_directory(*, non_interactive: bool = False) -> None:
-    """Warn if the current directory doesn't look like the CoC Lab project root."""
+    """Warn if the current directory doesn't look like the HHP-Lab project root."""
     cwd = Path.cwd()
     expected_markers = [
         cwd / "pyproject.toml",
@@ -84,7 +84,7 @@ def _check_working_directory(*, non_interactive: bool = False) -> None:
     if missing:
         missing_names = ", ".join(p.name for p in missing)
         typer.echo(
-            f"Warning: Current directory may not be the CoC Lab project root. "
+            f"Warning: Current directory may not be the HHP-Lab project root. "
             f"Missing: {missing_names}",
             err=True,
         )
@@ -94,8 +94,8 @@ def _check_working_directory(*, non_interactive: bool = False) -> None:
 
 
 app = typer.Typer(
-    name="coclab",
-    help="CoC Lab - Continuum of Care boundary data infrastructure CLI",
+    name="hhplab",
+    help="HHP-Lab - Continuum of Care boundary data infrastructure CLI",
     no_args_is_help=True,
 )
 
@@ -145,24 +145,24 @@ registry_app = typer.Typer(
     no_args_is_help=True,
 )
 
-AGENTS_INFO_TEXT = """# CoC-Lab Agent Quick Reference
+AGENTS_INFO_TEXT = """# HHP-Lab Agent Quick Reference
 
 ## Automation Defaults
 
 - Prefer machine-readable JSON output when available:
-  - `coclab status --json`
-  - `coclab build recipe-preflight --recipe <file> --json`
-  - `coclab build recipe --recipe <file> --json`
-- Use `coclab build recipe-plan --recipe <file> --json` when you need the
+  - `hhplab status --json`
+  - `hhplab build recipe-preflight --recipe <file> --json`
+  - `hhplab build recipe --recipe <file> --json`
+- Use `hhplab build recipe-plan --recipe <file> --json` when you need the
   resolved task graph while authoring or debugging a recipe.
 - Run non-interactively for automation:
-  - `coclab --non-interactive ...`
-  - or set `COCLAB_NON_INTERACTIVE=1`
+  - `hhplab --non-interactive ...`
+  - or set `HHPLAB_NON_INTERACTIVE=1`
 - Validate curated layout policy before/after writes:
-  - `coclab validate curated-layout`
+  - `hhplab validate curated-layout`
 - Preview curated migration changes before applying:
-  - `coclab migrate curated-layout`
-  - `coclab migrate curated-layout --apply`
+  - `hhplab migrate curated-layout`
+  - `hhplab migrate curated-layout --apply`
 
 ## Crosswalk Rules: Geography-to-Year Matching
 
@@ -204,7 +204,7 @@ def main_callback(
             "--non-interactive",
             help=(
                 "Disable interactive prompts. Can also be enabled with "
-                "COCLAB_NON_INTERACTIVE=1."
+                "HHPLAB_NON_INTERACTIVE=1."
             ),
         ),
     ] = False,
@@ -223,7 +223,7 @@ def main_callback(
 
 @app.command(
     "agents",
-    help="Information for agents who are using the coclab package.",
+    help="Information for agents who are using the hhplab package.",
 )
 def agents() -> None:
     """Display automation and crosswalk guidance for agents."""
@@ -267,9 +267,9 @@ def ingest_boundaries(
 
     Examples:
 
-        coclab ingest boundaries --source hud_exchange --vintage 2025
+        hhplab ingest boundaries --source hud_exchange --vintage 2025
 
-        coclab ingest boundaries --source hud_opendata --snapshot latest
+        hhplab ingest boundaries --source hud_opendata --snapshot latest
     """
     if source == "hud_exchange":
         if vintage is None:
@@ -355,9 +355,9 @@ def delete_boundaries(
 
     Examples:
 
-        coclab registry delete-entry 2024 hud_exchange
+        hhplab registry delete-entry 2024 hud_exchange
 
-        coclab registry delete-entry 2024 hud_exchange --yes
+        hhplab registry delete-entry 2024 hud_exchange --yes
     """
     from hhplab.registry.registry import delete_vintage, list_boundaries
     from hhplab.source_registry import delete_by_local_path
@@ -452,7 +452,7 @@ def check_boundaries(*, json_output: bool = False) -> None:
 
     Examples:
 
-        coclab validate boundaries
+        hhplab validate boundaries
     """
     import json
 
@@ -490,7 +490,7 @@ def check_boundaries(*, json_output: bool = False) -> None:
 
     if not report.is_healthy:
         typer.echo(
-            "\nTo fix issues, use 'coclab registry delete-entry <vintage> <source>' "
+            "\nTo fix issues, use 'hhplab registry delete-entry <vintage> <source>' "
             "and re-ingest the boundaries.",
             err=True,
         )
@@ -540,9 +540,9 @@ def show(
 
     Examples:
 
-        coclab show map --coc CO-500
+        hhplab show map --coc CO-500
 
-        coclab show map --coc CO-500 --vintage 2025
+        hhplab show map --coc CO-500 --vintage 2025
     """
     from hhplab.viz.map_folium import render_coc_map
 
@@ -592,11 +592,11 @@ def source_status(
 
     Examples:
 
-        coclab show sources
+        hhplab show sources
 
-        coclab show sources --type zori
+        hhplab show sources --type zori
 
-        coclab show sources --check-changes
+        hhplab show sources --check-changes
     """
     import json
 

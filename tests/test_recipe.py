@@ -64,7 +64,7 @@ runner = CliRunner()
 STALE_TRANSLATED_ACS_PATH = "data/curated/acs/acs5_tracts__A2019xT2020.parquet"
 STALE_TRANSLATED_ACS_VINTAGE = "2015-2019"
 STALE_TRANSLATED_ACS_REBUILD = (
-    "coclab ingest acs5-tract --acs 2015-2019 --tracts 2020 --force"
+    "hhplab ingest acs5-tract --acs 2015-2019 --tracts 2020 --force"
 )
 
 
@@ -2232,7 +2232,7 @@ class TestMaterialize:
         result = _execute_materialize(task, ctx)
         assert not result.success
         assert "not found" in result.error
-        assert "coclab generate xwalks" in result.error
+        assert "hhplab generate xwalks" in result.error
 
 
 # ===========================================================================
@@ -4156,8 +4156,8 @@ class TestJoinPersistence:
         )
         table = pq.read_table(panel_file)
         metadata = table.schema.metadata
-        assert b"coclab_provenance" in metadata
-        prov = json_mod.loads(metadata[b"coclab_provenance"])
+        assert b"hhplab_provenance" in metadata
+        prov = json_mod.loads(metadata[b"hhplab_provenance"])
         assert prov["recipe_name"] == "executor-test"
         assert prov["pipeline_id"] == "main"
         assert "pit" in prov["datasets"]
@@ -4608,7 +4608,7 @@ class TestProvenanceManifest:
             / "panel__Y2020-2021@B2025.parquet"
         )
         table = pq.read_table(panel_file)
-        prov = json_mod.loads(table.schema.metadata[b"coclab_provenance"])
+        prov = json_mod.loads(table.schema.metadata[b"hhplab_provenance"])
         assert "consumed_assets" in prov
         assert len(prov["consumed_assets"]) > 0
         asset = prov["consumed_assets"][0]
@@ -4921,7 +4921,7 @@ class TestRecipeJsonMode:
         assert ct_findings
         assert all(f["severity"] == "error" for f in ct_findings)
         assert all(
-            f["remediation"]["command"] == "coclab ingest tiger --year 2023 --type counties"
+            f["remediation"]["command"] == "hhplab ingest tiger --year 2023 --type counties"
             for f in ct_findings
         )
 

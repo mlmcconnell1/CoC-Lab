@@ -1,4 +1,4 @@
-"""Tests for the ``coclab aggregate`` CLI command group."""
+"""Tests for the ``hhplab aggregate`` CLI command group."""
 
 import json
 from pathlib import Path
@@ -322,7 +322,7 @@ def test_aggregate_acs_missing_crosswalk_suggests_decennial():
         assert result.exit_code == 1
         assert "Crosswalk not found" in result.output
         assert "Did you mean to request" not in result.output
-        assert "Run: coclab generate xwalks --boundary 2015 --tracts 2010" in result.output
+        assert "Run: hhplab generate xwalks --boundary 2015 --tracts 2010" in result.output
 
 
 def test_aggregate_acs_missing_crosswalk_no_decennial_hint():
@@ -333,7 +333,7 @@ def test_aggregate_acs_missing_crosswalk_no_decennial_hint():
         assert result.exit_code == 1
         assert "Crosswalk not found" in result.output
         assert "Did you mean to request" not in result.output
-        assert "Run: coclab generate xwalks --boundary 2020 --tracts 2020" in result.output
+        assert "Run: hhplab generate xwalks --boundary 2020 --tracts 2020" in result.output
 
 
 # ---------------------------------------------------------------------------

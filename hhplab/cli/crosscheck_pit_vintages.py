@@ -58,11 +58,11 @@ def _run_pit_vintages_validation(
 
     Examples:
 
-        coclab validate pit-vintages --vintage1 2023 --vintage2 2024
+        hhplab validate pit-vintages --vintage1 2023 --vintage2 2024
 
-        coclab validate pit-vintages -v1 2023 -v2 2024 --year 2020
+        hhplab validate pit-vintages -v1 2023 -v2 2024 --year 2020
 
-        coclab validate pit-vintages -v1 2023 -v2 2024 -o comparison.csv
+        hhplab validate pit-vintages -v1 2023 -v2 2024 -o comparison.csv
     """
     # Look up vintage paths in registry
     vintages = list_pit_vintages()
@@ -76,7 +76,7 @@ def _run_pit_vintages_validation(
             err=True,
         )
         typer.echo(
-            "\nHint: Run 'coclab ingest pit-vintage --vintage <year>' to ingest a vintage.",
+            "\nHint: Run 'hhplab ingest pit-vintage --vintage <year>' to ingest a vintage.",
             err=True,
         )
         raise typer.Exit(1)
@@ -89,7 +89,7 @@ def _run_pit_vintages_validation(
             err=True,
         )
         typer.echo(
-            "\nHint: Run 'coclab ingest pit-vintage --vintage <year>' to ingest a vintage.",
+            "\nHint: Run 'hhplab ingest pit-vintage --vintage <year>' to ingest a vintage.",
             err=True,
         )
         raise typer.Exit(1)

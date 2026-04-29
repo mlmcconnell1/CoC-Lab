@@ -27,7 +27,7 @@ def ingest_tract_relationship(
 
     Example:
 
-        coclab ingest-tract-relationship
+        hhplab ingest-tract-relationship
     """
     from hhplab.census.ingest import ingest_tract_relationship as do_ingest
 

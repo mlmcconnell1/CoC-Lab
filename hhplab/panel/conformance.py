@@ -1,4 +1,4 @@
-"""Post-build conformance report infrastructure for CoC Lab panels.
+"""Post-build conformance report infrastructure for HHP-Lab panels.
 
 This module provides the framework for running conformance checks on
 assembled panel DataFrames. Individual checks are registered via the

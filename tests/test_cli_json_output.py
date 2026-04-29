@@ -207,7 +207,7 @@ class TestDiagnosticsPanelJson:
             "total_population": [50000, 51000],
             "coverage_ratio": [0.95, 0.96],
             "boundary_changed": [False, True],
-            "source": ["coclab_panel", "coclab_panel"],
+            "source": ["hhplab_panel", "hhplab_panel"],
         }).to_parquet(panel_path)
 
         result = runner.invoke(

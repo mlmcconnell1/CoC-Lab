@@ -1,4 +1,4 @@
-"""Tests for the coclab status command."""
+"""Tests for the hhplab status command."""
 
 import json
 from pathlib import Path
@@ -97,7 +97,7 @@ class TestStatusHuman:
         )
 
         assert result.exit_code == 0
-        assert "CoC Lab Status Report" in result.output
+        assert "HHP-Lab Status Report" in result.output
         assert "2 vintage(s)" in result.output
         assert "2024" in result.output
         assert "2025" in result.output

@@ -10,7 +10,7 @@ and runs are recorded in the build manifest.
 
 .. deprecated::
     The ``--build`` flag and named build directories are deprecated.
-    Prefer recipe-driven panel assembly via ``coclab build recipe``
+    Prefer recipe-driven panel assembly via ``hhplab build recipe``
     which produces canonical outputs in ``output_root/<recipe-name>/``.
 """
 
@@ -64,12 +64,12 @@ def _validate_build(build: str) -> Path:
 
     warnings.warn(
         "The --build flag is deprecated. Prefer recipe-driven panel "
-        "assembly via 'coclab build recipe' for canonical outputs.",
+        "assembly via 'hhplab build recipe' for canonical outputs.",
         DeprecationWarning,
         stacklevel=2,
     )
     typer.echo(
-        "Warning: --build is deprecated. Use 'coclab build recipe' instead.",
+        "Warning: --build is deprecated. Use 'hhplab build recipe' instead.",
         err=True,
     )
     try:
@@ -202,7 +202,7 @@ def aggregate_pep(
         typer.Option(
             "--build",
             "-b",
-            help="[Deprecated] Named build directory. Prefer 'coclab build recipe'.",
+            help="[Deprecated] Named build directory. Prefer 'hhplab build recipe'.",
         ),
     ] = None,
     align: Annotated[
@@ -395,7 +395,7 @@ def aggregate_pit(
         typer.Option(
             "--build",
             "-b",
-            help="[Deprecated] Named build directory. Prefer 'coclab build recipe'.",
+            help="[Deprecated] Named build directory. Prefer 'hhplab build recipe'.",
         ),
     ] = None,
     align: Annotated[
@@ -543,7 +543,7 @@ def aggregate_acs(
         typer.Option(
             "--build",
             "-b",
-            help="[Deprecated] Named build directory. Prefer 'coclab build recipe'.",
+            help="[Deprecated] Named build directory. Prefer 'hhplab build recipe'.",
         ),
     ] = None,
     align: Annotated[
@@ -595,7 +595,7 @@ def aggregate_acs(
     Reads pre-ingested ACS tract files from disk and aggregates to CoC
     level using crosswalks.  No Census API calls are made.  If cached
     ingest files are missing, the command fails with instructions to
-    run ``coclab ingest acs5-tract`` first.
+    run ``hhplab ingest acs5-tract`` first.
 
     Iterates over years using each as the boundary vintage (hub).
     For each boundary year, the ACS vintage is derived from the alignment
@@ -678,7 +678,7 @@ def aggregate_acs(
                     "boundary_vintage": boundary_vintage,
                     "acs_vintage": acs_vintage,
                     "remedy": (
-                        f"coclab ingest acs5-tract"
+                        f"hhplab ingest acs5-tract"
                         f" --acs {acs_vintage}"
                         f" --tracts {tract_vintage}"
                     ),
@@ -689,7 +689,7 @@ def aggregate_acs(
                 err=True,
             )
             typer.echo(
-                f"Run: coclab ingest acs5-tract --acs {acs_vintage} --tracts {tract_vintage}",
+                f"Run: hhplab ingest acs5-tract --acs {acs_vintage} --tracts {tract_vintage}",
                 err=True,
             )
             raise typer.Exit(1)
@@ -715,7 +715,7 @@ def aggregate_acs(
                     "acs_vintage": acs_vintage,
                     "tract_vintage": str(tract_vintage),
                     "remedy": (
-                        f"coclab generate xwalks"
+                        f"hhplab generate xwalks"
                         f" --boundary {boundary_vintage}"
                         f" --tracts {tract_vintage}"
                     ),
@@ -733,7 +733,7 @@ def aggregate_acs(
                     err=True,
                 )
             typer.echo(
-                f"Run: coclab generate xwalks --boundary {boundary_vintage} "
+                f"Run: hhplab generate xwalks --boundary {boundary_vintage} "
                 f"--tracts {tract_vintage}",
                 err=True,
             )
@@ -867,7 +867,7 @@ def aggregate_zori(
         typer.Option(
             "--build",
             "-b",
-            help="[Deprecated] Named build directory. Prefer 'coclab build recipe'.",
+            help="[Deprecated] Named build directory. Prefer 'hhplab build recipe'.",
         ),
     ] = None,
     align: Annotated[

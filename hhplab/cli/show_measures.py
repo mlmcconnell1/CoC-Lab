@@ -185,11 +185,11 @@ def show_measures(
 
     Examples:
 
-        coclab show measures --coc CO-500
+        hhplab show measures --coc CO-500
 
-        coclab show measures --coc CO-500 --boundary 2025 --acs 2022
+        hhplab show measures --coc CO-500 --boundary 2025 --acs 2022
 
-        coclab show measures --coc NY-600 --format json
+        hhplab show measures --coc NY-600 --format json
     """
     if measures_dir is None:
         measures_dir = curated_dir("measures")
@@ -210,7 +210,7 @@ def show_measures(
     if not measures_dir.exists():
         typer.echo(
             f"Error: Measures directory not found: {measures_dir}. "
-            "Run 'coclab build recipe --recipe <file>' to generate measures via a recipe.",
+            "Run 'hhplab build recipe --recipe <file>' to generate measures via a recipe.",
             err=True,
         )
         raise typer.Exit(1)
@@ -239,7 +239,7 @@ def show_measures(
         else:
             typer.echo(
                 "Error: No measures files found."
-                " Run 'coclab build recipe --recipe <file>'"
+                " Run 'hhplab build recipe --recipe <file>'"
                 " to generate measures via a recipe.",
                 err=True,
             )

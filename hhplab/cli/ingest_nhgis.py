@@ -69,15 +69,15 @@ def ingest_nhgis(
 
     Examples:
 
-        coclab ingest-nhgis --year 2010 --year 2020
+        hhplab ingest-nhgis --year 2010 --year 2020
 
-        coclab ingest-nhgis --year 2010 --type counties
+        hhplab ingest-nhgis --year 2010 --type counties
 
-        coclab ingest-nhgis --year 2010 --type all
+        hhplab ingest-nhgis --year 2010 --type all
 
-        coclab ingest-nhgis --year 2010 --poll-interval 5
+        hhplab ingest-nhgis --year 2010 --poll-interval 5
 
-        IPUMS_API_KEY=your_key coclab ingest-nhgis --year 2020
+        IPUMS_API_KEY=your_key hhplab ingest-nhgis --year 2020
     """
     from hhplab.naming import county_filename, tract_filename
     from hhplab.nhgis.ingest import (

@@ -5,7 +5,7 @@ Provides ``load_config()`` to resolve ``asset_store_root`` and
 precedence order (highest wins):
 
 1. Explicit keyword arguments (CLI flags)
-2. Environment variables (``COCLAB_ASSET_STORE_ROOT``, ``COCLAB_OUTPUT_ROOT``)
+2. Environment variables (``HHPLAB_ASSET_STORE_ROOT``, ``HHPLAB_OUTPUT_ROOT``)
 3. Repo-local config file (``<project_root>/hhplab.yaml``)
 4. User config file (``~/.config/hhplab/config.yaml``)
 5. Built-in defaults
@@ -20,7 +20,7 @@ Relative path semantics:
 - CLI flags and environment variables resolve relative to the current
   working directory.
 - Repo-local ``hhplab.yaml`` values resolve relative to ``project_root``.
-- User config values resolve relative to ``~/.config/coclab``.
+- User config values resolve relative to ``~/.config/hhplab``.
 """
 
 from __future__ import annotations
@@ -38,15 +38,15 @@ logger = logging.getLogger(__name__)
 # Environment variable names
 # ---------------------------------------------------------------------------
 
-ENV_ASSET_STORE_ROOT = "COCLAB_ASSET_STORE_ROOT"
-ENV_OUTPUT_ROOT = "COCLAB_OUTPUT_ROOT"
+ENV_ASSET_STORE_ROOT = "HHPLAB_ASSET_STORE_ROOT"
+ENV_OUTPUT_ROOT = "HHPLAB_OUTPUT_ROOT"
 
 # ---------------------------------------------------------------------------
 # Well-known config file paths
 # ---------------------------------------------------------------------------
 
 REPO_CONFIG_FILENAME = "hhplab.yaml"
-USER_CONFIG_DIR = Path("~/.config/coclab").expanduser()
+USER_CONFIG_DIR = Path("~/.config/hhplab").expanduser()
 USER_CONFIG_PATH = USER_CONFIG_DIR / "config.yaml"
 
 
@@ -57,7 +57,7 @@ class StorageConfig:
     Attributes
     ----------
     asset_store_root : Path
-        Root directory for reusable CoC-Lab internal assets (raw snapshots,
+        Root directory for reusable HHP-Lab internal assets (raw snapshots,
         curated ingests, crosswalks, registries, aggregated artifacts).
     output_root : Path
         Root directory for downstream-consumable products (recipe-built

@@ -1,4 +1,4 @@
-"""Panel diagnostics and sensitivity checks for CoC Lab Phase 3.
+"""Panel diagnostics and sensitivity checks for HHP-Lab Phase 3.
 
 This module provides diagnostic functions to validate panel integrity before
 modeling. These diagnostics help identify data quality issues, coverage gaps,

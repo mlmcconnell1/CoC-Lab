@@ -1,4 +1,4 @@
-"""CoC Lab - Continuum of Care boundary data infrastructure.
+"""HHP-Lab - Continuum of Care boundary data infrastructure.
 
 The package root intentionally avoids eager submodule imports so source-owned
 packages can depend on shared utilities without pulling the entire package into

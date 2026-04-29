@@ -1,4 +1,4 @@
-"""Panel assembly module for CoC Lab Phase 3.
+"""Panel assembly module for HHP-Lab Phase 3.
 
 This module provides tools for constructing CoC x year panels by aligning
 PIT years with boundary vintages and ACS vintages according to explicit

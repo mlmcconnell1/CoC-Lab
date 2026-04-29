@@ -91,13 +91,13 @@ def list_census(
 
     Examples:
 
-        coclab list census
+        hhplab list census
 
-        coclab list census --type tracts
+        hhplab list census --type tracts
 
-        coclab list census --type counties
+        hhplab list census --type counties
 
-        coclab list census --dir /path/to/census
+        hhplab list census --dir /path/to/census
     """
     if directory is None:
         directory = curated_dir("tiger")

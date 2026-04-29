@@ -1,4 +1,4 @@
-"""Tests for CLI commands referenced in the CoC-Lab CLI test plan."""
+"""Tests for CLI commands referenced in the HHP-Lab CLI test plan."""
 
 from pathlib import Path
 from unittest.mock import patch
