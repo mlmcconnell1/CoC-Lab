@@ -21,7 +21,7 @@ import pytest
 
 pytestmark = pytest.mark.legacy_build_path
 
-from coclab.panel.assemble import (
+from hhplab.panel.assemble import (
     METRO_PANEL_COLUMNS,
     PANEL_COLUMNS,
     _detect_boundary_changes,
@@ -31,8 +31,8 @@ from coclab.panel.assemble import (
     build_panel,
     save_panel,
 )
-from coclab.panel.policies import DEFAULT_POLICY, AlignmentPolicy
-from coclab.provenance import read_provenance
+from hhplab.panel.policies import DEFAULT_POLICY, AlignmentPolicy
+from hhplab.provenance import read_provenance
 
 
 class TestLoadPitForYear:

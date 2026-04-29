@@ -15,10 +15,10 @@ import pytest
 from shapely.geometry import MultiPolygon, Polygon
 from typer.testing import CliRunner
 
-from coclab.cli.main import app
-from coclab.geo.normalize import normalize_boundaries
-from coclab.registry import latest_vintage, list_boundaries, register_vintage
-from coclab.viz import render_coc_map
+from hhplab.cli.main import app
+from hhplab.geo.normalize import normalize_boundaries
+from hhplab.registry import latest_vintage, list_boundaries, register_vintage
+from hhplab.viz import render_coc_map
 
 runner = CliRunner()
 

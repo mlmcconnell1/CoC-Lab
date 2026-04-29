@@ -6,8 +6,8 @@ import geopandas as gpd
 import pytest
 from shapely.geometry import Polygon
 
-from coclab.registry import register_vintage
-from coclab.viz import render_coc_map
+from hhplab.registry import register_vintage
+from hhplab.viz import render_coc_map
 
 
 @pytest.fixture

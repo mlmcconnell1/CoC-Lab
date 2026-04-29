@@ -6,7 +6,7 @@ and ACS1 unemployment variable completeness.
 
 import pytest
 
-from coclab.acs.variables_acs1 import (
+from hhplab.acs.variables_acs1 import (
     ACS1_FIRST_RELIABLE_YEAR,
     ACS1_METRO_OUTPUT_COLUMNS,
     ACS1_UNEMPLOYMENT_TABLE,
@@ -14,7 +14,7 @@ from coclab.acs.variables_acs1 import (
     ACS1_VARIABLE_NAMES,
     DERIVED_ACS1_MEASURES,
 )
-from coclab.metro.definitions import (
+from hhplab.metro.definitions import (
     _CBSA_METRO_NAMES,
     _CBSA_TO_METRO,
     METRO_CBSA_MAPPING,

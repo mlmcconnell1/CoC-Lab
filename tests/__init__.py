@@ -1,1 +1,1 @@
-"""Tests for coclab package."""
+"""Tests for hhplab package."""

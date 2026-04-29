@@ -7,12 +7,12 @@ covering single-county, multi-county, coverage tracking, and yearly collapse.
 import pandas as pd
 import pytest
 
-from coclab.rents import (
+from hhplab.rents import (
     aggregate_yearly_zori_to_metro,
     aggregate_zori_to_metro,
     collapse_zori_to_yearly,
 )
-from coclab.metro.definitions import (
+from hhplab.metro.definitions import (
     METRO_COUNT,
     METRO_COUNTY_MEMBERSHIP,
     build_county_membership_df,

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 from typer.testing import CliRunner
 
-from coclab.cli.main import app
+from hhplab.cli.main import app
 
 runner = CliRunner()
 
@@ -39,11 +39,11 @@ class TestIngestPitCommand:
         # Typer shows error for missing required option
         assert result.exit_code != 0
 
-    @patch("coclab.pit.ingest.download_pit_data")
-    @patch("coclab.pit.ingest.parse_pit_file")
-    @patch("coclab.pit.ingest.write_pit_parquet")
-    @patch("coclab.pit.registry.register_pit_year")
-    @patch("coclab.pit.qa.validate_pit_data")
+    @patch("hhplab.pit.ingest.download_pit_data")
+    @patch("hhplab.pit.ingest.parse_pit_file")
+    @patch("hhplab.pit.ingest.write_pit_parquet")
+    @patch("hhplab.pit.registry.register_pit_year")
+    @patch("hhplab.pit.qa.validate_pit_data")
     def test_ingest_pit_success(
         self,
         mock_validate,
@@ -55,9 +55,9 @@ class TestIngestPitCommand:
         """Full ingestion workflow should succeed."""
         from datetime import UTC, datetime
 
-        from coclab.pit.ingest import DownloadResult
-        from coclab.pit.qa import QAReport
-        from coclab.pit.registry import PitRegistryEntry
+        from hhplab.pit.ingest import DownloadResult
+        from hhplab.pit.qa import QAReport
+        from hhplab.pit.registry import PitRegistryEntry
 
         # Mock download result
         mock_download.return_value = DownloadResult(
@@ -68,7 +68,7 @@ class TestIngestPitCommand:
         )
 
         # Mock parsed result (PITParseResult with df attribute)
-        from coclab.pit.ingest import PITParseResult
+        from hhplab.pit.ingest import PITParseResult
 
         mock_df = pd.DataFrame(
             {
@@ -107,7 +107,7 @@ class TestIngestPitCommand:
         assert "Parsed 2 CoC records" in result.output
         assert "PIT ingestion complete" in result.output
 
-    @patch("coclab.pit.ingest.download_pit_data")
+    @patch("hhplab.pit.ingest.download_pit_data")
     def test_ingest_pit_download_failure(self, mock_download):
         """Should handle download failure gracefully."""
         mock_download.side_effect = Exception("Network error")
@@ -117,13 +117,13 @@ class TestIngestPitCommand:
         assert result.exit_code == 1
         assert "Error downloading PIT data" in result.output
 
-    @patch("coclab.pit.ingest.download_pit_data")
-    @patch("coclab.pit.ingest.parse_pit_file")
+    @patch("hhplab.pit.ingest.download_pit_data")
+    @patch("hhplab.pit.ingest.parse_pit_file")
     def test_ingest_pit_parse_failure(self, mock_parse, mock_download):
         """Should handle parse failure gracefully."""
         from datetime import UTC, datetime
 
-        from coclab.pit.ingest import DownloadResult
+        from hhplab.pit.ingest import DownloadResult
 
         mock_download.return_value = DownloadResult(
             path=Path("data/raw/pit/2024/pit.xlsx"),
@@ -183,7 +183,7 @@ class TestPanelDiagnosticsCommand:
         assert "Invalid format" in result.output
 
     @patch("pandas.read_parquet")
-    @patch("coclab.panel.generate_diagnostics_report")
+    @patch("hhplab.panel.generate_diagnostics_report")
     def test_panel_diagnostics_success_text(
         self,
         mock_generate,
@@ -191,7 +191,7 @@ class TestPanelDiagnosticsCommand:
         tmp_path,
     ):
         """Diagnostics in text format should succeed."""
-        from coclab.panel.diagnostics import DiagnosticsReport
+        from hhplab.panel.diagnostics import DiagnosticsReport
 
         # Create a dummy panel file
         panel_file = tmp_path / "panel.parquet"
@@ -232,7 +232,7 @@ class TestPanelDiagnosticsCommand:
         assert "PANEL DIAGNOSTICS REPORT" in result.output
 
     @patch("pandas.read_parquet")
-    @patch("coclab.panel.generate_diagnostics_report")
+    @patch("hhplab.panel.generate_diagnostics_report")
     def test_panel_diagnostics_success_csv(
         self,
         mock_generate,
@@ -240,7 +240,7 @@ class TestPanelDiagnosticsCommand:
         tmp_path,
     ):
         """Diagnostics in CSV format should succeed."""
-        from coclab.panel.diagnostics import DiagnosticsReport
+        from hhplab.panel.diagnostics import DiagnosticsReport
 
         # Create a dummy panel file
         panel_file = tmp_path / "panel.parquet"

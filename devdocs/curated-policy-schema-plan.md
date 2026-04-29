@@ -96,7 +96,7 @@ Then allow dataset file_sets to reference that set (or inline equivalent) and ma
 
 ### 4) Planner requirements -- IMPLEMENTED
 
-Functions in `coclab/recipe/planner.py`:
+Functions in `hhplab/recipe/planner.py`:
 - `expand_vintage_set(spec)` — expands rules into `{year: {dim: value}}` mapping.
 - `resolve_vintage_tuple(name, year, recipe)` — resolves one year from a named set.
 
@@ -110,16 +110,16 @@ Diagnostics for:
 
 ### Phase 1: Policy + validation -- DONE
 - Curated compliance tests in `tests/test_curated_compliance.py`.
-- `coclab validate curated-layout` command in `coclab/cli/validate_curated.py`.
-- Policy module at `coclab/curated_policy.py`.
+- `coclab validate curated-layout` command in `hhplab/cli/validate_curated.py`.
+- Policy module at `hhplab/curated_policy.py`.
 
 ### Phase 2: Canonical writes -- DONE
-- All curated writers now use `coclab/naming.py` helpers.
+- All curated writers now use `hhplab/naming.py` helpers.
 - PEP was the last holdout; `coc_pep_filename()` added and wired in.
 - Readers retain legacy fallback during transition.
 
 ### Phase 3: Backfill + dedupe -- DONE (tooling)
-- Migration utility at `coclab/curated_migrate.py`.
+- Migration utility at `hhplab/curated_migrate.py`.
 - CLI command: `coclab migrate curated-layout [--apply]`.
 - Dry-run mode (default) shows planned renames and conflicts.
 - Apply mode renames deterministically.

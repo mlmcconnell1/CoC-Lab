@@ -8,7 +8,7 @@ import json
 import pandas as pd
 from typer.testing import CliRunner
 
-from coclab.cli.main import app
+from hhplab.cli.main import app
 
 runner = CliRunner()
 

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from coclab.builds import (
+from hhplab.builds import (
     get_build_years,
     read_build_manifest,
     record_aggregate_run,

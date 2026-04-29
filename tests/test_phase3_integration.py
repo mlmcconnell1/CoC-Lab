@@ -33,7 +33,7 @@ from shapely.geometry import Polygon
 
 pytestmark = pytest.mark.legacy_build_path
 
-from coclab.panel import (
+from hhplab.panel import (
     DEFAULT_POLICY,
     AlignmentPolicy,
     DiagnosticsReport,
@@ -41,15 +41,15 @@ from coclab.panel import (
     generate_diagnostics_report,
     save_panel,
 )
-from coclab.panel.assemble import PANEL_COLUMNS
-from coclab.pit.ingest import normalize_coc_id, parse_pit_file, write_pit_parquet
-from coclab.pit.qa import validate_pit_data
-from coclab.pit.registry import (
+from hhplab.panel.assemble import PANEL_COLUMNS
+from hhplab.pit.ingest import normalize_coc_id, parse_pit_file, write_pit_parquet
+from hhplab.pit.qa import validate_pit_data
+from hhplab.pit.registry import (
     PitRegistryEntry,
     list_pit_years,
     register_pit_year,
 )
-from coclab.provenance import read_provenance
+from hhplab.provenance import read_provenance
 
 # ============================================================================
 # Fixtures for creating realistic test data

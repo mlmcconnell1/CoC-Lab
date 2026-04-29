@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from coclab.cli.main import app
+from hhplab.cli.main import app
 
 runner = CliRunner()
 
@@ -13,7 +13,7 @@ runner = CliRunner()
 class TestNestedIngestCommand:
     """Tests for the nested 'ingest boundaries' command."""
 
-    @patch("coclab.hud.ingest_hud_exchange")
+    @patch("hhplab.hud.ingest_hud_exchange")
     def test_ingest_boundaries_nested_hud_exchange(self, mock_ingest):
         """Nested ingest boundaries should call ingest_hud_exchange."""
         mock_ingest.return_value = Path("data/curated/coc_boundaries/coc_boundaries__2025.parquet")
@@ -39,7 +39,7 @@ class TestNestedIngestCommand:
 class TestListBoundariesCommand:
     """Tests for the 'list boundaries' command."""
 
-    @patch("coclab.registry.registry.list_boundaries")
+    @patch("hhplab.registry.registry.list_boundaries")
     def test_list_boundaries_empty(self, mock_list):
         """List boundaries when no vintages registered."""
         mock_list.return_value = []
@@ -49,12 +49,12 @@ class TestListBoundariesCommand:
         assert result.exit_code == 0
         assert "No vintages registered" in result.output
 
-    @patch("coclab.registry.registry.list_boundaries")
+    @patch("hhplab.registry.registry.list_boundaries")
     def test_list_boundaries_with_entries(self, mock_list):
         """List boundaries with registered entries."""
         from datetime import UTC, datetime
 
-        from coclab.registry.schema import RegistryEntry
+        from hhplab.registry.schema import RegistryEntry
 
         mock_list.return_value = [
             RegistryEntry(
@@ -89,7 +89,7 @@ class TestListBoundariesCommand:
 class TestShowCommand:
     """Tests for the 'show' command."""
 
-    @patch("coclab.viz.map_folium.render_coc_map")
+    @patch("hhplab.viz.map_folium.render_coc_map")
     def test_show_success(self, mock_render):
         """Show CoC map successfully."""
         mock_render.return_value = Path("data/curated/maps/CO-500__2025.html")
@@ -100,7 +100,7 @@ class TestShowCommand:
         assert "Map saved to" in result.output
         mock_render.assert_called_once_with(coc_id="CO-500", vintage=None, out_html=None)
 
-    @patch("coclab.viz.map_folium.render_coc_map")
+    @patch("hhplab.viz.map_folium.render_coc_map")
     def test_show_with_vintage(self, mock_render):
         """Show CoC map with specific vintage."""
         mock_render.return_value = Path("data/curated/maps/CO-500__2024.html")
@@ -110,7 +110,7 @@ class TestShowCommand:
         assert result.exit_code == 0
         mock_render.assert_called_once_with(coc_id="CO-500", vintage="2024", out_html=None)
 
-    @patch("coclab.viz.map_folium.render_coc_map")
+    @patch("hhplab.viz.map_folium.render_coc_map")
     def test_show_with_output_path(self, mock_render):
         """Show CoC map with custom output path."""
         custom_path = Path("/tmp/my_map.html")
@@ -124,7 +124,7 @@ class TestShowCommand:
         assert result.exit_code == 0
         mock_render.assert_called_once_with(coc_id="CO-500", vintage=None, out_html=custom_path)
 
-    @patch("coclab.viz.map_folium.render_coc_map")
+    @patch("hhplab.viz.map_folium.render_coc_map")
     def test_show_coc_not_found(self, mock_render):
         """Show CoC map when CoC not found."""
         mock_render.side_effect = ValueError("CoC 'XX-999' not found")
@@ -134,7 +134,7 @@ class TestShowCommand:
         assert result.exit_code == 1
         assert "Error:" in result.output
 
-    @patch("coclab.viz.map_folium.render_coc_map")
+    @patch("hhplab.viz.map_folium.render_coc_map")
     def test_show_file_not_found(self, mock_render):
         """Show CoC map when boundary file not found."""
         mock_render.side_effect = FileNotFoundError("Boundary file not found")
@@ -327,8 +327,8 @@ class TestValidatePopulation:
 class TestRegistryDeleteEntry:
     """Tests for the 'registry delete-entry' command."""
 
-    @patch("coclab.registry.registry.delete_vintage")
-    @patch("coclab.registry.registry.list_boundaries")
+    @patch("hhplab.registry.registry.delete_vintage")
+    @patch("hhplab.registry.registry.list_boundaries")
     def test_registry_delete_entry_not_found(self, mock_list, mock_delete):
         """Should fail if entry not found."""
         mock_list.return_value = []
@@ -341,9 +341,9 @@ class TestRegistryDeleteEntry:
         assert result.exit_code == 1
         assert "No entry found" in result.output
 
-    @patch("coclab.source_registry.delete_by_local_path")
-    @patch("coclab.registry.registry.delete_vintage")
-    @patch("coclab.registry.registry.list_boundaries")
+    @patch("hhplab.source_registry.delete_by_local_path")
+    @patch("hhplab.registry.registry.delete_vintage")
+    @patch("hhplab.registry.registry.list_boundaries")
     def test_registry_delete_entry_success(self, mock_list, mock_delete, mock_delete_src):
         """Should delete entry when found and confirmed."""
         from unittest.mock import MagicMock
@@ -379,7 +379,7 @@ class TestRegistryRebuild:
 
         assert "Registry not found" in result.output
 
-    @patch("coclab.cli.registry_rebuild._load_registry")
+    @patch("hhplab.cli.registry_rebuild._load_registry")
     def test_registry_rebuild_empty_registry(self, mock_load, tmp_path):
         """Should handle empty registry."""
         import pandas as pd

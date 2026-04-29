@@ -9,20 +9,20 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from coclab.measures.acs import aggregate_to_coc, aggregate_to_geo
-from coclab.measures.diagnostics import (
+from hhplab.measures.acs import aggregate_to_coc, aggregate_to_geo
+from hhplab.measures.diagnostics import (
     compute_crosswalk_diagnostics,
     compute_measure_diagnostics,
     identify_problem_cocs,
     identify_problem_geos,
 )
-from coclab.pep.aggregate import aggregate_pep_counties
-from coclab.rents.aggregate import (
+from hhplab.pep.aggregate import aggregate_pep_counties
+from hhplab.rents.aggregate import (
     collapse_to_yearly,
     compute_coc_county_weights,
     compute_geo_county_weights,
 )
-from coclab.xwalks.tract import (
+from hhplab.xwalks.tract import (
     add_population_weights,
     validate_population_shares,
 )
@@ -344,7 +344,7 @@ class TestDiagnosticsGeneralization:
 
 class TestExecutorCrosswalkDetection:
     def test_detects_coc_id(self):
-        from coclab.recipe.executor import _detect_xwalk_target_col
+        from hhplab.recipe.executor import _detect_xwalk_target_col
 
         xwalk = pd.DataFrame(
             {"coc_id": ["A"], "tract_geoid": ["B"], "area_share": [0.5]}
@@ -352,7 +352,7 @@ class TestExecutorCrosswalkDetection:
         assert _detect_xwalk_target_col(xwalk, "tract_geoid") == "coc_id"
 
     def test_detects_metro_id(self):
-        from coclab.recipe.executor import _detect_xwalk_target_col
+        from hhplab.recipe.executor import _detect_xwalk_target_col
 
         xwalk = pd.DataFrame(
             {"metro_id": ["GF01"], "tract_geoid": ["B"], "area_share": [0.5]}
@@ -360,7 +360,7 @@ class TestExecutorCrosswalkDetection:
         assert _detect_xwalk_target_col(xwalk, "tract_geoid") == "metro_id"
 
     def test_detects_geo_id(self):
-        from coclab.recipe.executor import _detect_xwalk_target_col
+        from hhplab.recipe.executor import _detect_xwalk_target_col
 
         xwalk = pd.DataFrame(
             {"geo_id": ["X"], "county_fips": ["Y"], "area_share": [0.5]}
@@ -368,7 +368,7 @@ class TestExecutorCrosswalkDetection:
         assert _detect_xwalk_target_col(xwalk, "county_fips") == "geo_id"
 
     def test_prefers_coc_id_over_geo_id(self):
-        from coclab.recipe.executor import _detect_xwalk_target_col
+        from hhplab.recipe.executor import _detect_xwalk_target_col
 
         xwalk = pd.DataFrame(
             {"coc_id": ["A"], "geo_id": ["A"], "tract_geoid": ["B"], "area_share": [0.5]}
@@ -377,7 +377,7 @@ class TestExecutorCrosswalkDetection:
 
     def test_raises_when_no_geo_candidate(self):
         """Regression: no silent fallback to 'coc_id' (coclab-0jfm)."""
-        from coclab.recipe.executor import ExecutorError, _detect_xwalk_target_col
+        from hhplab.recipe.executor import ExecutorError, _detect_xwalk_target_col
 
         xwalk = pd.DataFrame(
             {"county_fips": ["A"], "tract_geoid": ["B"], "area_share": [0.5]}

@@ -10,7 +10,7 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from coclab.acs.ingest.tract_population import (
+from hhplab.acs.ingest.tract_population import (
     fetch_state_tract_data,
     fetch_tract_data,
     get_output_path,
@@ -18,8 +18,8 @@ from coclab.acs.ingest.tract_population import (
     normalize_geoid,
     parse_acs_vintage,
 )
-from coclab.acs.variables import ALL_API_VARS, TRACT_OUTPUT_COLUMNS
-from coclab.provenance import (
+from hhplab.acs.variables import ALL_API_VARS, TRACT_OUTPUT_COLUMNS
+from hhplab.provenance import (
     ProvenanceBlock,
     read_provenance,
     write_parquet_with_provenance,
@@ -417,7 +417,7 @@ class TestFetchTractPopulation:
             return translated, object()
 
         monkeypatch.setattr(
-            "coclab.acs.ingest.tract_population.translate_acs_to_target_vintage",
+            "hhplab.acs.ingest.tract_population.translate_acs_to_target_vintage",
             fake_translate,
         )
 
@@ -562,7 +562,7 @@ class TestIngestTractPopulation:
             return translated, object()
 
         monkeypatch.setattr(
-            "coclab.acs.ingest.tract_population.translate_acs_to_target_vintage",
+            "hhplab.acs.ingest.tract_population.translate_acs_to_target_vintage",
             fake_translate,
         )
 

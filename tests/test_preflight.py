@@ -8,17 +8,17 @@ from pathlib import Path
 import pandas as pd
 from typer.testing import CliRunner
 
-from coclab.cli.main import app
-from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
-from coclab.recipe.loader import load_recipe
-from coclab.recipe.preflight import (
+from hhplab.cli.main import app
+from hhplab.provenance import ProvenanceBlock, write_parquet_with_provenance
+from hhplab.recipe.loader import load_recipe
+from hhplab.recipe.preflight import (
     FindingKind,
     PreflightFinding,
     PreflightReport,
     Severity,
     run_preflight,
 )
-from coclab.recipe.probes import (
+from hhplab.recipe.probes import (
     probe_dataset_schema,
     probe_geo_column,
     probe_measures,
@@ -26,7 +26,7 @@ from coclab.recipe.probes import (
     probe_temporal_filter,
     probe_year_column,
 )
-from coclab.recipe.recipe_schema import DatasetSpec, GeometryRef, TemporalFilter
+from hhplab.recipe.recipe_schema import DatasetSpec, GeometryRef, TemporalFilter
 
 runner = CliRunner()
 
@@ -1111,7 +1111,7 @@ class TestPreflightReport:
 
 
 def _make_remediation():
-    from coclab.recipe.preflight import Remediation
+    from hhplab.recipe.preflight import Remediation
     return Remediation(
         hint="Generate crosswalk artifacts.",
         command="coclab generate xwalks",
@@ -1125,7 +1125,7 @@ def _make_remediation():
 def _make_project_root(tmp_path: Path) -> None:
     """Create marker files so _check_working_directory() doesn't warn."""
     (tmp_path / "pyproject.toml").write_text("[project]\nname='test'\n")
-    (tmp_path / "coclab").mkdir(exist_ok=True)
+    (tmp_path / "hhplab").mkdir(exist_ok=True)
     (tmp_path / "data").mkdir(exist_ok=True)
 
 
@@ -2308,8 +2308,8 @@ class TestSupportDatasetProbe:
 class TestGetWeightedTransformRequirements:
 
     def test_population_weighted(self):
-        from coclab.recipe.probes import get_weighted_transform_requirements
-        from coclab.recipe.recipe_schema import (
+        from hhplab.recipe.probes import get_weighted_transform_requirements
+        from hhplab.recipe.recipe_schema import (
             CrosswalkSpec,
             CrosswalkTransform,
             CrosswalkWeighting,
@@ -2332,8 +2332,8 @@ class TestGetWeightedTransformRequirements:
         assert result == ("weights", "total_pop")
 
     def test_area_weighted_returns_none(self):
-        from coclab.recipe.probes import get_weighted_transform_requirements
-        from coclab.recipe.recipe_schema import (
+        from hhplab.recipe.probes import get_weighted_transform_requirements
+        from hhplab.recipe.recipe_schema import (
             CrosswalkSpec,
             CrosswalkTransform,
             CrosswalkWeighting,
@@ -2352,8 +2352,8 @@ class TestGetWeightedTransformRequirements:
         assert result is None
 
     def test_rollup_transform_returns_none(self):
-        from coclab.recipe.probes import get_weighted_transform_requirements
-        from coclab.recipe.recipe_schema import (
+        from hhplab.recipe.probes import get_weighted_transform_requirements
+        from hhplab.recipe.recipe_schema import (
             GeometryRef,
             RollupKeys,
             RollupSpec,

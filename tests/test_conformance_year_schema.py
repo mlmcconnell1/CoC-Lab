@@ -39,8 +39,8 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from coclab.panel.assemble import ZORI_COLUMNS, ZORI_PROVENANCE_COLUMNS
-from coclab.panel.conformance import (
+from hhplab.panel.assemble import ZORI_COLUMNS, ZORI_PROVENANCE_COLUMNS
+from hhplab.panel.conformance import (
     _CHECKS,
     ACS_MEASURE_COLUMNS,
     PanelRequest,

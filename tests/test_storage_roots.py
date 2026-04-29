@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from coclab.config import StorageConfig, load_config
-from coclab.recipe.manifest import (
+from hhplab.config import StorageConfig, load_config
+from hhplab.recipe.manifest import (
     ROOT_ASSET_STORE,
     ROOT_OUTPUT,
     AssetRecord,
@@ -233,7 +233,7 @@ class TestConfigIntegrationWithPaths:
 
     def test_custom_asset_store_root(self, tmp_path: Path):
         """Custom asset_store_root is used by path helpers."""
-        from coclab.paths import curated_dir, raw_root
+        from hhplab.paths import curated_dir, raw_root
 
         cfg = StorageConfig(
             asset_store_root=tmp_path / "my-assets",
@@ -244,7 +244,7 @@ class TestConfigIntegrationWithPaths:
 
     def test_custom_output_root(self, tmp_path: Path):
         """Custom output_root is used by path helpers."""
-        from coclab.paths import output_root
+        from hhplab.paths import output_root
 
         cfg = StorageConfig(
             asset_store_root=tmp_path / "my-assets",
@@ -277,7 +277,7 @@ class TestClassifyPath:
     """Tests for _classify_path in the executor."""
 
     def test_classifies_asset_store_path(self, tmp_path: Path):
-        from coclab.recipe.executor import ExecutionContext, _classify_path
+        from hhplab.recipe.executor import ExecutionContext, _classify_path
 
         cfg = StorageConfig(
             asset_store_root=tmp_path / "assets",
@@ -293,7 +293,7 @@ class TestClassifyPath:
         assert rel == "curated/pit.parquet"
 
     def test_classifies_output_path(self, tmp_path: Path):
-        from coclab.recipe.executor import ExecutionContext, _classify_path
+        from hhplab.recipe.executor import ExecutionContext, _classify_path
 
         cfg = StorageConfig(
             asset_store_root=tmp_path / "assets",
@@ -309,7 +309,7 @@ class TestClassifyPath:
         assert rel == "panel.parquet"
 
     def test_classifies_project_relative_fallback(self, tmp_path: Path):
-        from coclab.recipe.executor import ExecutionContext, _classify_path
+        from hhplab.recipe.executor import ExecutionContext, _classify_path
 
         cfg = StorageConfig(
             asset_store_root=tmp_path / "assets",

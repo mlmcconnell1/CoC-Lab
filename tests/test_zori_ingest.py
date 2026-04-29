@@ -16,8 +16,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from coclab.provenance import read_provenance
-from coclab.rents.ingest import (
+from hhplab.provenance import read_provenance
+from hhplab.rents.ingest import (
     ZORI_URLS,
     _validate_monthly_continuity,
     download_zori,
@@ -270,7 +270,7 @@ class TestDiscoverZoriIngest:
 
     def test_discovers_temporal_file(self, tmp_path):
         """Test discovery of Z-year named file."""
-        from coclab.naming import discover_zori_ingest
+        from hhplab.naming import discover_zori_ingest
 
         (tmp_path / "zori__county__Z2026.parquet").touch()
         result = discover_zori_ingest("county", tmp_path)
@@ -278,7 +278,7 @@ class TestDiscoverZoriIngest:
 
     def test_prefers_highest_year(self, tmp_path):
         """Test that highest Z-year is preferred."""
-        from coclab.naming import discover_zori_ingest
+        from hhplab.naming import discover_zori_ingest
 
         (tmp_path / "zori__county__Z2025.parquet").touch()
         (tmp_path / "zori__county__Z2026.parquet").touch()
@@ -287,7 +287,7 @@ class TestDiscoverZoriIngest:
 
     def test_falls_back_to_legacy(self, tmp_path):
         """Test fallback to legacy name."""
-        from coclab.naming import discover_zori_ingest
+        from hhplab.naming import discover_zori_ingest
 
         (tmp_path / "zori__county.parquet").touch()
         result = discover_zori_ingest("county", tmp_path)
@@ -295,7 +295,7 @@ class TestDiscoverZoriIngest:
 
     def test_returns_none_when_empty(self, tmp_path):
         """Test None return when no file exists."""
-        from coclab.naming import discover_zori_ingest
+        from hhplab.naming import discover_zori_ingest
 
         result = discover_zori_ingest("county", tmp_path)
         assert result is None

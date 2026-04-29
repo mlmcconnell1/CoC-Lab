@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from coclab.acs.translate import (
+from hhplab.acs.translate import (
     TranslationStats,
     default_tract_vintage_for_acs,
     get_source_tract_vintage,
@@ -13,7 +13,7 @@ from coclab.acs.translate import (
     translate_acs_to_target_vintage,
     translate_tracts_2010_to_2020,
 )
-from coclab.census.ingest.tract_relationship import TractRelationshipNotFoundError
+from hhplab.census.ingest.tract_relationship import TractRelationshipNotFoundError
 
 
 class TestGetSourceTractVintage:
@@ -152,7 +152,7 @@ class TestTranslateTracts2010To2020:
             return pd.read_parquet(rel_path)
 
         monkeypatch.setattr(
-            "coclab.acs.translate.load_tract_relationship",
+            "hhplab.acs.translate.load_tract_relationship",
             mock_load,
         )
 
@@ -513,7 +513,7 @@ class TestTranslateTracts2010To2020:
     def test_pre_2010_acs_to_2020_target_raises(self):
         """Regression test for coclab-i2fj.5.21: pre-2010 ACS vintages must
         not silently pass when targeting 2020+ geography."""
-        from coclab.acs.translate import needs_translation
+        from hhplab.acs.translate import needs_translation
 
         with pytest.raises(ValueError, match="not supported"):
             needs_translation("2005-2009", 2023)
@@ -543,7 +543,7 @@ class TestTranslateAcsToTargetVintage:
             return pd.read_parquet(rel_path)
 
         monkeypatch.setattr(
-            "coclab.acs.translate.load_tract_relationship",
+            "hhplab.acs.translate.load_tract_relationship",
             mock_load,
         )
 
@@ -593,7 +593,7 @@ class TestTranslateAcsToTargetVintage:
             raise TractRelationshipNotFoundError()
 
         monkeypatch.setattr(
-            "coclab.acs.translate.load_tract_relationship",
+            "hhplab.acs.translate.load_tract_relationship",
             mock_load,
         )
 
@@ -621,7 +621,7 @@ class TestIntegrationWithRealRelationshipFile:
     def _relationship_file_available(self) -> bool:
         """Check if the relationship file is available."""
         try:
-            from coclab.census.ingest.tract_relationship import get_tract_relationship_path
+            from hhplab.census.ingest.tract_relationship import get_tract_relationship_path
 
             get_tract_relationship_path()
             return True

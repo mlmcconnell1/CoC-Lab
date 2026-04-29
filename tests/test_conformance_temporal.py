@@ -25,7 +25,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from coclab.panel.conformance import (
+from hhplab.panel.conformance import (
     TEMPORAL_ERROR_THRESHOLD,
     TEMPORAL_WARN_THRESHOLD,
     PanelRequest,

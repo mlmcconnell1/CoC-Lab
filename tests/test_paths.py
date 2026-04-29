@@ -1,11 +1,11 @@
-"""Tests for coclab.paths — centralized path resolution helpers."""
+"""Tests for hhplab.paths — centralized path resolution helpers."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from coclab.config import StorageConfig
-from coclab.paths import (
+from hhplab.config import StorageConfig
+from hhplab.paths import (
     asset_store_root,
     curated_dir,
     curated_root,

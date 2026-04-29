@@ -24,7 +24,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from coclab.panel.conformance import (
+from hhplab.panel.conformance import (
     _CHECKS,
     ConformanceReport,
     ConformanceResult,

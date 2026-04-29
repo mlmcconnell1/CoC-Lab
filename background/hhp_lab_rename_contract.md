@@ -11,7 +11,7 @@ stages do not have to make naming decisions ad hoc.
 Rename the project identity, not the homelessness domain vocabulary.
 
 - Rename project identity strings such as `CoC-Lab`, `coc-lab`, `coclab`,
-  `COCLAB_*`, `coclab.yaml`, and `coclab_panel`.
+  `COCLAB_*`, `hhplab.yaml`, and `coclab_panel`.
 - Do not rename domain terms such as `coc`, `coc_id`, `Continuum of Care`,
   `coc_pep`, `coc_pit`, or geography names that still correctly describe the
   data model.
@@ -37,15 +37,15 @@ user before renaming.
 | Python distribution name | `coc-lab` | `hhp-lab` | Rename |
 | Python package import path | `coclab` | `hhplab` | Rename |
 | CLI command | `coclab` | `hhplab` | Rename |
-| Repo config file | `coclab.yaml` | `hhplab.yaml` | Rename |
+| Repo config file | `hhplab.yaml` | `hhplab.yaml` | Rename |
 | User config directory | `~/.config/coclab` | `~/.config/hhplab` | Rename |
-| User config file | `~/.config/coclab/config.yaml` | `~/.config/hhplab/config.yaml` | Rename |
+| User config file | `~/.config/hhplab/config.yaml` | `~/.config/hhplab/config.yaml` | Rename |
 | Environment variable prefix | `COCLAB_` | `HHPLAB_` | Rename |
 | Provenance field | `coclab_version` | `hhplab_version` | Rename |
 | Default CoC panel source label | `coclab_panel` | `hhplab_panel` | Rename |
 | Default metro panel source label | `metro_panel` | `metro_panel` | Keep |
 | Example branded metro source label | `coclab_metro_panel` | `hhplab_metro_panel` | Rename |
-| Package root marker in cwd checks | `coclab/` | `hhplab/` | Rename |
+| Package root marker in cwd checks | `hhplab/` | `hhplab/` | Rename |
 | Primary manual filename | `CoC-Lab-Manual.md` | `HHP-Lab-Manual.md` | Rename |
 | Beads issue prefix for new issues | `coclab` | `hhplab` | Rename |
 
@@ -155,7 +155,7 @@ Later stages should use these buckets rather than a monolithic search/replace:
 3. CLI and configuration contract
    - command name `coclab -> hhplab`
    - `COCLAB_* -> HHPLAB_*`
-   - `coclab.yaml -> hhplab.yaml`
+   - `hhplab.yaml -> hhplab.yaml`
    - `~/.config/coclab -> ~/.config/hhplab`
 
 4. Serialized metadata

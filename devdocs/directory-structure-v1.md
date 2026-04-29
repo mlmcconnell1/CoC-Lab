@@ -1,7 +1,7 @@
 # Directory Structure: ingest, aggregate, build, export
 
-Derived from code review of `coclab/naming.py`, `coclab/builds.py`,
-`coclab/raw_snapshot.py`, `coclab/export/copy.py`, and all CLI modules.
+Derived from code review of `hhplab/naming.py`, `hhplab/builds.py`,
+`hhplab/raw_snapshot.py`, `hhplab/export/copy.py`, and all CLI modules.
 
 This document shows the built-in default layout. The current runtime resolves
 canonical locations from storage roots:

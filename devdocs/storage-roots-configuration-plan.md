@@ -108,7 +108,7 @@ Flags should be added first to commands that read or write persisted assets or o
 
 ### Repo-local config
 
-Path: `<repo>/coclab.yaml`
+Path: `<repo>/hhplab.yaml`
 
 This file expresses the storage policy for a particular checkout.
 
@@ -121,7 +121,7 @@ output_root: /path/to/coclab-outputs
 
 ### User config
 
-Path: `~/.config/coclab/config.yaml`
+Path: `~/.config/hhplab/config.yaml`
 
 This supports local defaults across multiple repositories or workspaces.
 
@@ -140,7 +140,7 @@ Naming and placement should be separate concerns.
 
 ### Naming
 
-Canonical filenames remain defined in `coclab/naming.py`.
+Canonical filenames remain defined in `hhplab/naming.py`.
 
 ### Placement
 
@@ -148,8 +148,8 @@ Placement should be centralized in a new path/config layer rather than hardcoded
 
 Recommended module split:
 
-- `coclab/config.py`: load and merge configuration sources
-- `coclab/paths.py`: resolve typed directories and files from the active configuration
+- `hhplab/config.py`: load and merge configuration sources
+- `hhplab/paths.py`: resolve typed directories and files from the active configuration
 
 Examples of helper functions:
 

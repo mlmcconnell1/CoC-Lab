@@ -14,7 +14,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from coclab.pep.ingest import (
+from hhplab.pep.ingest import (
     PEP_URLS,
     POSTCENSAL_SERIES,
     VINTAGE_YEARS,

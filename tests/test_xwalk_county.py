@@ -17,7 +17,7 @@ import pandas as pd
 import pytest
 from shapely.geometry import box
 
-from coclab.xwalks.county import build_coc_county_crosswalk
+from hhplab.xwalks.county import build_coc_county_crosswalk
 
 
 class TestCountyCrosswalkSchema:

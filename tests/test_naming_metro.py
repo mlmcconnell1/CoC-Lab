@@ -2,7 +2,7 @@
 
 import pytest
 
-from coclab.naming import (
+from hhplab.naming import (
     geo_panel_filename,
     metro_coc_membership_filename,
     metro_county_membership_filename,

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from coclab.pit.ingest.hud_exchange import (
+from hhplab.pit.ingest.hud_exchange import (
     DownloadResult,
     download_pit_data,
     get_pit_source_url,

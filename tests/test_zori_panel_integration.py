@@ -27,14 +27,14 @@ import pytest
 
 pytestmark = pytest.mark.legacy_build_path
 
-from coclab.panel.assemble import (
+from hhplab.panel.assemble import (
     PANEL_COLUMNS,
     ZORI_COLUMNS,
     ZORI_PROVENANCE_COLUMNS,
     build_panel,
     save_panel,
 )
-from coclab.panel.zori_eligibility import (
+from hhplab.panel.zori_eligibility import (
     DEFAULT_ZORI_MIN_COVERAGE,
     EXCLUDED_LOW_COVERAGE,
     EXCLUDED_MISSING,
@@ -47,7 +47,7 @@ from coclab.panel.zori_eligibility import (
     get_zori_panel_columns,
     summarize_zori_eligibility,
 )
-from coclab.provenance import read_provenance
+from hhplab.provenance import read_provenance
 
 # =============================================================================
 # Unit Tests: rent_to_income Math

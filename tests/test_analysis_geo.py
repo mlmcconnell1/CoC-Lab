@@ -1,4 +1,4 @@
-"""Tests for coclab.analysis_geo module.
+"""Tests for hhplab.analysis_geo module.
 
 Covers the analysis geography model, DataFrame helpers, and canonical
 column handling introduced in coclab-djrh.1.
@@ -7,7 +7,7 @@ column handling introduced in coclab-djrh.1.
 import pandas as pd
 import pytest
 
-from coclab.analysis_geo import (
+from hhplab.analysis_geo import (
     GEO_TYPE_COC,
     GEO_TYPE_METRO,
     VALID_GEO_TYPES,

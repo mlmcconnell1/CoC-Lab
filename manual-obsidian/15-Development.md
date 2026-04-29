@@ -13,7 +13,7 @@ pytest tests/test_smoke.py -v
 pytest tests/test_offline_pipeline_fixture.py -v
 
 # Run with coverage
-pytest --cov=coclab
+pytest --cov=hhplab
 ```
 
 ## Code Quality
@@ -50,7 +50,7 @@ ruff format .
 
 ## Adding a New Data Source
 
-1. Create new ingester in `coclab/ingest/`
+1. Create new ingester in `hhplab/ingest/`
 2. Implement the canonical schema mapping
 3. Call `normalize_boundaries()` and `validate_boundaries()`
 4. Register vintage using `register_vintage()`
@@ -59,7 +59,7 @@ ruff format .
 
 ## Extending Validation
 
-Add new checks in `coclab/geo/validate.py`:
+Add new checks in `hhplab/geo/validate.py`:
 
 ```python
 def _validate_custom(gdf: gpd.GeoDataFrame, result: ValidationResult) -> None:

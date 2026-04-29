@@ -13,7 +13,7 @@ import warnings
 import pandas as pd
 import pytest
 
-from coclab.rents.diagnostics import (
+from hhplab.rents.diagnostics import (
     compute_coc_diagnostics,
     generate_text_summary,
     identify_problem_cocs,

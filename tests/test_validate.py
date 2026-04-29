@@ -6,7 +6,7 @@ import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Polygon
 
-from coclab.geo.validate import (
+from hhplab.geo.validate import (
     MIN_AREA_SQ_DEG,
     Severity,
     ValidationIssue,

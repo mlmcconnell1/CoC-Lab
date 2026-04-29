@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from coclab.raw_snapshot import (
+from hhplab.raw_snapshot import (
     hash_directory,
     hash_file,
     hash_zip_contents,

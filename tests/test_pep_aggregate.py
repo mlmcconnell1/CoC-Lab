@@ -14,7 +14,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from coclab.pep.aggregate import aggregate_pep_counties, aggregate_pep_to_coc
+from hhplab.pep.aggregate import aggregate_pep_counties, aggregate_pep_to_coc
 
 
 class TestAggregationIntegration:
@@ -303,8 +303,8 @@ class TestPepDiagnosticsProvenance:
 
     def test_run_pep_diagnostics_embeds_provenance(self, tmp_path):
         """Output parquet from run_pep_diagnostics must have provenance."""
-        from coclab.pep.diagnostics import run_pep_diagnostics
-        from coclab.provenance import has_provenance
+        from hhplab.pep.diagnostics import run_pep_diagnostics
+        from hhplab.provenance import has_provenance
 
         # Create a minimal PEP CoC parquet as input.
         pep_df = pd.DataFrame({

@@ -1,10 +1,10 @@
-"""Tests for coclab.config — layered storage root configuration.
+"""Tests for hhplab.config — layered storage root configuration.
 
 Precedence (highest to lowest):
 1. CLI keyword arguments
 2. Environment variables
-3. Repo-local coclab.yaml
-4. User config ~/.config/coclab/config.yaml
+3. Repo-local hhplab.yaml
+4. User config ~/.config/hhplab/config.yaml
 5. Built-in defaults
 """
 
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from coclab.config import (
+from hhplab.config import (
     ENV_ASSET_STORE_ROOT,
     ENV_OUTPUT_ROOT,
     REPO_CONFIG_FILENAME,
@@ -137,7 +137,7 @@ class TestEnvVars:
 
 
 class TestRepoConfig:
-    """Repo-local coclab.yaml overrides user config and defaults."""
+    """Repo-local hhplab.yaml overrides user config and defaults."""
 
     def test_repo_asset_store_root(self, tmp_path: Path) -> None:
         (tmp_path / REPO_CONFIG_FILENAME).write_text("asset_store_root: /repo/assets\n")
@@ -176,7 +176,7 @@ class TestRepoConfig:
 
         (tmp_path / REPO_CONFIG_FILENAME).write_text("asset_store_root: /repo/assets\n")
 
-        import coclab.config as config_mod
+        import hhplab.config as config_mod
 
         original = config_mod.USER_CONFIG_PATH
         config_mod.USER_CONFIG_PATH = user_cfg_path
@@ -193,7 +193,7 @@ class TestRepoConfig:
 
 
 class TestUserConfig:
-    """User config (~/.config/coclab/config.yaml) overrides only defaults."""
+    """User config (~/.config/hhplab/config.yaml) overrides only defaults."""
 
     def test_user_config(self, tmp_path: Path) -> None:
         user_dir = tmp_path / "user_config"
@@ -201,7 +201,7 @@ class TestUserConfig:
         user_cfg_path = user_dir / "config.yaml"
         user_cfg_path.write_text("output_root: /user/outputs\n")
 
-        import coclab.config as config_mod
+        import hhplab.config as config_mod
 
         original = config_mod.USER_CONFIG_PATH
         config_mod.USER_CONFIG_PATH = user_cfg_path
@@ -223,7 +223,7 @@ class TestUserConfig:
         off_repo_dir.mkdir()
         monkeypatch.chdir(off_repo_dir)
 
-        import coclab.config as config_mod
+        import hhplab.config as config_mod
 
         original = config_mod.USER_CONFIG_PATH
         config_mod.USER_CONFIG_PATH = user_cfg_path

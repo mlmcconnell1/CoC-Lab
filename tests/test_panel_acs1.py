@@ -21,11 +21,11 @@ import pytest
 
 pytestmark = pytest.mark.legacy_build_path
 
-from coclab.panel.assemble import (
+from hhplab.panel.assemble import (
     METRO_PANEL_COLUMNS,
     build_panel,
 )
-from coclab.panel.policies import AlignmentPolicy
+from hhplab.panel.policies import AlignmentPolicy
 
 # ---------------------------------------------------------------------------
 # Fixtures

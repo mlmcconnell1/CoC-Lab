@@ -92,7 +92,7 @@ Create a dedicated metro ACS 1-year module rather than trying to force annual da
 
 Recommended new module:
 
-- `coclab/metro/acs1.py`
+- `hhplab/metro/acs1.py`
 
 Responsibilities:
 
@@ -103,7 +103,7 @@ Responsibilities:
 
 Rationale:
 
-- the current ACS ingest code in `coclab/acs/ingest/tract_population.py` is explicitly tract-native;
+- the current ACS ingest code in `hhplab/acs/ingest/tract_population.py` is explicitly tract-native;
 - reusing it for ACS 1-year would hard-code false assumptions about tract availability.
 
 ## 2. Add a Metro-to-Census-Metro Mapping Layer
@@ -142,7 +142,7 @@ Recommended naming direction:
 - `measures__metro__acs1__A2024@Dglynnfoxv1.parquet`
 - `measures__metro__acs1__A2024-2024@Dglynnfoxv1.parquet`
 
-If naming should stay closer to existing helpers, add dedicated helpers in `coclab/naming.py`:
+If naming should stay closer to existing helpers, add dedicated helpers in `hhplab/naming.py`:
 
 - `metro_measures_acs1_filename(...)`
 - `metro_measures_acs5_filename(...)`
@@ -156,7 +156,7 @@ The important requirement is that the filename encode:
 
 ## 4. Make Panel Assembly Product-Aware
 
-Metro panel assembly in `coclab/panel/assemble.py` currently assumes a single ACS input family.
+Metro panel assembly in `hhplab/panel/assemble.py` currently assumes a single ACS input family.
 
 Add a second optional metro ACS load step:
 
@@ -178,7 +178,7 @@ Recommended provenance additions:
 
 ## 5. Generalize Conformance to Product-Specific Measure Sets
 
-`coclab/panel/conformance.py` currently uses a single `ACS_MEASURE_COLUMNS` list.
+`hhplab/panel/conformance.py` currently uses a single `ACS_MEASURE_COLUMNS` list.
 
 Replace or extend this with product-aware constants, for example:
 
@@ -199,13 +199,13 @@ Recommended rule:
 
 ## 6. Update Recipe and Export Logic
 
-Recipe execution currently infers measure columns from a small known set in `coclab/recipe/executor.py`.
+Recipe execution currently infers measure columns from a small known set in `hhplab/recipe/executor.py`.
 
 Update recipe-aware detection so metro ACS 1-year measures are included when present:
 
 - `unemployment_rate_acs1`
 
-Also update export codebook metadata in `coclab/export/codebook.py` so:
+Also update export codebook metadata in `hhplab/export/codebook.py` so:
 
 - `unemployment_rate_acs1` is documented explicitly;
 - unsuffixed `unemployment_rate` is avoided unless the project chooses a deliberate aliasing strategy.

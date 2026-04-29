@@ -18,8 +18,8 @@ from pathlib import Path
 import pandas as pd
 import pyarrow.parquet as pq
 
-from coclab.recipe.executor import execute_recipe
-from coclab.recipe.loader import load_recipe
+from hhplab.recipe.executor import execute_recipe
+from hhplab.recipe.loader import load_recipe
 
 # ---------------------------------------------------------------------------
 # ZORI recipe and fixture helpers
@@ -867,7 +867,7 @@ class TestLausOnlyConformanceFlags:
 
     def _make_laus_target(self, *, with_aliases: bool = False):
         """Minimal target with panel_policy.laus.include=True."""
-        from coclab.recipe.recipe_schema import LausPolicy, PanelPolicy
+        from hhplab.recipe.recipe_schema import LausPolicy, PanelPolicy
 
         aliases = (
             {"total_population": "total_population_acs5"} if with_aliases else {}
@@ -898,8 +898,8 @@ class TestLausOnlyConformanceFlags:
     def test_no_aliases_includes_all_laus_columns(self):
         """Without aliases, collect_conformance_flags must include all four LAUS
         measure columns even when no ACS products are present (coclab-d9d3)."""
-        from coclab.panel.conformance import LAUS_MEASURE_COLUMNS
-        from coclab.recipe.executor_panel_policies import collect_conformance_flags
+        from hhplab.panel.conformance import LAUS_MEASURE_COLUMNS
+        from hhplab.recipe.executor_panel_policies import collect_conformance_flags
 
         flags = collect_conformance_flags(
             recipe=self._make_laus_only_recipe(),
@@ -919,8 +919,8 @@ class TestLausOnlyConformanceFlags:
 
     def test_with_aliases_includes_all_laus_columns(self):
         """With column aliases, LAUS columns must survive alias translation."""
-        from coclab.panel.conformance import LAUS_MEASURE_COLUMNS
-        from coclab.recipe.executor_panel_policies import collect_conformance_flags
+        from hhplab.panel.conformance import LAUS_MEASURE_COLUMNS
+        from hhplab.recipe.executor_panel_policies import collect_conformance_flags
 
         flags = collect_conformance_flags(
             recipe=self._make_laus_only_recipe(),

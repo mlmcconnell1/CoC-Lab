@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from coclab.measures.acs import (
+from hhplab.measures.acs import (
     aggregate_to_coc,
 )
 
@@ -353,7 +353,7 @@ class TestCtPlanningRegionRemap:
     """Tests for CT planning region GEOID remapping."""
 
     def test_remaps_ct_planning_region_geoids(self):
-        from coclab.geo.ct_planning_regions import remap_ct_planning_region_geoids
+        from hhplab.geo.ct_planning_regions import remap_ct_planning_region_geoids
 
         acs_data = pd.DataFrame(
             {
@@ -421,19 +421,19 @@ class TestCtRemapFailurePaths:
         import sys
         import warnings
 
-        from coclab.measures.acs import _maybe_remap_ct_planning_regions
+        from hhplab.measures.acs import _maybe_remap_ct_planning_regions
 
         real_import = builtins.__import__
 
         def _fail_ct_import(name, *args, **kwargs):
-            if name == "coclab.geo.ct_planning_regions":
+            if name == "hhplab.geo.ct_planning_regions":
                 raise ImportError("simulated missing module")
             return real_import(name, *args, **kwargs)
 
         # Remove the module from sys.modules so the deferred import inside
         # _maybe_remap_ct_planning_regions actually goes through __import__
         # rather than finding the already-cached module.
-        mod_key = "coclab.geo.ct_planning_regions"
+        mod_key = "hhplab.geo.ct_planning_regions"
         saved_mod = sys.modules.pop(mod_key, None)
         monkeypatch.setattr(builtins, "__import__", _fail_ct_import)
 
@@ -469,10 +469,10 @@ class TestCtRemapFailurePaths:
         """When geometry files are missing, aggregation continues with a warning."""
         import warnings
 
-        from coclab.measures.acs import _maybe_remap_ct_planning_regions
+        from hhplab.measures.acs import _maybe_remap_ct_planning_regions
 
         monkeypatch.setattr(
-            "coclab.geo.ct_planning_regions.build_ct_tract_planning_region_map",
+            "hhplab.geo.ct_planning_regions.build_ct_tract_planning_region_map",
             lambda *args, **kwargs: (_ for _ in ()).throw(
                 FileNotFoundError("Required geometry file not found: /fake/path.parquet")
             ),
@@ -505,10 +505,10 @@ class TestCtRemapFailurePaths:
         """When mapping raises ValueError, aggregation continues with a warning."""
         import warnings
 
-        from coclab.measures.acs import _maybe_remap_ct_planning_regions
+        from hhplab.measures.acs import _maybe_remap_ct_planning_regions
 
         monkeypatch.setattr(
-            "coclab.geo.ct_planning_regions.build_ct_tract_planning_region_map",
+            "hhplab.geo.ct_planning_regions.build_ct_tract_planning_region_map",
             lambda *args, **kwargs: (_ for _ in ()).throw(
                 ValueError("CT tract or planning region geometries are empty")
             ),

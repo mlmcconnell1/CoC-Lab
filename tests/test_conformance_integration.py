@@ -24,14 +24,14 @@ import pytest
 
 pytestmark = pytest.mark.legacy_build_path
 
-from coclab.panel.assemble import save_panel
-from coclab.panel.conformance import (
+from hhplab.panel.assemble import save_panel
+from hhplab.panel.conformance import (
     ConformanceReport,
     ConformanceResult,
     PanelRequest,
     run_conformance,
 )
-from coclab.provenance import read_provenance
+from hhplab.provenance import read_provenance
 
 # ---------------------------------------------------------------------------
 # Minimal panel fixture

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from coclab.audit_panels import (
+from hhplab.audit_panels import (
     AUDIT_PANEL_SPECS,
     COC_SOURCE_PATH,
     METRO_DEFINITION_VERSION,
@@ -19,7 +19,7 @@ from coclab.audit_panels import (
     _validate_raw_panel,
     build_audit_panels,
 )
-from coclab.naming import (
+from hhplab.naming import (
     metro_coc_membership_filename,
     metro_county_membership_filename,
     metro_definitions_filename,
@@ -425,7 +425,7 @@ class TestBuildMetroSourcePanel:
 
     def test_produces_valid_panel_with_mocked_inputs(self, tmp_path, monkeypatch):
         """Rebuild path produces a structurally valid source panel."""
-        from coclab import audit_panels
+        from hhplab import audit_panels
 
         pit_df = _make_pit_df()
         zori_df = _make_zori_df()
@@ -516,7 +516,7 @@ class TestEnsureMetroSourcePanel:
     def test_rebuilds_when_file_missing(self, tmp_path, monkeypatch):
         """When the source panel parquet does not exist, _ensure_metro_source_panel
         builds it from raw artifacts and writes to disk."""
-        from coclab import audit_panels
+        from hhplab import audit_panels
 
         # The expected output path does NOT exist, triggering the rebuild.
         expected_path = tmp_path / audit_panels.METRO_SOURCE_PATH
@@ -555,7 +555,7 @@ class TestEnsureMetroSourcePanel:
     def test_skips_rebuild_when_file_exists(self, tmp_path, monkeypatch):
         """When the source panel parquet already exists and force=False,
         _ensure_metro_source_panel returns immediately without rebuilding."""
-        from coclab import audit_panels
+        from hhplab import audit_panels
 
         expected_path = tmp_path / audit_panels.METRO_SOURCE_PATH
         expected_path.parent.mkdir(parents=True, exist_ok=True)
@@ -576,7 +576,7 @@ class TestEnsureMetroSourcePanel:
 
     def test_force_triggers_rebuild_even_when_file_exists(self, tmp_path, monkeypatch):
         """When force=True, _ensure_metro_source_panel rebuilds even if file exists."""
-        from coclab import audit_panels
+        from hhplab import audit_panels
 
         expected_path = tmp_path / audit_panels.METRO_SOURCE_PATH
         expected_path.parent.mkdir(parents=True, exist_ok=True)
@@ -617,7 +617,7 @@ class TestLoadSourcePanelRebuild:
     ):
         """When spec.source_panel_path does not exist and unit_type is metro,
         _load_source_panel invokes _ensure_metro_source_panel."""
-        from coclab import audit_panels
+        from hhplab import audit_panels
 
         spec = AuditPanelSpec(
             panel_name="test_rebuild",
@@ -667,7 +667,7 @@ class TestLoadSourcePanelRebuild:
         does NOT attempt metro rebuild (it raises FileNotFoundError)."""
         import pytest
 
-        from coclab import audit_panels
+        from hhplab import audit_panels
 
         spec = AuditPanelSpec(
             panel_name="test_coc_missing",
@@ -704,7 +704,7 @@ class TestBuildMetroSourcePanelMissingArtifacts:
         FileNotFoundError (graceful failure at first I/O step)."""
         import pytest
 
-        from coclab import audit_panels
+        from hhplab import audit_panels
 
         # No PIT file written — the very first pd.read_parquet should fail.
         with pytest.raises((FileNotFoundError, OSError)):
@@ -715,7 +715,7 @@ class TestBuildMetroSourcePanelMissingArtifacts:
         raises FileNotFoundError."""
         import pytest
 
-        from coclab import audit_panels
+        from hhplab import audit_panels
 
         # Write PIT so the first read succeeds.
         pit_df = _make_pit_df()
@@ -739,7 +739,7 @@ class TestBuildMetroSourcePanelMissingArtifacts:
         FileNotFoundError during the year loop."""
         import pytest
 
-        from coclab import audit_panels
+        from hhplab import audit_panels
 
         # Write PIT and ZORI so those reads succeed.
         pit_df = _make_pit_df()
@@ -773,7 +773,7 @@ class TestBuildMetroSourcePanelMissingArtifacts:
         without leaving a partial file behind."""
         import pytest
 
-        from coclab import audit_panels
+        from hhplab import audit_panels
 
         expected_path = tmp_path / audit_panels.METRO_SOURCE_PATH
         assert not expected_path.exists()

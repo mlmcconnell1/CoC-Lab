@@ -10,7 +10,7 @@ import geopandas as gpd
 import pytest
 from shapely.geometry import Polygon
 
-from coclab.ingest.hud_exchange_gis import (
+from hhplab.ingest.hud_exchange_gis import (
     _HUD_STATE_ABBREVIATIONS,
     COC_ID_FIELDS,
     _download_per_state_shapefiles,
@@ -236,7 +236,7 @@ class TestDownloadHudExchangeGdb:
         )
         # Stub per-state fallback to avoid 55 HTTP requests in test
         monkeypatch.setattr(
-            "coclab.ingest.hud_exchange_gis._download_per_state_shapefiles",
+            "hhplab.ingest.hud_exchange_gis._download_per_state_shapefiles",
             lambda *a, **kw: None,
         )
 
@@ -281,15 +281,15 @@ class TestIngestHudExchange:
     def mock_registry(self, monkeypatch):
         """Mock the registry to avoid temp directory rejection in tests."""
         monkeypatch.setattr(
-            "coclab.registry.register_vintage",
+            "hhplab.registry.register_vintage",
             lambda **kwargs: None,
         )
         monkeypatch.setattr(
-            "coclab.ingest.hud_exchange_gis.check_source_changed",
+            "hhplab.ingest.hud_exchange_gis.check_source_changed",
             lambda **kwargs: (False, {"is_new": True, "previous_sha256": None}),
         )
         monkeypatch.setattr(
-            "coclab.ingest.hud_exchange_gis.register_source",
+            "hhplab.ingest.hud_exchange_gis.register_source",
             lambda **kwargs: None,
         )
 
@@ -370,7 +370,7 @@ class TestIngestHudExchange:
 
     def test_arcgis_path_uses_make_run_id(self):
         """hud_exchange_gis should import and use make_run_id for collision-resistant run_ids."""
-        import coclab.ingest.hud_exchange_gis as mod
+        import hhplab.ingest.hud_exchange_gis as mod
 
         assert hasattr(mod, "make_run_id"), "hud_exchange_gis should import make_run_id"
         # Verify make_run_id produces timestamp format, not date-only
@@ -397,7 +397,7 @@ class TestPerStateFallbackCompleteness:
             return None
 
         monkeypatch.setattr(
-            "coclab.ingest.hud_exchange_gis._download_and_extract_zip",
+            "hhplab.ingest.hud_exchange_gis._download_and_extract_zip",
             fake_download_and_extract,
         )
 
@@ -414,7 +414,7 @@ class TestPerStateFallbackCompleteness:
             return shp_path
 
         monkeypatch.setattr(
-            "coclab.ingest.hud_exchange_gis._download_and_extract_zip",
+            "hhplab.ingest.hud_exchange_gis._download_and_extract_zip",
             fake_download_and_extract,
         )
 

@@ -51,7 +51,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from coclab.panel.conformance import (
+from hhplab.panel.conformance import (
     ACS_MEASURE_COLUMNS,
     ZORI_MIN_ELIGIBILITY_RATE,
     PanelRequest,

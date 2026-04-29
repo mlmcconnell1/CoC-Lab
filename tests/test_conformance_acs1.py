@@ -19,8 +19,8 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from coclab.panel.assemble import METRO_PANEL_COLUMNS
-from coclab.panel.conformance import (
+from hhplab.panel.assemble import METRO_PANEL_COLUMNS
+from hhplab.panel.conformance import (
     _CHECKS,
     ACS1_MEASURE_COLUMNS,
     ACS_MEASURE_COLUMNS,

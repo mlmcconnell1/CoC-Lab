@@ -18,29 +18,29 @@ import pytest
 
 # All ingest modules that must comply with the retention policy
 INGEST_MODULES = [
-    "coclab/ingest/hud_opendata_arcgis.py",
-    "coclab/census/ingest/tiger_tracts.py",
-    "coclab/census/ingest/tiger_counties.py",
-    "coclab/census/ingest/tract_relationship.py",
-    "coclab/nhgis/ingest.py",
-    "coclab/acs/ingest/tract_population.py",
-    "coclab/rents/weights.py",
+    "hhplab/ingest/hud_opendata_arcgis.py",
+    "hhplab/census/ingest/tiger_tracts.py",
+    "hhplab/census/ingest/tiger_counties.py",
+    "hhplab/census/ingest/tract_relationship.py",
+    "hhplab/nhgis/ingest.py",
+    "hhplab/acs/ingest/tract_population.py",
+    "hhplab/rents/weights.py",
 ]
 
 # API ingest modules must use year+variant (not legacy snapshot_id)
 API_INGEST_MODULES = [
-    "coclab/ingest/hud_opendata_arcgis.py",
-    "coclab/ingest/hud_exchange_gis.py",
-    "coclab/acs/ingest/tract_population.py",
-    "coclab/rents/weights.py",
+    "hhplab/ingest/hud_opendata_arcgis.py",
+    "hhplab/ingest/hud_exchange_gis.py",
+    "hhplab/acs/ingest/tract_population.py",
+    "hhplab/rents/weights.py",
 ]
 
 # File ingest modules that use persist_file_snapshot with subdirs
 FILE_INGEST_MODULES = [
-    "coclab/census/ingest/tiger_tracts.py",
-    "coclab/census/ingest/tiger_counties.py",
-    "coclab/census/ingest/tract_relationship.py",
-    "coclab/nhgis/ingest.py",
+    "hhplab/census/ingest/tiger_tracts.py",
+    "hhplab/census/ingest/tiger_counties.py",
+    "hhplab/census/ingest/tract_relationship.py",
+    "hhplab/nhgis/ingest.py",
 ]
 
 
@@ -72,14 +72,14 @@ class TestRetentionPolicyImports:
 
     @pytest.mark.parametrize("module_path", INGEST_MODULES)
     def test_imports_raw_snapshot_utility(self, module_path: str):
-        """Each ingester must import from coclab.raw_snapshot."""
+        """Each ingester must import from hhplab.raw_snapshot."""
         source = _module_source(module_path)
         imports = _module_imports(source)
         has_persist = "persist_file_snapshot" in imports
         has_api = "write_api_snapshot" in imports
         assert has_persist or has_api, (
             f"{module_path} does not import persist_file_snapshot "
-            f"or write_api_snapshot from coclab.raw_snapshot"
+            f"or write_api_snapshot from hhplab.raw_snapshot"
         )
 
 

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from coclab.naming import (
+from hhplab.naming import (
     acs1_metro_filename,
     acs1_metro_path,
     metro_measures_acs1_filename,

@@ -11,15 +11,15 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from coclab.recipe.executor import execute_recipe
-from coclab.recipe.loader import load_recipe
-from coclab.recipe.planner import resolve_plan
-from coclab.recipe.preflight import (
+from hhplab.recipe.executor import execute_recipe
+from hhplab.recipe.loader import load_recipe
+from hhplab.recipe.planner import resolve_plan
+from hhplab.recipe.preflight import (
     FindingKind,
     Severity,
     run_preflight,
 )
-from coclab.recipe.probes import (
+from hhplab.recipe.probes import (
     probe_geo_column,
     probe_measures,
     probe_year_column,
@@ -110,7 +110,7 @@ def _make_acs1_parquet(path: Path) -> None:
 
 def _setup_committed_recipe_execution_fixtures(tmp_path: Path) -> None:
     """Create the lagged ACS1 inputs needed to execute the committed recipe."""
-    from coclab.metro.io import write_metro_artifacts
+    from hhplab.metro.io import write_metro_artifacts
 
     write_metro_artifacts(base_dir=tmp_path / "data")
 
@@ -447,8 +447,8 @@ class TestExecutorIdentityResampleACS1:
 
     def test_identity_resample_passthrough(self, tmp_path: Path):
         """Identity resample of ACS1 data passes through measures unchanged."""
-        from coclab.recipe.executor import _resample_identity
-        from coclab.recipe.planner import GeometryRef, ResampleTask
+        from hhplab.recipe.executor import _resample_identity
+        from hhplab.recipe.planner import GeometryRef, ResampleTask
 
         df = pd.DataFrame({
             "metro_id": ["GF01", "GF02"],
@@ -478,8 +478,8 @@ class TestExecutorIdentityResampleACS1:
 
     def test_identity_resample_renames_geo_column(self, tmp_path: Path):
         """Identity resample renames metro_id to geo_id."""
-        from coclab.recipe.executor import _resample_identity
-        from coclab.recipe.planner import GeometryRef, ResampleTask
+        from hhplab.recipe.executor import _resample_identity
+        from hhplab.recipe.planner import GeometryRef, ResampleTask
 
         df = pd.DataFrame({
             "metro_id": ["GF01"],
@@ -513,8 +513,8 @@ class TestACS1Adapter:
     """Test the census/acs1 dataset adapter validation."""
 
     def test_valid_acs1_spec(self):
-        from coclab.recipe.default_dataset_adapters import _validate_census_acs1
-        from coclab.recipe.recipe_schema import DatasetSpec, GeometryRef
+        from hhplab.recipe.default_dataset_adapters import _validate_census_acs1
+        from hhplab.recipe.recipe_schema import DatasetSpec, GeometryRef
 
         spec = DatasetSpec(
             provider="census",
@@ -527,8 +527,8 @@ class TestACS1Adapter:
         assert len(diags) == 0
 
     def test_wrong_version(self):
-        from coclab.recipe.default_dataset_adapters import _validate_census_acs1
-        from coclab.recipe.recipe_schema import DatasetSpec, GeometryRef
+        from hhplab.recipe.default_dataset_adapters import _validate_census_acs1
+        from hhplab.recipe.recipe_schema import DatasetSpec, GeometryRef
 
         spec = DatasetSpec(
             provider="census",
@@ -543,8 +543,8 @@ class TestACS1Adapter:
         assert "version" in errors[0].message
 
     def test_wrong_native_geometry_without_artifact(self):
-        from coclab.recipe.default_dataset_adapters import _validate_census_acs1
-        from coclab.recipe.recipe_schema import DatasetSpec, GeometryRef
+        from hhplab.recipe.default_dataset_adapters import _validate_census_acs1
+        from hhplab.recipe.recipe_schema import DatasetSpec, GeometryRef
 
         spec = DatasetSpec(
             provider="census",
@@ -558,8 +558,8 @@ class TestACS1Adapter:
         assert "metro" in errors[0].message
 
     def test_wrong_native_geometry_with_artifact(self):
-        from coclab.recipe.default_dataset_adapters import _validate_census_acs1
-        from coclab.recipe.recipe_schema import DatasetSpec, GeometryRef
+        from hhplab.recipe.default_dataset_adapters import _validate_census_acs1
+        from hhplab.recipe.recipe_schema import DatasetSpec, GeometryRef
 
         spec = DatasetSpec(
             provider="census",
@@ -574,8 +574,8 @@ class TestACS1Adapter:
         assert len(errors) == 0
 
     def test_unknown_params_warned(self):
-        from coclab.recipe.default_dataset_adapters import _validate_census_acs1
-        from coclab.recipe.recipe_schema import DatasetSpec, GeometryRef
+        from hhplab.recipe.default_dataset_adapters import _validate_census_acs1
+        from hhplab.recipe.recipe_schema import DatasetSpec, GeometryRef
 
         spec = DatasetSpec(
             provider="census",

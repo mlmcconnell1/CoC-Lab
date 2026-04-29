@@ -10,13 +10,13 @@ import pandas as pd
 import pytest
 from shapely.geometry import box
 
-from coclab.measures.acs import aggregate_to_coc
-from coclab.measures.diagnostics import (
+from hhplab.measures.acs import aggregate_to_coc
+from hhplab.measures.diagnostics import (
     compute_crosswalk_diagnostics,
     summarize_diagnostics,
 )
-from coclab.xwalks.county import build_coc_county_crosswalk
-from coclab.xwalks.tract import (
+from hhplab.xwalks.county import build_coc_county_crosswalk
+from hhplab.xwalks.tract import (
     add_population_weights,
     build_coc_tract_crosswalk,
     validate_population_shares,

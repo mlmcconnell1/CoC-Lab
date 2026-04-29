@@ -14,8 +14,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from coclab.recipe.executor import execute_recipe
-from coclab.recipe.loader import load_recipe
+from hhplab.recipe.executor import execute_recipe
+from hhplab.recipe.loader import load_recipe
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RECIPE_FIXTURE_DIR = REPO_ROOT / "tests" / "fixtures" / "recipes"

@@ -6,7 +6,7 @@ import pandas as pd
 import pyarrow.parquet as pq
 import pytest
 
-from coclab.provenance import (
+from hhplab.provenance import (
     PROVENANCE_KEY,
     ProvenanceBlock,
     has_provenance,

@@ -1,7 +1,7 @@
 """CoC coverage conformance check tests.
 
 Tests for the three coverage-related conformance checks defined in
-coclab/panel/conformance.py:
+hhplab/panel/conformance.py:
 
 1. check_coc_count — warns when fewer CoCs than expected
 2. check_panel_balance — warns when not all CoCs appear in all years
@@ -47,7 +47,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from coclab.panel.conformance import (
+from hhplab.panel.conformance import (
     PanelRequest,
     check_coc_count,
     check_coc_year_gaps,

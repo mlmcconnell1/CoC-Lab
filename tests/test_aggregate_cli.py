@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from coclab.cli.aggregate import _build_lagged_pep_series
-from coclab.cli.main import app
+from hhplab.cli.aggregate import _build_lagged_pep_series
+from hhplab.cli.main import app
 
 runner = CliRunner()
 
@@ -297,7 +297,7 @@ def _create_fake_acs_cache(acs_vintage: str, tract_vintage: str | int) -> None:
     """Create a minimal fake ACS cache file so aggregate reaches crosswalk check."""
     import pandas as pd
 
-    from coclab.acs.ingest.tract_population import get_output_path
+    from hhplab.acs.ingest.tract_population import get_output_path
 
     cache_path = get_output_path(acs_vintage, str(tract_vintage))
     cache_path.parent.mkdir(parents=True, exist_ok=True)

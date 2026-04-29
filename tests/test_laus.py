@@ -25,21 +25,21 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from coclab.bls import (
+from hhplab.bls import (
     LAUS_MEASURE_CODES,
     build_all_series_ids,
     build_laus_series_id,
 )
-from coclab.ingest.bls_laus import (
+from hhplab.ingest.bls_laus import (
     BlsQuotaExhausted,
     _build_metro_series_map,
     _chunked,
     fetch_laus_annual_averages,
     ingest_laus_metro,
 )
-from coclab.metro.definitions import METRO_CBSA_MAPPING, METRO_STATE_FIPS
-from coclab.naming import laus_metro_filename, laus_metro_path
-from coclab.panel.conformance import (
+from hhplab.metro.definitions import METRO_CBSA_MAPPING, METRO_STATE_FIPS
+from hhplab.naming import laus_metro_filename, laus_metro_path
+from hhplab.panel.conformance import (
     ACS1_MEASURE_COLUMNS,
     ACS_MEASURE_COLUMNS,
     LAUS_MEASURE_COLUMNS,
@@ -248,7 +248,7 @@ class TestFetchLausAnnualAverages:
         sid = NY_SERIES_IDS["unemployment_rate"]
         mock_response = _make_bls_response({sid: 4.2})
 
-        with patch("coclab.ingest.bls_laus.httpx.Client") as mock_client:
+        with patch("hhplab.ingest.bls_laus.httpx.Client") as mock_client:
             post_rv = (
                 mock_client.return_value.__enter__.return_value
                 .post.return_value
@@ -276,7 +276,7 @@ class TestFetchLausAnnualAverages:
                 ]
             },
         }
-        with patch("coclab.ingest.bls_laus.httpx.Client") as mock_client:
+        with patch("hhplab.ingest.bls_laus.httpx.Client") as mock_client:
             post_rv = (
                 mock_client.return_value.__enter__.return_value
                 .post.return_value
@@ -293,7 +293,7 @@ class TestFetchLausAnnualAverages:
             "status": "REQUEST_FAILED",
             "message": ["Bad request"],
         }
-        with patch("coclab.ingest.bls_laus.httpx.Client") as mock_client:
+        with patch("hhplab.ingest.bls_laus.httpx.Client") as mock_client:
             post_rv = (
                 mock_client.return_value.__enter__.return_value
                 .post.return_value
@@ -310,7 +310,7 @@ class TestFetchLausAnnualAverages:
         sids = [f"LAUMT36{i:05d}00000003" for i in range(60)]
         empty_response = {"status": "REQUEST_SUCCEEDED", "Results": {"series": []}}
 
-        with patch("coclab.ingest.bls_laus.httpx.Client") as mock_client:
+        with patch("hhplab.ingest.bls_laus.httpx.Client") as mock_client:
             mock_post = mock_client.return_value.__enter__.return_value.post
             mock_post.return_value.json.return_value = empty_response
             mock_post.return_value.raise_for_status.return_value = None
@@ -325,7 +325,7 @@ class TestFetchLausAnnualAverages:
         sids = [f"LAUMT36{i:05d}00000003" for i in range(60)]
         empty_response = {"status": "REQUEST_SUCCEEDED", "Results": {"series": []}}
 
-        with patch("coclab.ingest.bls_laus.httpx.Client") as mock_client:
+        with patch("hhplab.ingest.bls_laus.httpx.Client") as mock_client:
             mock_post = mock_client.return_value.__enter__.return_value.post
             mock_post.return_value.json.return_value = empty_response
             mock_post.return_value.raise_for_status.return_value = None
@@ -377,7 +377,7 @@ class TestBlsQuotaExhausted:
         quota_response = {"status": status, "message": message}
         sid = NY_SERIES_IDS["unemployment_rate"]
 
-        with patch("coclab.ingest.bls_laus.httpx.Client") as mock_client:
+        with patch("hhplab.ingest.bls_laus.httpx.Client") as mock_client:
             post_rv = (
                 mock_client.return_value.__enter__.return_value
                 .post.return_value
@@ -401,7 +401,7 @@ class TestBlsQuotaExhausted:
         }
         sid = NY_SERIES_IDS["unemployment_rate"]
 
-        with patch("coclab.ingest.bls_laus.httpx.Client") as mock_client:
+        with patch("hhplab.ingest.bls_laus.httpx.Client") as mock_client:
             post_rv = (
                 mock_client.return_value.__enter__.return_value
                 .post.return_value
@@ -427,7 +427,7 @@ class TestBlsQuotaExhausted:
         bad_request = {"status": "REQUEST_FAILED", "message": ["Invalid series id"]}
         sid = NY_SERIES_IDS["unemployment_rate"]
 
-        with patch("coclab.ingest.bls_laus.httpx.Client") as mock_client:
+        with patch("hhplab.ingest.bls_laus.httpx.Client") as mock_client:
             post_rv = (
                 mock_client.return_value.__enter__.return_value
                 .post.return_value
@@ -491,7 +491,7 @@ def _mock_ingest(tmp_path: Path, year: int) -> Path:
 
         return FakeResp()
 
-    with patch("coclab.ingest.bls_laus.httpx.Client") as mock_client:
+    with patch("hhplab.ingest.bls_laus.httpx.Client") as mock_client:
         mock_client.return_value.__enter__.return_value.post = mock_post
         return ingest_laus_metro(year=year, project_root=tmp_path)
 
@@ -551,7 +551,7 @@ class TestIngestLausMetro:
         """Ingest must fail fast rather than write an all-null parquet."""
         empty_response = {"status": "REQUEST_SUCCEEDED", "Results": {"series": []}}
 
-        with patch("coclab.ingest.bls_laus.httpx.Client") as mock_client:
+        with patch("hhplab.ingest.bls_laus.httpx.Client") as mock_client:
             mock_post = mock_client.return_value.__enter__.return_value.post
             mock_post.return_value.json.return_value = empty_response
             mock_post.return_value.raise_for_status.return_value = None
@@ -568,7 +568,7 @@ class TestIngestLausMetro:
         The remaining 12 metros have all-null measures.
         Expected: ValueError — partial output must not be written silently.
         """
-        from coclab.ingest.bls_laus import _build_metro_series_map
+        from hhplab.ingest.bls_laus import _build_metro_series_map
 
         # Build values for only the first 13 metros (sorted order)
         metro_series = _build_metro_series_map()
@@ -581,7 +581,7 @@ class TestIngestLausMetro:
         def _partial_fetch(series_ids, year, api_key=None):
             return {sid: v for sid, v in partial_values.items() if sid in series_ids}
 
-        with patch("coclab.ingest.bls_laus.fetch_laus_annual_averages", _partial_fetch):
+        with patch("hhplab.ingest.bls_laus.fetch_laus_annual_averages", _partial_fetch):
             with pytest.raises(ValueError, match="metro\\(s\\) have no data for any measure"):
                 ingest_laus_metro(year=2023, project_root=tmp_path)
 
@@ -596,8 +596,8 @@ class TestIngestLausMetro:
         measures), but the parquet would be silently written with 25 null rates.
         Expected: ValueError naming the missing measure.
         """
-        from coclab.bls import LAUS_MEASURE_CODES
-        from coclab.ingest.bls_laus import _build_metro_series_map
+        from hhplab.bls import LAUS_MEASURE_CODES
+        from hhplab.ingest.bls_laus import _build_metro_series_map
 
         # Collect series IDs for every measure except unemployment_rate
         metro_series = _build_metro_series_map()
@@ -612,7 +612,7 @@ class TestIngestLausMetro:
         def _no_rate_fetch(series_ids, year, api_key=None):
             return {sid: v for sid, v in non_rate_values.items() if sid in series_ids}
 
-        with patch("coclab.ingest.bls_laus.fetch_laus_annual_averages", _no_rate_fetch):
+        with patch("hhplab.ingest.bls_laus.fetch_laus_annual_averages", _no_rate_fetch):
             with pytest.raises(ValueError, match="unemployment_rate"):
                 ingest_laus_metro(year=2023, project_root=tmp_path)
 
@@ -628,7 +628,7 @@ class TestIngestLausMetro:
         written with a null rate.
         Expected: ValueError naming GF01 and unemployment_rate.
         """
-        from coclab.ingest.bls_laus import _build_metro_series_map
+        from hhplab.ingest.bls_laus import _build_metro_series_map
 
         metro_series = _build_metro_series_map()
         skip_metro = sorted(metro_series)[0]  # GF01
@@ -645,7 +645,7 @@ class TestIngestLausMetro:
         def _one_missing_fetch(series_ids, year, api_key=None):
             return {sid: v for sid, v in all_values.items() if sid in series_ids}
 
-        with patch("coclab.ingest.bls_laus.fetch_laus_annual_averages", _one_missing_fetch):
+        with patch("hhplab.ingest.bls_laus.fetch_laus_annual_averages", _one_missing_fetch):
             with pytest.raises(ValueError, match="partial measure data"):
                 ingest_laus_metro(year=2023, project_root=tmp_path)
 
@@ -788,8 +788,8 @@ class TestLausPanelIntegration:
 
     def _write_laus_artifact(self, tmp_path: Path, year: int) -> Path:
         """Write a minimal valid LAUS artifact for testing panel integration."""
-        from coclab.metro.definitions import METRO_CBSA_MAPPING, METRO_STATE_FIPS
-        from coclab.naming import laus_metro_path
+        from hhplab.metro.definitions import METRO_CBSA_MAPPING, METRO_STATE_FIPS
+        from hhplab.naming import laus_metro_path
 
         rows = []
         for metro_id, cbsa in METRO_CBSA_MAPPING.items():
@@ -819,7 +819,7 @@ class TestLausPanelIntegration:
         return out_path
 
     def test_load_laus_metro_measures_returns_dataframe(self, tmp_path):
-        from coclab.panel.assemble import _load_laus_metro_measures
+        from hhplab.panel.assemble import _load_laus_metro_measures
 
         year = 2023
         self._write_laus_artifact(tmp_path, year)
@@ -838,7 +838,7 @@ class TestLausPanelIntegration:
         assert "labor_force" in df.columns
 
     def test_load_laus_metro_measures_returns_none_when_missing(self, tmp_path):
-        from coclab.panel.assemble import _load_laus_metro_measures
+        from hhplab.panel.assemble import _load_laus_metro_measures
 
         df = _load_laus_metro_measures(
             year=2023,
@@ -848,7 +848,7 @@ class TestLausPanelIntegration:
         assert df is None
 
     def test_laus_measures_appear_in_metro_panel_columns(self):
-        from coclab.panel.assemble import METRO_PANEL_COLUMNS
+        from hhplab.panel.assemble import METRO_PANEL_COLUMNS
         for col in ["labor_force", "employed", "unemployed", "unemployment_rate"]:
             assert col in METRO_PANEL_COLUMNS, (
                 f"LAUS column '{col}' missing from METRO_PANEL_COLUMNS"
@@ -861,11 +861,11 @@ class TestLausPanelIntegration:
 
 
 def _make_mock_ingest_fn(tmp_path: Path, year_override: int | None = None) -> Any:
-    """Return a mock for coclab.ingest.bls_laus.ingest_laus_metro that writes a
+    """Return a mock for hhplab.ingest.bls_laus.ingest_laus_metro that writes a
     minimal parquet and returns the path."""
     import pandas as pd
 
-    from coclab.naming import laus_metro_path
+    from hhplab.naming import laus_metro_path
 
     def _mock_ingest(year: int, definition_version: str = "glynn_fox_v1",
                      api_key: Any = None, project_root: Path | None = None) -> Path:
@@ -899,28 +899,28 @@ class TestCliLausMetro:
         return CliRunner()
 
     def _app(self):
-        from coclab.cli.main import app
+        from hhplab.cli.main import app
         return app
 
     def test_single_year_exits_zero(self, tmp_path):
         mock_fn = _make_mock_ingest_fn(tmp_path)
-        with patch("coclab.ingest.bls_laus.ingest_laus_metro", mock_fn), \
-             patch("coclab.cli.main._check_working_directory"):
+        with patch("hhplab.ingest.bls_laus.ingest_laus_metro", mock_fn), \
+             patch("hhplab.cli.main._check_working_directory"):
             result = self._runner().invoke(self._app(), ["ingest", "laus-metro", "--year", "2023"])
         assert result.exit_code == 0, result.output
 
     def test_single_year_output_mentions_metros(self, tmp_path):
         mock_fn = _make_mock_ingest_fn(tmp_path)
-        with patch("coclab.ingest.bls_laus.ingest_laus_metro", mock_fn), \
-             patch("coclab.cli.main._check_working_directory"):
+        with patch("hhplab.ingest.bls_laus.ingest_laus_metro", mock_fn), \
+             patch("hhplab.cli.main._check_working_directory"):
             result = self._runner().invoke(self._app(), ["ingest", "laus-metro", "--year", "2023"])
         assert result.exit_code == 0, result.output
         assert "25" in result.output or "Metro" in result.output
 
     def test_json_output_flag(self, tmp_path):
         mock_fn = _make_mock_ingest_fn(tmp_path)
-        with patch("coclab.ingest.bls_laus.ingest_laus_metro", mock_fn), \
-             patch("coclab.cli.main._check_working_directory"):
+        with patch("hhplab.ingest.bls_laus.ingest_laus_metro", mock_fn), \
+             patch("hhplab.cli.main._check_working_directory"):
             result = self._runner().invoke(self._app(),
                                            ["ingest", "laus-metro", "--year", "2023", "--json"])
         assert result.exit_code == 0, result.output
@@ -933,8 +933,8 @@ class TestCliLausMetro:
 
     def test_year_range_backfill(self, tmp_path):
         mock_fn = _make_mock_ingest_fn(tmp_path)
-        with patch("coclab.ingest.bls_laus.ingest_laus_metro", mock_fn), \
-             patch("coclab.cli.main._check_working_directory"):
+        with patch("hhplab.ingest.bls_laus.ingest_laus_metro", mock_fn), \
+             patch("hhplab.cli.main._check_working_directory"):
             result = self._runner().invoke(
                 self._app(),
                 ["ingest", "laus-metro", "--start-year", "2021", "--end-year", "2023"]
@@ -943,8 +943,8 @@ class TestCliLausMetro:
 
     def test_year_range_json_output(self, tmp_path):
         mock_fn = _make_mock_ingest_fn(tmp_path)
-        with patch("coclab.ingest.bls_laus.ingest_laus_metro", mock_fn), \
-             patch("coclab.cli.main._check_working_directory"):
+        with patch("hhplab.ingest.bls_laus.ingest_laus_metro", mock_fn), \
+             patch("hhplab.cli.main._check_working_directory"):
             result = self._runner().invoke(
                 self._app(),
                 ["ingest", "laus-metro", "--start-year", "2021", "--end-year", "2022", "--json"]
@@ -955,12 +955,12 @@ class TestCliLausMetro:
         assert set(data["years_succeeded"]) == {2021, 2022}
 
     def test_no_year_arg_exits_nonzero(self, tmp_path):
-        with patch("coclab.cli.main._check_working_directory"):
+        with patch("hhplab.cli.main._check_working_directory"):
             result = self._runner().invoke(self._app(), ["ingest", "laus-metro"])
         assert result.exit_code != 0
 
     def test_year_and_start_year_conflict_exits_nonzero(self, tmp_path):
-        with patch("coclab.cli.main._check_working_directory"):
+        with patch("hhplab.cli.main._check_working_directory"):
             result = self._runner().invoke(
                 self._app(),
                 ["ingest", "laus-metro", "--year", "2023", "--start-year", "2021"]
@@ -968,7 +968,7 @@ class TestCliLausMetro:
         assert result.exit_code != 0
 
     def test_reversed_range_exits_nonzero(self, tmp_path):
-        with patch("coclab.cli.main._check_working_directory"):
+        with patch("hhplab.cli.main._check_working_directory"):
             result = self._runner().invoke(
                 self._app(),
                 ["ingest", "laus-metro", "--start-year", "2023", "--end-year", "2021"]
@@ -979,8 +979,8 @@ class TestCliLausMetro:
         def _failing_ingest(**kwargs):
             raise ValueError("BLS API down")
 
-        with patch("coclab.ingest.bls_laus.ingest_laus_metro", _failing_ingest), \
-             patch("coclab.cli.main._check_working_directory"):
+        with patch("hhplab.ingest.bls_laus.ingest_laus_metro", _failing_ingest), \
+             patch("hhplab.cli.main._check_working_directory"):
             result = self._runner().invoke(
                 self._app(), ["ingest", "laus-metro", "--year", "2023"]
             )
@@ -1003,8 +1003,8 @@ class TestCliLausMetro:
                 raise ValueError("No data for 2022")
             return mock_fn(year=year, **kwargs)
 
-        with patch("coclab.ingest.bls_laus.ingest_laus_metro", _partial_ingest), \
-             patch("coclab.cli.main._check_working_directory"):
+        with patch("hhplab.ingest.bls_laus.ingest_laus_metro", _partial_ingest), \
+             patch("hhplab.cli.main._check_working_directory"):
             result = self._runner().invoke(
                 self._app(),
                 ["ingest", "laus-metro", "--start-year", "2021", "--end-year", "2022", "--json"],
@@ -1021,8 +1021,8 @@ class TestCliLausMetro:
         def _failing_ingest(**kwargs):
             raise ValueError("BLS API unavailable")
 
-        with patch("coclab.ingest.bls_laus.ingest_laus_metro", _failing_ingest), \
-             patch("coclab.cli.main._check_working_directory"):
+        with patch("hhplab.ingest.bls_laus.ingest_laus_metro", _failing_ingest), \
+             patch("hhplab.cli.main._check_working_directory"):
             result = self._runner().invoke(
                 self._app(),
                 ["ingest", "laus-metro", "--start-year", "2021", "--end-year", "2022", "--json"],
@@ -1041,7 +1041,7 @@ class TestCliLausMetro:
     def test_quota_exhausted_single_year_text_includes_actionable_hint(self, tmp_path):
         """Single-year ingest must surface the BlsQuotaExhausted message verbatim
         so the user immediately sees how to recover (API key or wait)."""
-        from coclab.ingest.bls_laus import BlsQuotaExhausted
+        from hhplab.ingest.bls_laus import BlsQuotaExhausted
 
         actionable = (
             "The anonymous BLS API daily threshold has been reached. "
@@ -1053,8 +1053,8 @@ class TestCliLausMetro:
         def _quota_ingest(**kwargs):
             raise BlsQuotaExhausted(actionable)
 
-        with patch("coclab.ingest.bls_laus.ingest_laus_metro", _quota_ingest), \
-             patch("coclab.cli.main._check_working_directory"):
+        with patch("hhplab.ingest.bls_laus.ingest_laus_metro", _quota_ingest), \
+             patch("hhplab.cli.main._check_working_directory"):
             result = self._runner().invoke(
                 self._app(), ["ingest", "laus-metro", "--year", "2023"]
             )
@@ -1067,7 +1067,7 @@ class TestCliLausMetro:
         assert "wait" in combined.lower()
 
     def test_quota_exhausted_single_year_json_carries_reason(self, tmp_path):
-        from coclab.ingest.bls_laus import BlsQuotaExhausted
+        from hhplab.ingest.bls_laus import BlsQuotaExhausted
 
         def _quota_ingest(**kwargs):
             raise BlsQuotaExhausted(
@@ -1075,8 +1075,8 @@ class TestCliLausMetro:
                 "or wait for the threshold to reset"
             )
 
-        with patch("coclab.ingest.bls_laus.ingest_laus_metro", _quota_ingest), \
-             patch("coclab.cli.main._check_working_directory"):
+        with patch("hhplab.ingest.bls_laus.ingest_laus_metro", _quota_ingest), \
+             patch("hhplab.cli.main._check_working_directory"):
             result = self._runner().invoke(
                 self._app(), ["ingest", "laus-metro", "--year", "2023", "--json"]
             )
@@ -1093,7 +1093,7 @@ class TestCliLausMetro:
         must NOT be retried (they would all fail with the same condition).  All
         years should be reported as failed and the JSON payload must carry the
         bls_quota_exhausted reason."""
-        from coclab.ingest.bls_laus import BlsQuotaExhausted
+        from hhplab.ingest.bls_laus import BlsQuotaExhausted
 
         call_log: list[int] = []
 
@@ -1104,8 +1104,8 @@ class TestCliLausMetro:
                 "or wait for the threshold to reset"
             )
 
-        with patch("coclab.ingest.bls_laus.ingest_laus_metro", _quota_ingest), \
-             patch("coclab.cli.main._check_working_directory"):
+        with patch("hhplab.ingest.bls_laus.ingest_laus_metro", _quota_ingest), \
+             patch("hhplab.cli.main._check_working_directory"):
             result = self._runner().invoke(
                 self._app(),
                 ["ingest", "laus-metro", "--start-year", "2015", "--end-year", "2023", "--json"],
@@ -1125,7 +1125,7 @@ class TestCliLausMetro:
         """If some early years succeed and a later year hits the quota, the
         backfill must report status=partial, mark only the unattempted years
         as failed, and tag the payload with bls_quota_exhausted."""
-        from coclab.ingest.bls_laus import BlsQuotaExhausted
+        from hhplab.ingest.bls_laus import BlsQuotaExhausted
 
         mock_fn = _make_mock_ingest_fn(tmp_path)
         call_log: list[int] = []
@@ -1139,8 +1139,8 @@ class TestCliLausMetro:
                 )
             return mock_fn(year=year, **kwargs)
 
-        with patch("coclab.ingest.bls_laus.ingest_laus_metro", _mixed_ingest), \
-             patch("coclab.cli.main._check_working_directory"):
+        with patch("hhplab.ingest.bls_laus.ingest_laus_metro", _mixed_ingest), \
+             patch("hhplab.cli.main._check_working_directory"):
             result = self._runner().invoke(
                 self._app(),
                 ["ingest", "laus-metro", "--start-year", "2015", "--end-year", "2020", "--json"],
@@ -1167,36 +1167,36 @@ class TestLausRecipeSchema:
     """Tests for LausPolicy round-trips through the recipe schema."""
 
     def test_laus_policy_default(self):
-        from coclab.recipe.recipe_schema import LausPolicy
+        from hhplab.recipe.recipe_schema import LausPolicy
         p = LausPolicy()
         assert p.include is False
 
     def test_laus_policy_include_true(self):
-        from coclab.recipe.recipe_schema import LausPolicy
+        from hhplab.recipe.recipe_schema import LausPolicy
         p = LausPolicy(include=True)
         assert p.include is True
 
     def test_laus_policy_forbids_extra_fields(self):
         from pydantic import ValidationError
 
-        from coclab.recipe.recipe_schema import LausPolicy
+        from hhplab.recipe.recipe_schema import LausPolicy
         with pytest.raises(ValidationError):
             LausPolicy(include=True, bogus_field=42)
 
     def test_panel_policy_with_laus(self):
-        from coclab.recipe.recipe_schema import LausPolicy, PanelPolicy
+        from hhplab.recipe.recipe_schema import LausPolicy, PanelPolicy
         policy = PanelPolicy(laus=LausPolicy(include=True))
         assert policy.laus is not None
         assert policy.laus.include is True
 
     def test_panel_policy_laus_none_by_default(self):
-        from coclab.recipe.recipe_schema import PanelPolicy
+        from hhplab.recipe.recipe_schema import PanelPolicy
         policy = PanelPolicy()
         assert policy.laus is None
 
     def test_laus_policy_round_trips_via_recipe_load(self):
         """LausPolicy is preserved after loading a recipe dict."""
-        from coclab.recipe.loader import load_recipe
+        from hhplab.recipe.loader import load_recipe
         recipe = load_recipe({
             "version": 1,
             "name": "test-laus",
@@ -1228,7 +1228,7 @@ class TestValidateBLSLaus:
     """Tests for the bls/laus dataset adapter validator."""
 
     def _make_spec(self, **overrides) -> Any:
-        from coclab.recipe.recipe_schema import DatasetSpec, GeometryRef
+        from hhplab.recipe.recipe_schema import DatasetSpec, GeometryRef
         defaults: dict[str, Any] = {
             "provider": "bls",
             "product": "laus",
@@ -1240,55 +1240,55 @@ class TestValidateBLSLaus:
         return DatasetSpec(**defaults)
 
     def test_valid_spec_no_diagnostics(self):
-        from coclab.recipe.default_dataset_adapters import _validate_bls_laus
+        from hhplab.recipe.default_dataset_adapters import _validate_bls_laus
         spec = self._make_spec()
         diags = _validate_bls_laus(spec)
         assert diags == []
 
     def test_wrong_version_is_error(self):
-        from coclab.recipe.default_dataset_adapters import _validate_bls_laus
+        from hhplab.recipe.default_dataset_adapters import _validate_bls_laus
         spec = self._make_spec(version=2)
         diags = _validate_bls_laus(spec)
         assert any(d.level == "error" and "version" in d.message for d in diags)
 
     def test_wrong_geometry_type_is_error(self):
-        from coclab.recipe.default_dataset_adapters import _validate_bls_laus
-        from coclab.recipe.recipe_schema import GeometryRef
+        from hhplab.recipe.default_dataset_adapters import _validate_bls_laus
+        from hhplab.recipe.recipe_schema import GeometryRef
         # No path → validator cannot fall back to materialized artifact
         spec = self._make_spec(native_geometry=GeometryRef(type="county"), path=None)
         diags = _validate_bls_laus(spec)
         assert any(d.level == "error" and "metro" in d.message for d in diags)
 
     def test_no_source_warns(self):
-        from coclab.recipe.default_dataset_adapters import _validate_bls_laus
-        from coclab.recipe.recipe_schema import GeometryRef
+        from hhplab.recipe.default_dataset_adapters import _validate_bls_laus
+        from hhplab.recipe.recipe_schema import GeometryRef
         spec = self._make_spec(native_geometry=GeometryRef(type="metro"))
         diags = _validate_bls_laus(spec)
         assert any(d.level == "warning" and "source" in d.message for d in diags)
 
     def test_no_path_warns(self):
-        from coclab.recipe.default_dataset_adapters import _validate_bls_laus
+        from hhplab.recipe.default_dataset_adapters import _validate_bls_laus
         spec = self._make_spec(path=None)
         diags = _validate_bls_laus(spec)
         assert any(d.level == "warning" and "path" in d.message.lower() for d in diags)
 
     def test_unknown_params_warns(self):
-        from coclab.recipe.default_dataset_adapters import _validate_bls_laus
+        from hhplab.recipe.default_dataset_adapters import _validate_bls_laus
         spec = self._make_spec(params={"bogus": "value"})
         diags = _validate_bls_laus(spec)
         assert any(d.level == "warning" and "unrecognized" in d.message for d in diags)
 
     def test_bls_laus_registered_in_global_registry(self):
         """bls/laus must be registered in the default dataset registry."""
-        from coclab.recipe.adapters import dataset_registry
+        from hhplab.recipe.adapters import dataset_registry
 
         # Force a clean registry with defaults to verify registration
         local_registry = type(dataset_registry)()
-        from coclab.recipe.default_dataset_adapters import register_dataset_defaults
+        from hhplab.recipe.default_dataset_adapters import register_dataset_defaults
         register_dataset_defaults(local_registry)
 
         # Build a minimal spec
-        from coclab.recipe.recipe_schema import DatasetSpec, GeometryRef
+        from hhplab.recipe.recipe_schema import DatasetSpec, GeometryRef
         spec = DatasetSpec(
             provider="bls", product="laus", version=1,
             native_geometry=GeometryRef(type="metro", source="glynn_fox_v1"),
@@ -1302,7 +1302,7 @@ class TestValidateBLSLaus:
         """The example metro25-glynnfox-laus.yaml must load without errors."""
         import yaml
 
-        from coclab.recipe.loader import load_recipe
+        from hhplab.recipe.loader import load_recipe
 
         recipe_path = Path(__file__).parent.parent / "recipes" / "metro25-glynnfox-laus.yaml"
         assert recipe_path.exists(), f"Example LAUS recipe not found: {recipe_path}"
@@ -1330,8 +1330,8 @@ class TestValidateBLSLaus:
         """The committed LAUS recipe should resolve the full 2015-2023 window."""
         import yaml
 
-        from coclab.recipe.loader import load_recipe
-        from coclab.recipe.planner import resolve_plan
+        from hhplab.recipe.loader import load_recipe
+        from hhplab.recipe.planner import resolve_plan
 
         recipe_path = Path(__file__).parent.parent / "recipes" / "metro25-glynnfox-laus.yaml"
         with open(recipe_path) as f:
@@ -1376,8 +1376,8 @@ class TestValidateBLSLaus:
         """
         import yaml
 
-        from coclab.recipe.loader import load_recipe
-        from coclab.recipe.planner import resolve_plan
+        from hhplab.recipe.loader import load_recipe
+        from hhplab.recipe.planner import resolve_plan
 
         recipe_path = Path(__file__).parent.parent / "recipes" / "metro25-glynnfox-laus.yaml"
         with open(recipe_path) as f:
@@ -1402,14 +1402,14 @@ class TestValidateBLSLaus:
         """The LAUS example recipe should pass adapter validation with no errors."""
         import yaml
 
-        from coclab.recipe.adapters import (
+        from hhplab.recipe.adapters import (
             DatasetAdapterRegistry,
             GeometryAdapterRegistry,
             validate_recipe_adapters,
         )
-        from coclab.recipe.default_dataset_adapters import register_dataset_defaults
-        from coclab.recipe.default_geometry_adapters import register_geometry_defaults
-        from coclab.recipe.loader import load_recipe
+        from hhplab.recipe.default_dataset_adapters import register_dataset_defaults
+        from hhplab.recipe.default_geometry_adapters import register_geometry_defaults
+        from hhplab.recipe.loader import load_recipe
 
         recipe_path = Path(__file__).parent.parent / "recipes" / "metro25-glynnfox-laus.yaml"
         with open(recipe_path) as f:

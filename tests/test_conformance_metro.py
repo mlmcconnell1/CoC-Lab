@@ -7,8 +7,8 @@ uses metro_id instead of coc_id, proving metro is a first-class target.
 import pandas as pd
 import pytest
 
-from coclab.metro.definitions import METRO_COUNT
-from coclab.panel.conformance import (
+from hhplab.metro.definitions import METRO_COUNT
+from hhplab.panel.conformance import (
     PanelRequest,
     check_coc_count,
     check_coc_year_gaps,
@@ -61,13 +61,13 @@ def metro_panel():
 class TestResolveGeoCol:
     def test_metro_id_resolved(self):
         """resolve_geo_col should recognize metro_id."""
-        from coclab.analysis_geo import resolve_geo_col
+        from hhplab.analysis_geo import resolve_geo_col
         df = pd.DataFrame({"metro_id": ["GF01"], "year": [2020]})
         assert resolve_geo_col(df) == "metro_id"
 
     def test_coc_id_preferred_over_metro_id(self):
         """If both coc_id and metro_id exist, coc_id wins (backward compat)."""
-        from coclab.analysis_geo import resolve_geo_col
+        from hhplab.analysis_geo import resolve_geo_col
         df = pd.DataFrame({
             "coc_id": ["NY-600"],
             "metro_id": ["GF01"],

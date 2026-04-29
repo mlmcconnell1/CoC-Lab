@@ -8,7 +8,7 @@ import geopandas as gpd
 import httpx
 import pytest
 
-from coclab.ingest.hud_opendata_arcgis import (
+from hhplab.ingest.hud_opendata_arcgis import (
     FEATURE_SERVICE_URL,
     PAGE_SIZE,
     _features_to_geodataframe,
@@ -17,7 +17,7 @@ from coclab.ingest.hud_opendata_arcgis import (
     _map_to_canonical_schema,
     ingest_hud_opendata,
 )
-from coclab.raw_snapshot import make_run_id
+from hhplab.raw_snapshot import make_run_id
 
 # Sample polygon coordinates (kept short for readability)
 SAMPLE_COORDS_1 = [

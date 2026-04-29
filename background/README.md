@@ -17,6 +17,6 @@ For current behavior and command syntax, use:
 
 - `manual-obsidian/04-CLI-Reference.md`
 - `manual-obsidian/07-Temporal-Terminology.md`
-- `coclab/cli/main.py`
+- `hhplab/cli/main.py`
 
 The background docs are planning/support material, not authoritative runtime docs.

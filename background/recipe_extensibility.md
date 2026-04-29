@@ -8,8 +8,8 @@ The recipe system separates concerns into two layers:
 
 | Layer | Module | Responsibility |
 |-------|--------|----------------|
-| **Structural** | `coclab/recipe/recipe_schema.py` | Pydantic models — shape, types, referential integrity |
-| **Semantic** | `coclab/recipe/adapters.py` | Adapter registries — geometry/dataset compatibility checks |
+| **Structural** | `hhplab/recipe/recipe_schema.py` | Pydantic models — shape, types, referential integrity |
+| **Semantic** | `hhplab/recipe/adapters.py` | Adapter registries — geometry/dataset compatibility checks |
 
 **Key principle:** The schema uses open string sets for geometry types and dataset providers. It never hardcodes enumerations like `"coc" | "tract" | "county"`. Runtime adapter registries validate whether a referenced type or provider actually has an implementation.
 
@@ -79,7 +79,7 @@ class RecipeV2(BaseModel):
     # ... new/changed fields ...
 ```
 
-2. Register it in `coclab/recipe/loader.py`:
+2. Register it in `hhplab/recipe/loader.py`:
 
 ```python
 _VERSION_REGISTRY: dict[int, type] = {
@@ -92,14 +92,14 @@ The loader dispatches on the `version` key in the YAML, so existing `version: 1`
 
 ## Built-in Adapter Bootstrap
 
-The recipe CLI automatically registers built-in adapters before validation via `register_defaults()` in `coclab/recipe/default_adapters.py`. This is called at the top of `recipe_cmd()` in `coclab/cli/recipe.py`.
+The recipe CLI automatically registers built-in adapters before validation via `register_defaults()` in `hhplab/recipe/default_adapters.py`. This is called at the top of `recipe_cmd()` in `hhplab/cli/recipe.py`.
 
 Built-in adapters are organized into two modules:
 
 | Module | Adapters |
 |--------|----------|
-| `coclab/recipe/default_geometry_adapters.py` | `coc`, `tract`, `county` |
-| `coclab/recipe/default_dataset_adapters.py` | `(hud, pit)`, `(census, acs5)`, `(census, acs)`, `(zillow, zori)` |
+| `hhplab/recipe/default_geometry_adapters.py` | `coc`, `tract`, `county` |
+| `hhplab/recipe/default_dataset_adapters.py` | `(hud, pit)`, `(census, acs5)`, `(census, acs)`, `(zillow, zori)` |
 
 Registration is idempotent — calling `register_defaults()` multiple times has no side effects beyond the first call (re-registration overwrites with the same function).
 
@@ -110,8 +110,8 @@ Geometry and dataset validation live in adapter registries, not in the schema. C
 ### Adding a geometry adapter
 
 ```python
-from coclab.recipe.adapters import geometry_registry, ValidationDiagnostic
-from coclab.recipe.recipe_schema import GeometryRef
+from hhplab.recipe.adapters import geometry_registry, ValidationDiagnostic
+from hhplab.recipe.recipe_schema import GeometryRef
 
 def validate_zcta(ref: GeometryRef) -> list[ValidationDiagnostic]:
     if ref.vintage is None:
@@ -124,8 +124,8 @@ geometry_registry.register("zcta", validate_zcta)
 ### Adding a dataset adapter
 
 ```python
-from coclab.recipe.adapters import dataset_registry, ValidationDiagnostic
-from coclab.recipe.recipe_schema import DatasetSpec
+from hhplab.recipe.adapters import dataset_registry, ValidationDiagnostic
+from hhplab.recipe.recipe_schema import DatasetSpec
 
 def validate_mit_election(spec: DatasetSpec) -> list[ValidationDiagnostic]:
     diags = []

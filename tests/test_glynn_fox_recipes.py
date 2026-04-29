@@ -4,8 +4,8 @@ from pathlib import Path
 
 import yaml
 
-from coclab.recipe.loader import load_recipe
-from coclab.recipe.planner import resolve_plan
+from hhplab.recipe.loader import load_recipe
+from hhplab.recipe.planner import resolve_plan
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RECIPES_DIR = REPO_ROOT / "recipes"

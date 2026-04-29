@@ -69,12 +69,12 @@ datasets:
     native_geometry: { type: tract }
 
     file_set:
-      path_template: "coclab/data/curated/acs/acs_{year}.parquet"
+      path_template: "hhplab/data/curated/acs/acs_{year}.parquet"
       segments:
         - years: "2015-2019"
           geometry: { type: tract, vintage: 2010, source: nhgis }
           overrides:
-            2017: "coclab/data/curated/acs/acs_special_2017.parquet"
+            2017: "hhplab/data/curated/acs/acs_special_2017.parquet"
 
         - years: "2020-2024"
           geometry: { type: tract, vintage: 2020, source: tiger }

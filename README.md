@@ -73,8 +73,8 @@ Resolution precedence is:
 
 - CLI flags: `--asset-store-root`, `--output-root`
 - Environment: `COCLAB_ASSET_STORE_ROOT`, `COCLAB_OUTPUT_ROOT`
-- Repo config: `coclab.yaml`
-- User config: `~/.config/coclab/config.yaml`
+- Repo config: `hhplab.yaml`
+- User config: `~/.config/hhplab/config.yaml`
 - Built-in defaults
 
 Built-in defaults preserve the historical layout:
@@ -85,8 +85,8 @@ Built-in defaults preserve the historical layout:
 Relative paths are resolved by source:
 
 - CLI flags and environment variables are relative to the current working directory
-- `coclab.yaml` values are relative to the repo root
-- `~/.config/coclab/config.yaml` values are relative to `~/.config/coclab/`
+- `hhplab.yaml` values are relative to the repo root
+- `~/.config/hhplab/config.yaml` values are relative to `~/.config/hhplab/`
 
 Internal curated assets resolve under `asset_store_root/curated/...`. Recipe
 panels and their manifest sidecars resolve under `output_root/`.
@@ -125,7 +125,7 @@ Metro support is a first-class part of the analysis model. The repository includ
 
 ## Project Layout
 
-- `coclab/`: Python package and CLI implementation
+- `hhplab/`: Python package and CLI implementation
 - `recipes/`: committed example recipes, including Glynn/Fox metro panel builds
 - `tests/`: regression coverage for CLI, aggregation, panel assembly, recipes, and metro logic
 - `manual-obsidian/`: the full project manual

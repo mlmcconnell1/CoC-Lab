@@ -2,7 +2,7 @@
 
 import pytest
 
-from coclab.year_spec import parse_year_spec
+from hhplab.year_spec import parse_year_spec
 
 
 class TestParseYearSpec:

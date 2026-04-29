@@ -8,17 +8,17 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from coclab.acs.ingest.metro_acs1 import (
+from hhplab.acs.ingest.metro_acs1 import (
     CBSA_GEO_PARAM,
     fetch_acs1_cbsa_data,
     ingest_metro_acs1,
 )
-from coclab.acs.variables_acs1 import (
+from hhplab.acs.variables_acs1 import (
     ACS1_METRO_OUTPUT_COLUMNS,
     ACS1_UNAVAILABLE_VINTAGES,
     ACS1_UNEMPLOYMENT_VARIABLES,
 )
-from coclab.provenance import read_provenance
+from hhplab.provenance import read_provenance
 
 # ---------------------------------------------------------------------------
 # Fixtures and helpers

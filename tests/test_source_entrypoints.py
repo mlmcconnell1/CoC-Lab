@@ -1,22 +1,22 @@
 """Tests for source-owned package entrypoints."""
 
-from coclab import census, hud, nhgis, pit
-from coclab.census.ingest import ingest_tiger_counties, ingest_tiger_tracts, load_tract_relationship
-from coclab.ingest.hud_exchange_gis import ingest_hud_exchange
-from coclab.ingest.hud_opendata_arcgis import ingest_hud_opendata
-from coclab.nhgis.ingest import ingest_nhgis_counties, ingest_nhgis_tracts
-from coclab.pit.ingest import download_pit_data, parse_pit_file
-from coclab.pit.qa import validate_pit_data
+from hhplab import census, hud, nhgis, pit
+from hhplab.census.ingest import ingest_tiger_counties, ingest_tiger_tracts, load_tract_relationship
+from hhplab.ingest.hud_exchange_gis import ingest_hud_exchange
+from hhplab.ingest.hud_opendata_arcgis import ingest_hud_opendata
+from hhplab.nhgis.ingest import ingest_nhgis_counties, ingest_nhgis_tracts
+from hhplab.pit.ingest import download_pit_data, parse_pit_file
+from hhplab.pit.qa import validate_pit_data
 
 
 def test_package_root_lazy_exports() -> None:
     """The package root should lazily expose common source-owned subpackages."""
-    import coclab
+    import hhplab
 
-    assert coclab.census is census
-    assert coclab.hud is hud
-    assert coclab.nhgis is nhgis
-    assert coclab.pit is pit
+    assert hhplab.census is census
+    assert hhplab.hud is hud
+    assert hhplab.nhgis is nhgis
+    assert hhplab.pit is pit
 
 
 def test_census_root_reexports_ingest_helpers() -> None:

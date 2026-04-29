@@ -41,14 +41,14 @@ flowchart TB
 
 ## Major Subsystems
 
-- `coclab/cli/`: Typer CLI command groups
-- `coclab/analysis_geo.py`: analysis geography abstraction (`AnalysisGeometryRef`, canonical `geo_type`/`geo_id` columns)
-- `coclab/recipe/`: schema, adapters, planner, executor, recipe manifests
-- `coclab/builds.py`: build directory and manifest helpers
-- `coclab/xwalks/`: tract/county crosswalk generation (geography-neutral via `geo_id_col` parameter)
-- `coclab/measures/`, `coclab/rents/`, `coclab/pep/`, `coclab/pit/`: dataset-specific ingestion and aggregation (generalized to arbitrary target geographies)
-- `coclab/metro/`: metro definition data, PIT/ACS/PEP/ZORI aggregation to metro, validation, I/O
-- `coclab/acs/ingest/metro_acs1.py`: ACS 1-year CBSA-level unemployment ingestion for metros
+- `hhplab/cli/`: Typer CLI command groups
+- `hhplab/analysis_geo.py`: analysis geography abstraction (`AnalysisGeometryRef`, canonical `geo_type`/`geo_id` columns)
+- `hhplab/recipe/`: schema, adapters, planner, executor, recipe manifests
+- `hhplab/builds.py`: build directory and manifest helpers
+- `hhplab/xwalks/`: tract/county crosswalk generation (geography-neutral via `geo_id_col` parameter)
+- `hhplab/measures/`, `hhplab/rents/`, `hhplab/pep/`, `hhplab/pit/`: dataset-specific ingestion and aggregation (generalized to arbitrary target geographies)
+- `hhplab/metro/`: metro definition data, PIT/ACS/PEP/ZORI aggregation to metro, validation, I/O
+- `hhplab/acs/ingest/metro_acs1.py`: ACS 1-year CBSA-level unemployment ingestion for metros
 
 ## Storage Model
 

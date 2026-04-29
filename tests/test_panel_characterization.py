@@ -48,7 +48,7 @@ import pytest
 
 pytestmark = pytest.mark.legacy_build_path
 
-from coclab.panel.assemble import (
+from hhplab.panel.assemble import (
     PANEL_COLUMNS,
     ZORI_COLUMNS,
     ZORI_PROVENANCE_COLUMNS,

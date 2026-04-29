@@ -6,14 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from coclab.registry import (
+from hhplab.registry import (
     RegistryEntry,
     check_registry_health,
     latest_vintage,
     list_boundaries,
     register_vintage,
 )
-from coclab.registry.registry import _is_temp_path
+from hhplab.registry.registry import _is_temp_path
 
 
 @pytest.fixture

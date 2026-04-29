@@ -18,7 +18,7 @@ import logging
 import pandas as pd
 import pytest
 
-from coclab.panel.zori_eligibility import (
+from hhplab.panel.zori_eligibility import (
     EXCLUDED_LOW_COVERAGE,
     EXCLUDED_MISSING,
     EXCLUDED_ZERO_COVERAGE,

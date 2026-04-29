@@ -3,14 +3,14 @@
 Status: design only, no code changes
 Parent bead: `coclab-i6qh` (executor decomposition)
 Scope bead: `coclab-wxl9` (panel assembly + persistence path)
-Source under discussion: `coclab/recipe/executor.py` (2455 LOC)
+Source under discussion: `hhplab/recipe/executor.py` (2455 LOC)
 Author/agent date: 2026-04-10
 
 ---
 
 ## 1. Current state
 
-The panel-assembly and persistence path inside `coclab/recipe/executor.py` is
+The panel-assembly and persistence path inside `hhplab/recipe/executor.py` is
 four top-level helpers plus one private dataclass, all living in the same
 file as materialize/resample/join orchestration, crosswalk probing, CT
 alignment, and the `execute_recipe` entry point. The persistence bundle is
@@ -40,7 +40,7 @@ executor.py being the only orchestrator that calls `_persist_outputs` and
 3. **Target-geometry metadata** — derived via `_target_geometry_metadata`.
 4. **Policy resolution** — `policy = getattr(target, "panel_policy", None)`.
 5. **ZORI branch** (~40 LOC): local import of
-   `coclab.panel.zori_eligibility` symbols, rename `zori → zori_coc`, call
+   `hhplab.panel.zori_eligibility` symbols, rename `zori → zori_coc`, call
    `apply_zori_eligibility`, `compute_rent_to_income`,
    `add_provenance_columns`, drop leak columns (`method`, `geo_count`),
    compute `extra_columns`, and construct a `ZoriProvenance` that needs to
@@ -51,7 +51,7 @@ executor.py being the only orchestrator that calls `_persist_outputs` and
 7. **LAUS branch** (~20 LOC): metro-only gating, adds `laus_vintage_used`,
    ensures all four LAUS measure columns exist.
 8. **`finalize_panel` call** — the shared canonical shaping from
-   `coclab.panel.finalize`, parameterised by `include_zori`,
+   `hhplab.panel.finalize`, parameterised by `include_zori`,
    `source_label`, `column_aliases`, `extra_columns`.
 9. **Cohort selector** — `_apply_cohort_selector` + `_echo` for progress
    output.
@@ -95,13 +95,13 @@ executor.py being the only orchestrator that calls `_persist_outputs` and
 
 ## 2. Target modules
 
-Create three new modules under `coclab/recipe/` and reduce `executor.py`
-to re-exports. Keeping the new modules under `coclab.recipe.*` (not
-`coclab.panel.*`) keeps them close to the orchestration context they
-serve; `coclab.panel.*` is reserved for schema and shaping primitives
+Create three new modules under `hhplab/recipe/` and reduce `executor.py`
+to re-exports. Keeping the new modules under `hhplab.recipe.*` (not
+`hhplab.panel.*`) keeps them close to the orchestration context they
+serve; `hhplab.panel.*` is reserved for schema and shaping primitives
 shared with the legacy `build_panel` path.
 
-### 2.1 `coclab/recipe/executor_panel_policies.py`
+### 2.1 `hhplab/recipe/executor_panel_policies.py`
 
 Responsibility: translate `target.panel_policy` into concrete
 mutations on a partially assembled panel DataFrame, and surface any
@@ -130,7 +130,7 @@ policy-specific metadata needed downstream.
   `measure_columns` needed by `_persist_outputs`. This removes the
   second policy-read drift described above.
 
-### 2.2 `coclab/recipe/executor_panel.py`
+### 2.2 `hhplab/recipe/executor_panel.py`
 
 Responsibility: pure panel assembly from join intermediates. No
 parquet, no JSON, no manifest, no conformance.
@@ -158,7 +158,7 @@ parquet, no JSON, no manifest, no conformance.
   call and cohort-selector step remain here because they are not
   policy-specific.
 
-### 2.3 `coclab/recipe/executor_persistence.py`
+### 2.3 `hhplab/recipe/executor_persistence.py`
 
 Responsibility: write parquet, write manifest sidecar, write diagnostics
 sidecar. Consumes only an `AssembledPanel` plus `plan` and `ctx`.
@@ -278,10 +278,10 @@ conformance, replacing the 20+ lines currently inlined inside
 
 Tests and one production module reach into executor internals. The
 extraction must keep these symbols importable from
-`coclab.recipe.executor` via re-export shims — do not change callers in
+`hhplab.recipe.executor` via re-export shims — do not change callers in
 step one.
 
-### Symbols that must remain importable from `coclab.recipe.executor`
+### Symbols that must remain importable from `hhplab.recipe.executor`
 
 From `tests/test_recipe.py` top-level import (lines 23–36):
 
@@ -314,28 +314,28 @@ From other tests:
   extraction can change internals freely as long as the behaviour is
   preserved)
 
-From `coclab/cli/recipe.py`:
+From `hhplab/cli/recipe.py`:
 
 - `ExecutorError`, `execute_recipe`, `resolve_pipeline_artifacts`
 
-From `coclab/recipe/probes.py` (lazy import):
+From `hhplab/recipe/probes.py` (lazy import):
 
 - `_identify_metro_and_base`, `_resolve_transform_path`, `ExecutorError`
 
 ### Shim strategy
 
-At the bottom of `coclab/recipe/executor.py`, after all remaining
+At the bottom of `hhplab/recipe/executor.py`, after all remaining
 definitions, add:
 
 ```python
 # Back-compat shims for symbols that moved during the coclab-wxl9 split.
-# Tests and external callers import these from coclab.recipe.executor.
-from coclab.recipe.executor_panel import (           # noqa: E402,F401
+# Tests and external callers import these from hhplab.recipe.executor.
+from hhplab.recipe.executor_panel import (           # noqa: E402,F401
     AssembledPanel as _AssembledPanel,
     assemble_panel as _assemble_panel,
     canonicalize_panel_for_target as _canonicalize_panel_for_target,
 )
-from coclab.recipe.executor_persistence import (      # noqa: E402,F401
+from hhplab.recipe.executor_persistence import (      # noqa: E402,F401
     persist_outputs as _persist_outputs,
     persist_diagnostics as _persist_diagnostics,
 )
@@ -343,7 +343,7 @@ from coclab.recipe.executor_persistence import (      # noqa: E402,F401
 
 Note: the shim re-exports under the original underscored names, and the
 extracted modules define public names without underscores. The alias
-preserves `from coclab.recipe.executor import _persist_diagnostics`.
+preserves `from hhplab.recipe.executor import _persist_diagnostics`.
 
 `_apply_cohort_selector`, `_canonicalize_panel_for_target` used inline
 in tests must be verified for call-signature parity — they currently
@@ -351,9 +351,9 @@ take no special state, so a simple function move + re-export suffices.
 
 ### No new public API (yet)
 
-Do not add `coclab.recipe.executor_panel` / `executor_persistence` to
+Do not add `hhplab.recipe.executor_panel` / `executor_persistence` to
 any `__init__.py`. They are internal. Callers continue to import from
-`coclab.recipe.executor` so the surface area is unchanged.
+`hhplab.recipe.executor` so the surface area is unchanged.
 
 ---
 
@@ -374,7 +374,7 @@ tuple of concrete appliers keeps the loop linear and easy to test in
 isolation.
 
 ```python
-# coclab/recipe/executor_panel_policies.py
+# hhplab/recipe/executor_panel_policies.py
 from typing import Protocol
 
 class PanelPolicyApplier(Protocol):
@@ -404,7 +404,7 @@ class ZoriPolicyApplier:
 
     def apply(self, panel, *, policy, target_geo_type):
         # Local import stays local to the applier, not to _assemble_panel.
-        from coclab.panel.zori_eligibility import (
+        from hhplab.panel.zori_eligibility import (
             ZoriProvenance,
             add_provenance_columns,
             apply_zori_eligibility,
@@ -582,7 +582,7 @@ panel = finalize_panel(
 | ZORI/ACS1/LAUS ordering subtly matters — today's sequence is ZORI first (rename + provenance), ACS1 second (metro provenance columns), LAUS third (metro provenance columns). Reordering would change which columns exist at `finalize_panel` time. | Capture order in `DEFAULT_APPLIERS`. Do not change the tuple order in step one. Document the invariant at the tuple definition. |
 | `finalize_panel` is sensitive to `extra_columns` and `include_zori`. If the applier loop computes these differently from today, the final schema drifts. | The loop computes `extras` as a union exactly like the current code's single `extra_columns` assignment; `include_zori` is still derived from "did the ZORI applier run successfully". Add an assertion or test that the extracted path produces the same column list as the original for a representative ZORI recipe. |
 | `_persist_outputs` currently re-reads policy to configure conformance. Extracting both assembly and persistence in the same step means two call sites could drift if we refactor one but not the other. | Introduce `collect_conformance_flags` in step one but keep it byte-identical to the current inline logic. Verify with a golden-output test of the produced provenance dict before and after. |
-| Tests reach in via `from coclab.recipe.executor import _persist_diagnostics` and similar private names. Moving the definition breaks the import if the shim is forgotten. | Add the re-export shim in the same commit as the move; run the test suite to verify imports resolve. |
+| Tests reach in via `from hhplab.recipe.executor import _persist_diagnostics` and similar private names. Moving the definition breaks the import if the shim is forgotten. | Add the re-export shim in the same commit as the move; run the test suite to verify imports resolve. |
 | `ctx._written_outputs` is a private attribute attached dynamically. The persistence module must still mutate it. | Move the `hasattr(ctx, "_written_outputs")` check into `persist_outputs`; it is already defensive today. Consider promoting it to a real field on `ExecutionContext` in a follow-up bead, not step one. |
 | `_assemble_panel` is called from two places (panel and diagnostics persistence) and the current code re-assembles the panel twice when both outputs are requested. The extraction is a good opportunity to fix this, but changing the call pattern is out of scope for step one. | Preserve the double-assembly behaviour in step one to isolate risk. Track single-assembly as a follow-up optimisation. (Alternatively, do it in the orchestrator as noted in 2.4; if you do, the test at `test_diagnostics_no_joined_outputs_fails` still needs to pass because it constructs an empty-intermediates ctx and calls `_persist_diagnostics` directly.) |
 | `tests/test_recipe.py::test_diagnostics_no_joined_outputs_fails` constructs an `ExecutionContext` with empty intermediates and calls `_persist_diagnostics(plan, ctx)` directly. The shim must accept this signature unchanged. | `persist_diagnostics(plan, ctx)` must keep the 2-arg signature; internally it calls `assemble_panel(plan, ctx, step_kind="persist_diagnostics")` just like today. The single-assembly optimisation therefore cannot be applied to the diagnostics path without breaking this test; keep `persist_diagnostics` self-contained. |
@@ -602,11 +602,11 @@ Each step leaves the tree with `pytest` passing. Do not combine steps.
 
 ### Step 1 — Scaffold the new modules with no behaviour change
 
-- Create `coclab/recipe/executor_panel.py` containing only the module
+- Create `hhplab/recipe/executor_panel.py` containing only the module
   docstring and imports.
-- Create `coclab/recipe/executor_persistence.py` containing only the
+- Create `hhplab/recipe/executor_persistence.py` containing only the
   module docstring and imports.
-- Create `coclab/recipe/executor_panel_policies.py` containing only
+- Create `hhplab/recipe/executor_panel_policies.py` containing only
   the module docstring and imports.
 - Run `pytest -x`. Nothing references the new modules yet; tests must
   still pass.
@@ -647,7 +647,7 @@ Each step leaves the tree with `pytest` passing. Do not combine steps.
   `_resolve_panel_aliases`, `_target_geometry_metadata`, `_echo`,
   `write_manifest`, `expand_year_spec`.
   - Several of these still live in `executor.py` after the split. Import
-    them from `coclab.recipe.executor` at the top of
+    them from `hhplab.recipe.executor` at the top of
     `executor_persistence.py`. This creates a one-way dependency
     `executor_persistence → executor`, which is fine; the reverse would
     be a cycle.
@@ -710,9 +710,9 @@ Each step leaves the tree with `pytest` passing. Do not combine steps.
 ### Post-step validation
 
 - After step 8, `executor.py` should be about 470 LOC lighter (~1985
-  LOC remaining). Verify `wc -l coclab/recipe/executor.py`.
+  LOC remaining). Verify `wc -l hhplab/recipe/executor.py`.
 - Verify that every symbol listed in Section 4 still resolves via
-  `python -c "from coclab.recipe.executor import <name>"` for each.
+  `python -c "from hhplab.recipe.executor import <name>"` for each.
 - Run the recipe CLI end-to-end against a known recipe fixture and
   diff the produced `panel.parquet` schema and the
   `panel.manifest.json` file against a pre-refactor capture. Field

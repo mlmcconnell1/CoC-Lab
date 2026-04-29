@@ -1,11 +1,11 @@
 """Tests for the census/acs1 dataset adapter added in coclab-425s."""
 
-from coclab.recipe.adapters import DatasetAdapterRegistry
-from coclab.recipe.default_dataset_adapters import (
+from hhplab.recipe.adapters import DatasetAdapterRegistry
+from hhplab.recipe.default_dataset_adapters import (
     _validate_census_acs1,
     register_dataset_defaults,
 )
-from coclab.recipe.recipe_schema import DatasetSpec, GeometryRef
+from hhplab.recipe.recipe_schema import DatasetSpec, GeometryRef
 
 
 def _make_acs1_spec(

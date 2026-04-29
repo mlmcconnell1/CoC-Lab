@@ -5,7 +5,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from coclab.cli.main import app
+from hhplab.cli.main import app
 
 runner = CliRunner()
 

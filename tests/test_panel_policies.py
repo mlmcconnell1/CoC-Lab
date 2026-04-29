@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from coclab.panel.policies import (
+from hhplab.panel.policies import (
     DEFAULT_POLICY,
     AlignmentPolicy,
     default_acs_vintage,

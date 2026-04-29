@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pandas as pd
 from typer.testing import CliRunner
 
-from coclab.cli.main import app
+from hhplab.cli.main import app
 
 runner = CliRunner()
 
@@ -21,8 +21,8 @@ class TestTigerIngestCommand:
         assert result.exit_code == 1
         assert "Invalid type" in result.output
 
-    @patch("coclab.census.ingest.ingest_tiger_tracts")
-    @patch("coclab.census.ingest.ingest_tiger_counties")
+    @patch("hhplab.census.ingest.ingest_tiger_tracts")
+    @patch("hhplab.census.ingest.ingest_tiger_counties")
     def test_ingest_tiger_cached_skips_downloads(
         self,
         mock_counties,
@@ -55,12 +55,12 @@ class TestBuildXwalksCommand:
         # Typer shows error for missing required --build option
         assert result.exit_code != 0
 
-    @patch("coclab.cli.build_xwalks.list_boundaries")
-    @patch("coclab.cli.build_xwalks.gpd.read_parquet")
-    @patch("coclab.cli.build_xwalks.build_coc_tract_crosswalk")
-    @patch("coclab.cli.build_xwalks.save_crosswalk")
-    @patch("coclab.cli.build_xwalks.compute_crosswalk_diagnostics")
-    @patch("coclab.cli.build_xwalks.summarize_diagnostics")
+    @patch("hhplab.cli.build_xwalks.list_boundaries")
+    @patch("hhplab.cli.build_xwalks.gpd.read_parquet")
+    @patch("hhplab.cli.build_xwalks.build_coc_tract_crosswalk")
+    @patch("hhplab.cli.build_xwalks.save_crosswalk")
+    @patch("hhplab.cli.build_xwalks.compute_crosswalk_diagnostics")
+    @patch("hhplab.cli.build_xwalks.summarize_diagnostics")
     def test_build_xwalks_success_skips_missing_counties_silently(
         self,
         mock_summarize,
@@ -75,7 +75,7 @@ class TestBuildXwalksCommand:
         import json
         from datetime import UTC, datetime
 
-        from coclab.registry.schema import RegistryEntry
+        from hhplab.registry.schema import RegistryEntry
 
         with runner.isolated_filesystem(temp_dir=tmp_path):
             # Create build directory
@@ -147,12 +147,12 @@ class TestBuildXwalksCommand:
         mock_build_crosswalk.assert_called_once()
         mock_save_crosswalk.assert_called_once()
 
-    @patch("coclab.cli.build_xwalks.list_boundaries")
-    @patch("coclab.cli.build_xwalks.gpd.read_parquet")
-    @patch("coclab.cli.build_xwalks.build_coc_tract_crosswalk")
-    @patch("coclab.cli.build_xwalks.save_crosswalk")
-    @patch("coclab.cli.build_xwalks.compute_crosswalk_diagnostics")
-    @patch("coclab.cli.build_xwalks.summarize_diagnostics")
+    @patch("hhplab.cli.build_xwalks.list_boundaries")
+    @patch("hhplab.cli.build_xwalks.gpd.read_parquet")
+    @patch("hhplab.cli.build_xwalks.build_coc_tract_crosswalk")
+    @patch("hhplab.cli.build_xwalks.save_crosswalk")
+    @patch("hhplab.cli.build_xwalks.compute_crosswalk_diagnostics")
+    @patch("hhplab.cli.build_xwalks.summarize_diagnostics")
     def test_build_xwalks_warns_when_counties_explicitly_requested_and_missing(
         self,
         mock_summarize,
@@ -167,7 +167,7 @@ class TestBuildXwalksCommand:
         import json
         from datetime import UTC, datetime
 
-        from coclab.registry.schema import RegistryEntry
+        from hhplab.registry.schema import RegistryEntry
 
         with runner.isolated_filesystem(temp_dir=tmp_path):
             # Create build directory
@@ -253,9 +253,9 @@ class TestDiagnosticsCommand:
         assert result.exit_code == 1
         assert "Crosswalk file not found" in result.output
 
-    @patch("coclab.cli.diagnostics.compute_crosswalk_diagnostics")
-    @patch("coclab.cli.diagnostics.summarize_diagnostics")
-    @patch("coclab.cli.diagnostics.identify_problem_cocs")
+    @patch("hhplab.cli.diagnostics.compute_crosswalk_diagnostics")
+    @patch("hhplab.cli.diagnostics.summarize_diagnostics")
+    @patch("hhplab.cli.diagnostics.identify_problem_cocs")
     @patch("pandas.read_parquet")
     def test_diagnostics_show_problems(
         self,

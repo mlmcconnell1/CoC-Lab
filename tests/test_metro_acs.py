@@ -8,8 +8,8 @@ coverage/weighting cases.
 import pandas as pd
 import pytest
 
-from coclab.acs import aggregate_acs_to_metro, build_metro_tract_crosswalk
-from coclab.metro.definitions import (
+from hhplab.acs import aggregate_acs_to_metro, build_metro_tract_crosswalk
+from hhplab.metro.definitions import (
     METRO_COUNT,
     METRO_COUNTY_MEMBERSHIP,
     build_county_membership_df,

@@ -1,4 +1,4 @@
-"""Tests for coclab.metro definitions and validation.
+"""Tests for hhplab.metro definitions and validation.
 
 Covers the metro definition data integrity (coclab-djrh.2), including
 truth-table consistency, identifier formats, and validation logic.
@@ -14,7 +14,7 @@ Truth table for metro definition structure
 
 import pytest
 
-from coclab.metro.definitions import (
+from hhplab.metro.definitions import (
     DEFINITION_VERSION,
     METRO_COC_MEMBERSHIP,
     METRO_COUNTY_MEMBERSHIP,
@@ -23,7 +23,7 @@ from coclab.metro.definitions import (
     build_county_membership_df,
     build_definitions_df,
 )
-from coclab.metro.validate import validate_metro_artifacts
+from hhplab.metro.validate import validate_metro_artifacts
 
 # ---------------------------------------------------------------------------
 # Constants from truth table

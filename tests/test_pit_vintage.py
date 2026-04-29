@@ -13,18 +13,18 @@ from pathlib import Path
 import pandas as pd
 import pyarrow.parquet as pq
 
-from coclab.pit.ingest.parser import (
+from hhplab.pit.ingest.parser import (
     PITParseResult,
     PITVintageParseResult,
     write_pit_parquet,
 )
-from coclab.pit.registry import (
+from hhplab.pit.registry import (
     PitVintageRegistryEntry,
     get_pit_vintage_path,
     list_pit_vintages,
     register_pit_vintage,
 )
-from coclab.provenance import PROVENANCE_KEY, ProvenanceBlock
+from hhplab.provenance import PROVENANCE_KEY, ProvenanceBlock
 
 # ---------------------------------------------------------------------------
 # Helpers

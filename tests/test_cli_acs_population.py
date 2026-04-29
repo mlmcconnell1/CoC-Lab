@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pandas as pd
 from typer.testing import CliRunner
 
-from coclab.cli.main import app
+from hhplab.cli.main import app
 
 runner = CliRunner()
 
@@ -13,8 +13,8 @@ runner = CliRunner()
 class TestIngestAcs5TractCommand:
     """Tests for ingest acs5-tract CLI command."""
 
-    @patch("coclab.cli.ingest_acs_population.get_output_path")
-    @patch("coclab.acs.ingest.tract_population.ingest_tract_data")
+    @patch("hhplab.cli.ingest_acs_population.get_output_path")
+    @patch("hhplab.acs.ingest.tract_population.ingest_tract_data")
     @patch("pandas.read_parquet")
     def test_ingest_acs5_tract_uses_cache(
         self,
@@ -39,8 +39,8 @@ class TestIngestAcs5TractCommand:
         assert "Cached file found" in result.output
         mock_ingest.assert_not_called()
 
-    @patch("coclab.cli.ingest_acs_population.get_output_path")
-    @patch("coclab.acs.ingest.tract_population.ingest_tract_data")
+    @patch("hhplab.cli.ingest_acs_population.get_output_path")
+    @patch("hhplab.acs.ingest.tract_population.ingest_tract_data")
     @patch("pandas.read_parquet")
     def test_ingest_acs5_tract_success(
         self,

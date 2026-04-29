@@ -10,7 +10,7 @@ PIT fallback (the @B suffix path is no longer supported).
 
 import pandas as pd
 
-from coclab.panel.assemble import _load_acs_measures, _load_pit_for_year
+from hhplab.panel.assemble import _load_acs_measures, _load_pit_for_year
 
 
 class TestPitCanonicalFilenames:

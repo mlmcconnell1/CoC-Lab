@@ -14,7 +14,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from coclab.panel.diagnostics import (
+from hhplab.panel.diagnostics import (
     DiagnosticsReport,
     boundary_change_summary,
     coverage_summary,

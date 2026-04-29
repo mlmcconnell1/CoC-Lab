@@ -2,7 +2,7 @@
 
 import geopandas as gpd
 
-from coclab.census.ingest.tiger_tracts import (
+from hhplab.census.ingest.tiger_tracts import (
     _resolve_geoid_column,
     _tract_url,
     _tract_zip_name,

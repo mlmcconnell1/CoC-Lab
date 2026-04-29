@@ -11,9 +11,9 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from coclab.provenance import read_provenance
-from coclab.rents.aggregate import compute_geo_county_weights
-from coclab.rents.weights import (
+from hhplab.provenance import read_provenance
+from hhplab.rents.aggregate import compute_geo_county_weights
+from hhplab.rents.weights import (
     ACS_WEIGHT_VARS,
     build_county_weights,
     fetch_county_acs_totals,
@@ -637,7 +637,7 @@ class TestComputeGeoCountyWeightsMissingACS:
             # 08001 intentionally absent
         ])
 
-        with caplog.at_level(logging.WARNING, logger="coclab.rents.aggregate"):
+        with caplog.at_level(logging.WARNING, logger="hhplab.rents.aggregate"):
             result = compute_geo_county_weights(xwalk, weights)
 
         # Only the county with a weight should survive

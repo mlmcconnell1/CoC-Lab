@@ -26,7 +26,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from coclab.panel.conformance import (
+from hhplab.panel.conformance import (
     PanelRequest,
     check_pit_exceeds_population,
 )

@@ -2,16 +2,16 @@
 
 The executor decomposition landed in commit fdcdfe6 with five new
 modules plus ``executor_manifest``.  Each submodule originally imported
-shared primitives back from ``coclab.recipe.executor`` while the
+shared primitives back from ``hhplab.recipe.executor`` while the
 orchestrator eagerly re-imported symbols from the partially-initialized
 submodule, producing a partial-initialization ImportError whenever a
 caller imported a submodule directly (without going through
-``coclab.recipe.executor`` first).
+``hhplab.recipe.executor`` first).
 
 This test verifies every extracted submodule — including the shared
 ``executor_core`` — can be imported on its own in a fresh interpreter,
 so the cycle cannot silently return.  Subprocesses are used so prior
-imports of ``coclab.recipe.executor`` elsewhere in the session can't
+imports of ``hhplab.recipe.executor`` elsewhere in the session can't
 mask a regression.
 """
 
@@ -26,16 +26,16 @@ import pytest
 # shared base is listed first, then the orchestrator, then each
 # extracted leaf module.
 EXECUTOR_SUBMODULES: list[str] = [
-    "coclab.recipe.executor_core",
-    "coclab.recipe.executor",
-    "coclab.recipe.executor_transforms",
-    "coclab.recipe.executor_manifest",
-    "coclab.recipe.executor_inputs",
-    "coclab.recipe.executor_ct_alignment",
-    "coclab.recipe.executor_resample",
-    "coclab.recipe.executor_panel",
-    "coclab.recipe.executor_panel_policies",
-    "coclab.recipe.executor_persistence",
+    "hhplab.recipe.executor_core",
+    "hhplab.recipe.executor",
+    "hhplab.recipe.executor_transforms",
+    "hhplab.recipe.executor_manifest",
+    "hhplab.recipe.executor_inputs",
+    "hhplab.recipe.executor_ct_alignment",
+    "hhplab.recipe.executor_resample",
+    "hhplab.recipe.executor_panel",
+    "hhplab.recipe.executor_panel_policies",
+    "hhplab.recipe.executor_persistence",
 ]
 
 

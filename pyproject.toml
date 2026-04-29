@@ -1,7 +1,7 @@
 [project]
-name = "coc-lab"
+name = "hhp-lab"
 version = "0.1.0"
-description = "CoC Lab - Continuum of Care boundary data infrastructure"
+description = "HHP-Lab - homelessness and housing precarity data infrastructure"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.scripts]
-coclab = "coclab.cli.main:app"
+coclab = "hhplab.cli.main:app"
 
 [project.optional-dependencies]
 dev = [
@@ -60,4 +60,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["coclab"]
+packages = ["hhplab"]

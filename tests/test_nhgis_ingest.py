@@ -17,7 +17,7 @@ import geopandas as gpd
 import pytest
 from shapely.geometry import Point
 
-from coclab.nhgis.ingest import (
+from hhplab.nhgis.ingest import (
     NHGIS_COUNTY_SHAPEFILES,
     NHGIS_TRACT_SHAPEFILES,
     NhgisExtractError,

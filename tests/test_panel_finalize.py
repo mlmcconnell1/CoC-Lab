@@ -1,4 +1,4 @@
-"""Tests for the shared panel finalization layer (coclab.panel.finalize).
+"""Tests for the shared panel finalization layer (hhplab.panel.finalize).
 
 Covers:
 - detect_boundary_changes: boundary-vintage change detection
@@ -12,7 +12,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from coclab.panel.finalize import (
+from hhplab.panel.finalize import (
     COC_PANEL_COLUMNS,
     METRO_PANEL_COLUMNS,
     RECIPE_COLUMN_ALIASES,

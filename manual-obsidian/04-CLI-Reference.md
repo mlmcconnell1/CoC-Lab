@@ -1,6 +1,6 @@
 # CLI Reference
 
-This chapter documents the currently supported CLI surface from `coclab/cli/main.py`.
+This chapter documents the currently supported CLI surface from `hhplab/cli/main.py`.
 
 ## Top-Level Groups
 
@@ -145,8 +145,8 @@ Resolution precedence is:
 
 - CLI flags: `--asset-store-root`, `--output-root`
 - Environment: `COCLAB_ASSET_STORE_ROOT`, `COCLAB_OUTPUT_ROOT`
-- Repo config: `coclab.yaml`
-- User config: `~/.config/coclab/config.yaml`
+- Repo config: `hhplab.yaml`
+- User config: `~/.config/hhplab/config.yaml`
 - Built-in defaults
 
 Built-in defaults:

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from coclab.recipe.loader import load_recipe
-from coclab.recipe.planner import (
+from hhplab.recipe.loader import load_recipe
+from hhplab.recipe.planner import (
     ExecutionPlan,
     PlannerError,
     resolve_plan,

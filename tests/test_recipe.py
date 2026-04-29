@@ -9,10 +9,10 @@ import pandas as pd
 import pytest
 from typer.testing import CliRunner
 
-from coclab.cli.main import app
-from coclab.geo.ct_planning_regions import CtPlanningRegionCrosswalk
-from coclab.provenance import ProvenanceBlock, write_parquet_with_provenance
-from coclab.recipe.adapters import (
+from hhplab.cli.main import app
+from hhplab.geo.ct_planning_regions import CtPlanningRegionCrosswalk
+from hhplab.provenance import ProvenanceBlock, write_parquet_with_provenance
+from hhplab.recipe.adapters import (
     DatasetAdapterRegistry,
     GeometryAdapterRegistry,
     ValidationDiagnostic,
@@ -20,8 +20,8 @@ from coclab.recipe.adapters import (
     geometry_registry,
     validate_recipe_adapters,
 )
-from coclab.recipe.cache import RecipeCache, _sha256_file
-from coclab.recipe.executor import (
+from hhplab.recipe.cache import RecipeCache, _sha256_file
+from hhplab.recipe.executor import (
     ExecutionContext,
     ExecutorError,
     PipelineResult,
@@ -34,20 +34,20 @@ from coclab.recipe.executor import (
     _resolve_transform_path,
     execute_recipe,
 )
-from coclab.recipe.loader import RecipeLoadError, load_recipe
-from coclab.recipe.manifest import (
+from hhplab.recipe.loader import RecipeLoadError, load_recipe
+from hhplab.recipe.manifest import (
     AssetRecord,
     RecipeManifest,
     export_bundle,
     read_manifest,
     write_manifest,
 )
-from coclab.recipe.planner import (
+from hhplab.recipe.planner import (
     MaterializeTask,
     ResampleTask,
     resolve_plan,
 )
-from coclab.recipe.recipe_schema import (
+from hhplab.recipe.recipe_schema import (
     Acs1Policy,
     DatasetSpec,
     GeometryRef,
@@ -317,7 +317,7 @@ class TestDatasetAdapterRegistry:
         assert reg.registered_products() == []
 
     def test_defaults_accept_county_pep(self):
-        from coclab.recipe.default_adapters import register_defaults
+        from hhplab.recipe.default_adapters import register_defaults
 
         geometry_registry.reset()
         dataset_registry.reset()
@@ -360,7 +360,7 @@ class TestValidateRecipeAdapters:
         assert diags == []
 
     def test_defaults_accept_metro_target_and_preaggregated_datasets(self):
-        from coclab.recipe.default_adapters import register_defaults
+        from hhplab.recipe.default_adapters import register_defaults
 
         geometry_registry.reset()
         dataset_registry.reset()
@@ -1098,8 +1098,8 @@ class TestDefaultAdapters:
     """Tests for built-in adapter registration."""
 
     def test_register_defaults_idempotent(self):
-        from coclab.recipe.adapters import dataset_registry, geometry_registry
-        from coclab.recipe.default_adapters import register_defaults
+        from hhplab.recipe.adapters import dataset_registry, geometry_registry
+        from hhplab.recipe.default_adapters import register_defaults
 
         geometry_registry.reset()
         dataset_registry.reset()
@@ -1111,8 +1111,8 @@ class TestDefaultAdapters:
         assert dataset_registry.registered_products() == products_1
 
     def test_geometry_types_registered(self):
-        from coclab.recipe.adapters import geometry_registry
-        from coclab.recipe.default_adapters import register_defaults
+        from hhplab.recipe.adapters import geometry_registry
+        from hhplab.recipe.default_adapters import register_defaults
 
         geometry_registry.reset()
         register_defaults()
@@ -1121,8 +1121,8 @@ class TestDefaultAdapters:
         assert "county" in geometry_registry.registered_types()
 
     def test_dataset_products_registered(self):
-        from coclab.recipe.adapters import dataset_registry
-        from coclab.recipe.default_adapters import register_defaults
+        from hhplab.recipe.adapters import dataset_registry
+        from hhplab.recipe.default_adapters import register_defaults
 
         dataset_registry.reset()
         register_defaults()
@@ -1133,32 +1133,32 @@ class TestDefaultAdapters:
         assert ("zillow", "zori") in products
 
     def test_coc_valid(self):
-        from coclab.recipe.default_geometry_adapters import _validate_coc
+        from hhplab.recipe.default_geometry_adapters import _validate_coc
 
         diags = _validate_coc(GeometryRef(type="coc", vintage=2025, source="hud_exchange"))
         assert diags == []
 
     def test_coc_no_vintage_valid(self):
-        from coclab.recipe.default_geometry_adapters import _validate_coc
+        from hhplab.recipe.default_geometry_adapters import _validate_coc
 
         diags = _validate_coc(GeometryRef(type="coc"))
         assert diags == []
 
     def test_coc_early_vintage_warns(self):
-        from coclab.recipe.default_geometry_adapters import _validate_coc
+        from hhplab.recipe.default_geometry_adapters import _validate_coc
 
         diags = _validate_coc(GeometryRef(type="coc", vintage=1990))
         assert len(diags) == 1
         assert diags[0].level == "warning"
 
     def test_tract_decennial_valid(self):
-        from coclab.recipe.default_geometry_adapters import _validate_tract
+        from hhplab.recipe.default_geometry_adapters import _validate_tract
 
         diags = _validate_tract(GeometryRef(type="tract", vintage=2020))
         assert diags == []
 
     def test_tract_non_decennial_warns(self):
-        from coclab.recipe.default_geometry_adapters import _validate_tract
+        from hhplab.recipe.default_geometry_adapters import _validate_tract
 
         diags = _validate_tract(GeometryRef(type="tract", vintage=2023))
         assert len(diags) == 1
@@ -1166,7 +1166,7 @@ class TestDefaultAdapters:
         assert "decennial" in diags[0].message
 
     def test_hud_pit_valid(self):
-        from coclab.recipe.default_dataset_adapters import _validate_hud_pit
+        from hhplab.recipe.default_dataset_adapters import _validate_hud_pit
 
         spec = DatasetSpec(
             provider="hud", product="pit", version=1,
@@ -1177,7 +1177,7 @@ class TestDefaultAdapters:
         assert diags == []
 
     def test_hud_pit_bad_version(self):
-        from coclab.recipe.default_dataset_adapters import _validate_hud_pit
+        from hhplab.recipe.default_dataset_adapters import _validate_hud_pit
 
         spec = DatasetSpec(
             provider="hud", product="pit", version=2,
@@ -1187,7 +1187,7 @@ class TestDefaultAdapters:
         assert any(d.level == "error" and "version" in d.message for d in diags)
 
     def test_hud_pit_wrong_geometry(self):
-        from coclab.recipe.default_dataset_adapters import _validate_hud_pit
+        from hhplab.recipe.default_dataset_adapters import _validate_hud_pit
 
         spec = DatasetSpec(
             provider="hud", product="pit", version=1,
@@ -1197,7 +1197,7 @@ class TestDefaultAdapters:
         assert any(d.level == "error" and "coc" in d.message for d in diags)
 
     def test_hud_pit_unknown_params_warns(self):
-        from coclab.recipe.default_dataset_adapters import _validate_hud_pit
+        from hhplab.recipe.default_dataset_adapters import _validate_hud_pit
 
         spec = DatasetSpec(
             provider="hud", product="pit", version=1,
@@ -1208,7 +1208,7 @@ class TestDefaultAdapters:
         assert any(d.level == "warning" and "unrecognized" in d.message for d in diags)
 
     def test_census_acs5_valid(self):
-        from coclab.recipe.default_dataset_adapters import _validate_census_acs5
+        from hhplab.recipe.default_dataset_adapters import _validate_census_acs5
 
         spec = DatasetSpec(
             provider="census", product="acs5", version=1,
@@ -1217,7 +1217,7 @@ class TestDefaultAdapters:
         assert _validate_census_acs5(spec) == []
 
     def test_census_acs_valid(self):
-        from coclab.recipe.default_dataset_adapters import _validate_census_acs
+        from hhplab.recipe.default_dataset_adapters import _validate_census_acs
 
         spec = DatasetSpec(
             provider="census", product="acs", version=1,
@@ -1226,7 +1226,7 @@ class TestDefaultAdapters:
         assert _validate_census_acs(spec) == []
 
     def test_zillow_zori_valid(self):
-        from coclab.recipe.default_dataset_adapters import _validate_zillow_zori
+        from hhplab.recipe.default_dataset_adapters import _validate_zillow_zori
 
         spec = DatasetSpec(
             provider="zillow", product="zori", version=1,
@@ -1235,7 +1235,7 @@ class TestDefaultAdapters:
         assert _validate_zillow_zori(spec) == []
 
     def test_zillow_zori_wrong_geometry_warns(self):
-        from coclab.recipe.default_dataset_adapters import _validate_zillow_zori
+        from hhplab.recipe.default_dataset_adapters import _validate_zillow_zori
 
         spec = DatasetSpec(
             provider="zillow", product="zori", version=1,
@@ -1246,8 +1246,8 @@ class TestDefaultAdapters:
 
     def test_recipe_integration_no_adapter_errors(self):
         """Full recipe validation with defaults registered produces no errors."""
-        from coclab.recipe.adapters import dataset_registry, geometry_registry
-        from coclab.recipe.default_adapters import register_defaults
+        from hhplab.recipe.adapters import dataset_registry, geometry_registry
+        from hhplab.recipe.default_adapters import register_defaults
 
         geometry_registry.reset()
         dataset_registry.reset()
@@ -1473,7 +1473,7 @@ def _setup_metro_pipeline_fixtures(tmp_path: Path) -> None:
 
 def _setup_curated_metro_artifacts(tmp_path: Path) -> None:
     """Write the curated Glynn/Fox metro definition artifacts for tests."""
-    from coclab.metro.io import write_metro_artifacts
+    from hhplab.metro.io import write_metro_artifacts
 
     write_metro_artifacts(base_dir=tmp_path / "data")
 
@@ -1806,7 +1806,7 @@ class TestPersistDiagnostics:
 
     def test_diagnostics_no_joined_outputs_fails(self, tmp_path: Path):
         """When no joined intermediates exist, persist_diagnostics returns failure."""
-        from coclab.recipe.executor import _persist_diagnostics
+        from hhplab.recipe.executor import _persist_diagnostics
 
         _setup_pipeline_fixtures(tmp_path)
         data = _recipe_with_pipeline()
@@ -2118,7 +2118,7 @@ class TestMaterialize:
         xwalk_file = xwalk_dir / "xwalk__B2025xT2020.parquet"
         pd.DataFrame({"a": [1]}).to_parquet(xwalk_file)
 
-        from coclab.recipe.planner import MaterializeTask
+        from hhplab.recipe.planner import MaterializeTask
         task = MaterializeTask(transform_ids=["tract_to_coc"])
         result = _execute_materialize(task, ctx)
         assert result.success
@@ -2227,7 +2227,7 @@ class TestMaterialize:
 
     def test_materialize_fails_missing_artifact(self, tmp_path: Path):
         ctx = self._make_ctx(tmp_path)
-        from coclab.recipe.planner import MaterializeTask
+        from hhplab.recipe.planner import MaterializeTask
         task = MaterializeTask(transform_ids=["tract_to_coc"])
         result = _execute_materialize(task, ctx)
         assert not result.success
@@ -2301,11 +2301,11 @@ def _make_ct_recipe_alignment_crosswalk() -> CtPlanningRegionCrosswalk:
 
 def _patch_ct_recipe_alignment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "coclab.recipe.executor_ct_alignment.build_ct_county_planning_region_crosswalk",
+        "hhplab.recipe.executor_ct_alignment.build_ct_county_planning_region_crosswalk",
         lambda **kwargs: _make_ct_recipe_alignment_crosswalk(),
     )
     monkeypatch.setattr(
-        "coclab.recipe.preflight.build_ct_county_planning_region_crosswalk",
+        "hhplab.recipe.preflight.build_ct_county_planning_region_crosswalk",
         lambda **kwargs: _make_ct_recipe_alignment_crosswalk(),
     )
 
@@ -2319,11 +2319,11 @@ def _patch_ct_recipe_alignment_failure(
         raise FileNotFoundError(message)
 
     monkeypatch.setattr(
-        "coclab.recipe.executor_ct_alignment.build_ct_county_planning_region_crosswalk",
+        "hhplab.recipe.executor_ct_alignment.build_ct_county_planning_region_crosswalk",
         _raise,
     )
     monkeypatch.setattr(
-        "coclab.recipe.preflight.build_ct_county_planning_region_crosswalk",
+        "hhplab.recipe.preflight.build_ct_county_planning_region_crosswalk",
         _raise,
     )
 
@@ -4399,7 +4399,7 @@ class TestRecipeManifest:
         )
         out = tmp_path / "bundle"
         import logging
-        with caplog.at_level(logging.WARNING, logger="coclab.recipe.manifest"):
+        with caplog.at_level(logging.WARNING, logger="hhplab.recipe.manifest"):
             export_bundle(m, tmp_path, out)
         assert (out / "manifest.json").exists()
         assert "skipping missing asset" in caplog.text
@@ -4429,7 +4429,7 @@ class TestRecipeManifest:
 
         out = tmp_path / "bundle"
         import logging
-        with caplog.at_level(logging.WARNING, logger="coclab.recipe.manifest"):
+        with caplog.at_level(logging.WARNING, logger="hhplab.recipe.manifest"):
             result = export_bundle(m, tmp_path, out)
 
         assert result == out
@@ -4472,7 +4472,7 @@ class TestRecipeManifest:
 
         out = tmp_path / "bundle"
         import logging
-        with caplog.at_level(logging.WARNING, logger="coclab.recipe.manifest"):
+        with caplog.at_level(logging.WARNING, logger="hhplab.recipe.manifest"):
             export_bundle(m, tmp_path, out)
 
         # Present asset copied
@@ -4739,7 +4739,7 @@ class TestRecipeProvenanceCLI:
 def _make_project_root(tmp_path: Path) -> None:
     """Create marker files so _check_working_directory() doesn't warn."""
     (tmp_path / "pyproject.toml").write_text("[project]\nname='test'\n")
-    (tmp_path / "coclab").mkdir(exist_ok=True)
+    (tmp_path / "hhplab").mkdir(exist_ok=True)
     (tmp_path / "data").mkdir(exist_ok=True)
 
 
@@ -5261,7 +5261,7 @@ class TestCohortSelectorSchema:
     def test_top_n_requires_n(self):
         from pydantic import ValidationError
 
-        from coclab.recipe.recipe_schema import CohortSelector
+        from hhplab.recipe.recipe_schema import CohortSelector
 
         with pytest.raises(ValidationError, match="requires 'n'"):
             CohortSelector(
@@ -5273,7 +5273,7 @@ class TestCohortSelectorSchema:
     def test_percentile_requires_threshold(self):
         from pydantic import ValidationError
 
-        from coclab.recipe.recipe_schema import CohortSelector
+        from hhplab.recipe.recipe_schema import CohortSelector
 
         with pytest.raises(ValidationError, match="requires 'threshold'"):
             CohortSelector(
@@ -5318,8 +5318,8 @@ class TestApplyCohortSelector:
         return pd.DataFrame(rows)
 
     def test_top_n(self):
-        from coclab.recipe.executor import _apply_cohort_selector
-        from coclab.recipe.recipe_schema import CohortSelector
+        from hhplab.recipe.executor import _apply_cohort_selector
+        from hhplab.recipe.recipe_schema import CohortSelector
 
         panel = self._make_panel()
         cohort = CohortSelector(
@@ -5332,8 +5332,8 @@ class TestApplyCohortSelector:
         assert len(result) == 6
 
     def test_bottom_n(self):
-        from coclab.recipe.executor import _apply_cohort_selector
-        from coclab.recipe.recipe_schema import CohortSelector
+        from hhplab.recipe.executor import _apply_cohort_selector
+        from hhplab.recipe.recipe_schema import CohortSelector
 
         panel = self._make_panel()
         cohort = CohortSelector(
@@ -5345,8 +5345,8 @@ class TestApplyCohortSelector:
         assert len(result) == 4
 
     def test_percentile(self):
-        from coclab.recipe.executor import _apply_cohort_selector
-        from coclab.recipe.recipe_schema import CohortSelector
+        from hhplab.recipe.executor import _apply_cohort_selector
+        from hhplab.recipe.recipe_schema import CohortSelector
 
         panel = self._make_panel()
         # 0.5 threshold keeps geos >= median (300): G2=500, G5=400, G3=300
@@ -5363,8 +5363,8 @@ class TestApplyCohortSelector:
         assert "G1" not in selected_geos
 
     def test_missing_rank_column_raises(self):
-        from coclab.recipe.executor import ExecutorError, _apply_cohort_selector
-        from coclab.recipe.recipe_schema import CohortSelector
+        from hhplab.recipe.executor import ExecutorError, _apply_cohort_selector
+        from hhplab.recipe.recipe_schema import CohortSelector
 
         panel = self._make_panel()
         cohort = CohortSelector(
@@ -5374,8 +5374,8 @@ class TestApplyCohortSelector:
             _apply_cohort_selector(panel, cohort)
 
     def test_empty_reference_year_raises(self):
-        from coclab.recipe.executor import ExecutorError, _apply_cohort_selector
-        from coclab.recipe.recipe_schema import CohortSelector
+        from hhplab.recipe.executor import ExecutorError, _apply_cohort_selector
+        from hhplab.recipe.recipe_schema import CohortSelector
 
         panel = self._make_panel()
         cohort = CohortSelector(
