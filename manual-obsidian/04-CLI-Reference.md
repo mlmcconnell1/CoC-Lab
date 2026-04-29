@@ -4,26 +4,26 @@ This chapter documents the currently supported CLI surface from `hhplab/cli/main
 
 ## Top-Level Groups
 
-- `coclab agents`
-- `coclab status`
-- `coclab ingest ...`
-- `coclab list ...`
-- `coclab validate ...`
-- `coclab diagnostics ...`
-- `coclab generate ...`
-- `coclab build ...`
-- `coclab aggregate ...`
-- `coclab show ...`
-- `coclab registry ...`
-- `coclab migrate ...`
+- `hhplab agents`
+- `hhplab status`
+- `hhplab ingest ...`
+- `hhplab list ...`
+- `hhplab validate ...`
+- `hhplab diagnostics ...`
+- `hhplab generate ...`
+- `hhplab build ...`
+- `hhplab aggregate ...`
+- `hhplab show ...`
+- `hhplab registry ...`
+- `hhplab migrate ...`
 
 ## High-Value Commands
 
 ### Environment Preflight (Agent-Safe)
 
 ```bash
-coclab status
-coclab status --json
+hhplab status
+hhplab status --json
 ```
 
 `status` performs a one-shot readiness scan across:
@@ -37,7 +37,7 @@ Exit behavior:
 ### Crosswalk Generation
 
 ```bash
-coclab generate xwalks --boundary 2025 --tracts 2023
+hhplab generate xwalks --boundary 2025 --tracts 2023
 ```
 
 Important options:
@@ -53,10 +53,10 @@ Important options:
 ### Aggregation Commands
 
 ```bash
-coclab aggregate acs --years 2018-2024 --weighting population
-coclab aggregate zori --years 2018-2024 --align pit_january
-coclab aggregate pep --years 2018-2024
-coclab aggregate pit --years 2018-2024
+hhplab aggregate acs --years 2018-2024 --weighting population
+hhplab aggregate zori --years 2018-2024 --align pit_january
+hhplab aggregate pep --years 2018-2024
+hhplab aggregate pit --years 2018-2024
 ```
 
 All four write to `asset_store_root/curated/<dataset>/` by default
@@ -77,13 +77,13 @@ Current ACS aggregation details:
 
 ```bash
 # Default human workflow
-coclab build recipe --recipe recipes/metro25-glynnfox.yaml
+hhplab build recipe --recipe recipes/metro25-glynnfox.yaml
 
 # Automation / CI readiness check
-coclab build recipe-preflight --recipe recipes/metro25-glynnfox.yaml --json
+hhplab build recipe-preflight --recipe recipes/metro25-glynnfox.yaml --json
 
 # Same command path without execution
-coclab build recipe --recipe recipes/metro25-glynnfox.yaml --dry-run
+hhplab build recipe --recipe recipes/metro25-glynnfox.yaml --dry-run
 ```
 
 Current behavior:
@@ -102,8 +102,8 @@ Current behavior:
 ### Recipe Preflight (No Execution)
 
 ```bash
-coclab build recipe-preflight --recipe recipes/metro25-glynnfox.yaml
-coclab build recipe-preflight --recipe recipes/metro25-glynnfox.yaml --json
+hhplab build recipe-preflight --recipe recipes/metro25-glynnfox.yaml
+hhplab build recipe-preflight --recipe recipes/metro25-glynnfox.yaml --json
 ```
 
 Use this for a no-execute readiness gate in automation/CI, or when you want a
@@ -118,8 +118,8 @@ Current special-case note:
 ### Recipe Plan (No Execution)
 
 ```bash
-coclab build recipe-plan --recipe recipes/metro25-glynnfox.yaml
-coclab build recipe-plan --recipe recipes/metro25-glynnfox.yaml --json
+hhplab build recipe-plan --recipe recipes/metro25-glynnfox.yaml
+hhplab build recipe-plan --recipe recipes/metro25-glynnfox.yaml --json
 ```
 
 Use this to resolve and inspect planned tasks (`materialize`, `resample`, `join`) while authoring or debugging a recipe. For a readiness gate, use `recipe-preflight`.
@@ -127,8 +127,8 @@ Use this to resolve and inspect planned tasks (`materialize`, `resample`, `join`
 ### Recipe Provenance Utilities
 
 ```bash
-coclab build recipe-provenance --manifest <manifest_path>
-coclab build recipe-export --manifest <manifest_path> --destination /tmp/bundle
+hhplab build recipe-provenance --manifest <manifest_path>
+hhplab build recipe-export --manifest <manifest_path> --destination /tmp/bundle
 ```
 
 `recipe-export` accepts `--asset-store-root` and `--output-root` so manifests
@@ -144,7 +144,7 @@ Canonical paths resolve from two storage roots:
 Resolution precedence is:
 
 - CLI flags: `--asset-store-root`, `--output-root`
-- Environment: `COCLAB_ASSET_STORE_ROOT`, `COCLAB_OUTPUT_ROOT`
+- Environment: `HHPLAB_ASSET_STORE_ROOT`, `HHPLAB_OUTPUT_ROOT`
 - Repo config: `hhplab.yaml`
 - User config: `~/.config/hhplab/config.yaml`
 - Built-in defaults
@@ -157,13 +157,13 @@ Built-in defaults:
 ### Core Ingestion Commands
 
 ```bash
-coclab ingest boundaries --source hud_exchange --vintage 2025
-coclab ingest tiger --year 2023 --type all
-coclab ingest acs5-tract --acs 2019-2023 --tracts 2023
-coclab ingest acs1-metro --vintage 2023
-coclab ingest pit-vintage --vintage 2024
-coclab ingest zori --geography county
-coclab ingest pep --series auto
+hhplab ingest boundaries --source hud_exchange --vintage 2025
+hhplab ingest tiger --year 2023 --type all
+hhplab ingest acs5-tract --acs 2019-2023 --tracts 2023
+hhplab ingest acs1-metro --vintage 2023
+hhplab ingest pit-vintage --vintage 2024
+hhplab ingest zori --geography county
+hhplab ingest pep --series auto
 ```
 
 Boundary ingestion uses a multi-source fallback chain: national boundary file first, then legacy NatlTerrDC URL, then per-state shapefiles. This makes historical vintage ingestion more reliable.
@@ -177,9 +177,9 @@ Useful PEP options:
 ### Dataset Discovery
 
 ```bash
-coclab list curated                       # List all curated files with metadata
-coclab list curated --subdir pit          # Filter by subdirectory
-coclab list curated --json                # JSON output for automation
+hhplab list curated                       # List all curated files with metadata
+hhplab list curated --subdir pit          # Filter by subdirectory
+hhplab list curated --json                # JSON output for automation
 ```
 
 `list curated` shows Parquet file paths, row counts, column lists, and file sizes. Useful for exploring what curated data is available before building recipes.
@@ -189,19 +189,19 @@ coclab list curated --json                # JSON output for automation
 ### Structured JSON Outputs
 
 `--json` is available on these high-value commands:
-- `coclab status`
-- `coclab build recipe`
-- `coclab build recipe-preflight`
-- `coclab build recipe-plan`
-- `coclab build recipe-provenance`
-- `coclab build recipe-export`
-- `coclab list census`
-- `coclab list curated`
-- `coclab list measures`
-- `coclab list xwalks`
-- `coclab ingest acs1-metro`
-- `coclab diagnostics xwalk`
-- `coclab diagnostics panel`
+- `hhplab status`
+- `hhplab build recipe`
+- `hhplab build recipe-preflight`
+- `hhplab build recipe-plan`
+- `hhplab build recipe-provenance`
+- `hhplab build recipe-export`
+- `hhplab list census`
+- `hhplab list curated`
+- `hhplab list measures`
+- `hhplab list xwalks`
+- `hhplab ingest acs1-metro`
+- `hhplab diagnostics xwalk`
+- `hhplab diagnostics panel`
 
 Current caveat: `list census/measures/xwalks --json` emits JSON when matches are found. Empty or missing-directory cases may still emit human text and exit `0`.
 
@@ -210,16 +210,16 @@ Current caveat: `list census/measures/xwalks --json` emits JSON when matches are
 ### Non-Interactive CLI Use
 
 For automation and agents, disable prompts with either:
-- global flag: `coclab --non-interactive ...`
-- environment variable: `COCLAB_NON_INTERACTIVE=1`
+- global flag: `hhplab --non-interactive ...`
+- environment variable: `HHPLAB_NON_INTERACTIVE=1`
 
 Example:
 
 ```bash
-COCLAB_NON_INTERACTIVE=1 coclab status --json
+HHPLAB_NON_INTERACTIVE=1 hhplab status --json
 ```
 
-In non-interactive mode, destructive actions still require explicit consent flags. Example: `coclab registry delete-entry ...` requires `--yes`.
+In non-interactive mode, destructive actions still require explicit consent flags. Example: `hhplab registry delete-entry ...` requires `--yes`.
 
 ## Operational Guidance
 
@@ -232,9 +232,9 @@ In non-interactive mode, destructive actions still require explicit consent flag
 For exact option signatures, use:
 
 ```bash
-coclab --help
-coclab <group> --help
-coclab <group> <command> --help
+hhplab --help
+hhplab <group> --help
+hhplab <group> <command> --help
 ```
 
 ---

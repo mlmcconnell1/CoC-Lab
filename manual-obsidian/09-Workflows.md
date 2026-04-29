@@ -2,10 +2,10 @@
 
 ## Recipe-Driven Build
 
-1. Inspect available curated assets if needed (`coclab status --json` for automation, `coclab list curated` for browsing).
+1. Inspect available curated assets if needed (`hhplab status --json` for automation, `hhplab list curated` for browsing).
 2. Ingest required global assets (`boundaries`, `tiger`, `acs5-tract`, `pit`, `zori`, `pep`, and optionally `acs1-metro` for metro unemployment).
 3. Generate required crosswalks.
-4. Run `coclab build recipe-preflight` when you want a no-execute readiness gate.
+4. Run `hhplab build recipe-preflight` when you want a no-execute readiness gate.
 5. Run a YAML recipe for deterministic panel construction.
 6. Export a bundle for downstream analysis.
 
@@ -13,52 +13,52 @@ If you are not using the default repo-local layout, set storage roots once via
 CLI flags, environment, or config:
 
 ```bash
-export COCLAB_ASSET_STORE_ROOT=/srv/coclab-assets
-export COCLAB_OUTPUT_ROOT=/srv/coclab-outputs
+export HHPLAB_ASSET_STORE_ROOT=/srv/hhplab-assets
+export HHPLAB_OUTPUT_ROOT=/srv/hhplab-outputs
 ```
 
 Example command sequence:
 
 ```bash
 # 1) Ingest core sources
-coclab ingest boundaries --source hud_exchange --vintage 2025
-coclab ingest tiger --year 2023 --type all
-coclab ingest acs5-tract --acs 2019-2023 --tracts 2023
-coclab ingest acs1-metro --vintage 2023          # optional: metro ACS1 unemployment
-coclab ingest pit-vintage --vintage 2024
-coclab ingest zori --geography county
-coclab ingest pep --series auto
+hhplab ingest boundaries --source hud_exchange --vintage 2025
+hhplab ingest tiger --year 2023 --type all
+hhplab ingest acs5-tract --acs 2019-2023 --tracts 2023
+hhplab ingest acs1-metro --vintage 2023          # optional: metro ACS1 unemployment
+hhplab ingest pit-vintage --vintage 2024
+hhplab ingest zori --geography county
+hhplab ingest pep --series auto
 
 # 2) Crosswalks
-coclab generate xwalks --boundary 2025 --tracts 2023 --counties 2023
+hhplab generate xwalks --boundary 2025 --tracts 2023 --counties 2023
 
 # 3) Automation / CI readiness check
-coclab status --json
-coclab build recipe-preflight --recipe recipes/metro25-glynnfox.yaml --json
+hhplab status --json
+hhplab build recipe-preflight --recipe recipes/metro25-glynnfox.yaml --json
 
 # 4) Optional: inspect the resolved task graph while authoring/debugging
-coclab build recipe-plan --recipe recipes/metro25-glynnfox.yaml --json
+hhplab build recipe-plan --recipe recipes/metro25-glynnfox.yaml --json
 
 # 5) Recipe execution
-coclab build recipe --recipe recipes/metro25-glynnfox.yaml
+hhplab build recipe --recipe recipes/metro25-glynnfox.yaml
 
 # 6) Export bundle
-coclab build recipe-export --manifest <manifest_path> --destination exports/bundle
+hhplab build recipe-export --manifest <manifest_path> --destination exports/bundle
 ```
 
 `<manifest_path>` should come from the `artifacts.manifest_path` field returned
-by `coclab build recipe --json`, especially when `output_root` is outside the
+by `hhplab build recipe --json`, especially when `output_root` is outside the
 repository tree.
 
 ## Workflow Principles
 
 - Treat recipe files as auditable execution plans, not ad-hoc scripts.
-- `coclab build recipe` is the default human entrypoint.
-- `coclab build recipe-preflight --json` is the default no-execute automation/CI gate.
-- `coclab build recipe-plan --json` is for authoring/debugging, not for readiness checking.
-- `coclab aggregate ...` is a parallel path for standalone CoC artifacts, not a default prerequisite for recipe execution.
+- `hhplab build recipe` is the default human entrypoint.
+- `hhplab build recipe-preflight --json` is the default no-execute automation/CI gate.
+- `hhplab build recipe-plan --json` is for authoring/debugging, not for readiness checking.
+- `hhplab aggregate ...` is a parallel path for standalone CoC artifacts, not a default prerequisite for recipe execution.
 - See `recipes/examples/README.md` for runnable example recipes that cover CoC, metro, PIT, ACS5, PEP, ZORI, and ACS1 paths.
-- Use `--non-interactive` (or `COCLAB_NON_INTERACTIVE=1`) for agent automation.
+- Use `--non-interactive` (or `HHPLAB_NON_INTERACTIVE=1`) for agent automation.
 
 ---
 

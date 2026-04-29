@@ -47,15 +47,15 @@ results = execute_recipe(recipe)
 
 # Resolve output paths for a pipeline with explicit storage roots
 cfg = load_config(
-    asset_store_root=Path("/srv/coclab-assets"),
-    output_root=Path("/srv/coclab-outputs"),
+    asset_store_root=Path("/srv/hhplab-assets"),
+    output_root=Path("/srv/hhplab-outputs"),
 )
 artifacts = resolve_pipeline_artifacts(
     recipe,
     "build_coc_panel",
     storage_config=cfg,
 )
-# {"panel_path": "/srv/coclab-outputs/my-recipe/panel__...", "manifest_path": "..."}
+# {"panel_path": "/srv/hhplab-outputs/my-recipe/panel__...", "manifest_path": "..."}
 ```
 
 Notes:

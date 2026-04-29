@@ -36,8 +36,8 @@ The project defaults to CoC-level inference but supports metro areas as an alter
 
 ## Key Surfaces
 
-- **CLI:** `coclab ...`
-- **Recipe execution:** `coclab build recipe --recipe <file.yaml>`
+- **CLI:** `hhplab ...`
+- **Recipe execution:** `hhplab build recipe --recipe <file.yaml>`
 - **Storage roots:** `asset_store_root/curated/...` for reusable assets and
   `output_root/` for recipe products
 

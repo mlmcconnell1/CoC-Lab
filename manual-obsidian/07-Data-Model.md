@@ -546,7 +546,7 @@ All HHP-Lab Parquet files embed **provenance metadata** in the file schema, enab
   "geo_type": "coc",
   "definition_version": null,
   "created_at": "2025-01-05T12:30:00+00:00",
-  "coclab_version": "0.1.0",
+  "hhplab_version": "0.1.0",
   "extra": {
     "dataset_type": "coc_measures",
     "crosswalk_path": "data/curated/xwalks/xwalk__B2025xT2020.parquet"
@@ -567,7 +567,7 @@ The `notation` field uses the shorthand from [[08-Temporal-Terminology|Temporal 
 | `geo_type` | string | Analysis geography type, e.g. `coc` or `metro` (nullable) |
 | `definition_version` | string | Synthetic geography definition version, e.g. `glynn_fox_v1` (nullable) |
 | `created_at` | ISO 8601 | Timestamp of dataset creation |
-| `coclab_version` | string | Current project version that produced the file |
+| `hhplab_version` | string | Current project version that produced the file |
 | `extra` | object | Extensible metadata (dataset type, source paths, etc.) |
 
 ### Reading Provenance
@@ -595,7 +595,7 @@ PIT count Parquet files include additional provenance fields tracking data linea
 ```json
 {
   "created_at": "2025-01-05T22:02:41.946985+00:00",
-  "coclab_version": "0.1.0",
+  "hhplab_version": "0.1.0",
   "extra": {
     "pit_year": 2024,
     "row_count": 385,

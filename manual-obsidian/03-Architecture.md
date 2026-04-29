@@ -11,25 +11,25 @@ flowchart TB
     end
 
     subgraph Ingest[Ingestion]
-        INGEST[coclab ingest ...]
+        INGEST[hhplab ingest ...]
         RAW[asset_store_root/raw]
         CURATED[asset_store_root/curated]
     end
 
     subgraph BuildLayer[Build Layer]
-        XWALK[coclab generate xwalks]
-        AGG[coclab aggregate {acs,zori,pep,pit}]
+        XWALK[hhplab generate xwalks]
+        AGG[hhplab aggregate {acs,zori,pep,pit}]
     end
 
     subgraph RecipeLayer[Recipe Layer]
-        RECIPE[coclab build recipe]
+        RECIPE[hhplab build recipe]
         PLAN[planner + executor]
         PANEL[output_root]
         RMAN[.manifest.json sidecar]
     end
 
     subgraph Export[Export]
-        BUNDLE[coclab build recipe-export]
+        BUNDLE[hhplab build recipe-export]
         MANIFEST[.manifest.json sidecar]
     end
 

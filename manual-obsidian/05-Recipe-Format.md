@@ -50,16 +50,16 @@ pipelines:
 
 ```bash
 # No-execute readiness check
-coclab build recipe-preflight --recipe recipes/demo.yaml --json
+hhplab build recipe-preflight --recipe recipes/demo.yaml --json
 
 # Optional: inspect resolved tasks while authoring/debugging
-coclab build recipe-plan --recipe recipes/demo.yaml --json
+hhplab build recipe-plan --recipe recipes/demo.yaml --json
 
 # Execute
-coclab build recipe --recipe recipes/demo.yaml
+hhplab build recipe --recipe recipes/demo.yaml
 ```
 
-`coclab build recipe` is the normal entrypoint. Use `--dry-run` when you want
+`hhplab build recipe` is the normal entrypoint. Use `--dry-run` when you want
 the same validation/preflight path without execution.
 
 Use `--asset-store-root` and `--output-root` when you need the canonical asset
@@ -90,9 +90,9 @@ Near-term HHP-Lab policy:
 
 Current runtime diagnostics:
 
-- `coclab build recipe-preflight --json` emits `ct_county_alignment` findings
+- `hhplab build recipe-preflight --json` emits `ct_county_alignment` findings
   when this special-case path will be used.
-- `coclab build recipe --json` records per-step `notes` when the alignment was
+- `hhplab build recipe --json` records per-step `notes` when the alignment was
   actually applied during execution.
 - Human-readable `build recipe` output prints the same alignment note inline
   during the affected resample step.
@@ -106,7 +106,7 @@ Required bridge artifact:
 - If `counties__C2023.parquet` is missing, the remediation command is:
 
 ```bash
-coclab ingest tiger --year 2023 --type counties
+hhplab ingest tiger --year 2023 --type counties
 ```
 
 Affected situations:
@@ -208,7 +208,7 @@ Optional declarative policy controlling panel finalization behavior. This is the
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `source_label` | `string` | No | Override the default source label (e.g. `coclab_panel`). |
+| `source_label` | `string` | No | Override the default source label (e.g. `hhplab_panel`). |
 | `zori` | `ZoriPolicy` | No | ZORI eligibility and provenance policy. Null means no ZORI integration. |
 | `acs1` | `Acs1Policy` | No | ACS 1-year merge policy (metro targets only). |
 | `column_aliases` | `dict[str, str]` | No | Column rename mapping for output (e.g. `{total_population: acs_total_population}`). |
@@ -239,7 +239,7 @@ targets:
         include: true
       zori:
         min_coverage: 0.90
-      source_label: coclab_metro_panel
+      source_label: hhplab_metro_panel
 ```
 
 ### Cohort Selector
@@ -547,7 +547,7 @@ Violations produce clear error messages at load time, before any execution begin
 
 Recipes declare a `version` key. The loader dispatches to the matching schema class (`RecipeV1`, etc.), so introducing `RecipeV2` does not break existing `version: 1` recipes.
 
-Within a version, the schema is extended by adding new transform types or pipeline step kinds to the discriminated unions. Existing transform types and step kinds are never removed or redefined. See [[04-CLI-Reference]] for the `coclab build recipe` command.
+Within a version, the schema is extended by adding new transform types or pipeline step kinds to the discriminated unions. Existing transform types and step kinds are never removed or redefined. See [[04-CLI-Reference]] for the `hhplab build recipe` command.
 
 ---
 

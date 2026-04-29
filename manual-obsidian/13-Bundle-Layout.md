@@ -1,11 +1,11 @@
 # Bundle Layout and MANIFEST.json
 
-`coclab build recipe-export` creates export bundles from recipe outputs for downstream analysis repositories.
+`hhplab build recipe-export` creates export bundles from recipe outputs for downstream analysis repositories.
 
 ## Command Contract
 
 ```bash
-coclab build recipe-export --manifest <manifest_path> --destination /tmp/bundle
+hhplab build recipe-export --manifest <manifest_path> --destination /tmp/bundle
 ```
 
 The recipe manifest sidecar (`.manifest.json`) tracks all consumed assets,

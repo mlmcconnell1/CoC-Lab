@@ -25,8 +25,8 @@ uv sync --extra dev
 ## Verify Installation
 
 ```bash
-# Check CLI is available (the runtime command rename happens later)
-coclab --help
+# Check CLI is available
+hhplab --help
 
 # Run tests
 pytest tests/test_smoke.py -v
@@ -37,12 +37,12 @@ pytest tests/test_smoke.py -v
 The CLI expects to be run from the HHP-Lab project root directory. If run from a different directory, you'll see a warning:
 
 ```
-Warning: Current directory may not be the CoC Lab project root. Missing: pyproject.toml, hhplab, data
+Warning: Current directory may not be the HHP-Lab project root. Missing: pyproject.toml, hhplab, data
 ```
 
-The current runtime warning still says `CoC Lab` and checks for `hhplab/`
-because the package/CLI rename is staged separately. While commands may still
-work, file paths assume the project root as the working directory.
+The current runtime checks for `hhplab/` because that is the package directory.
+Commands may still work outside the repo root, but path-oriented workflows
+assume the project root as the working directory.
 
 ---
 

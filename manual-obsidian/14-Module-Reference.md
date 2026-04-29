@@ -7,7 +7,7 @@ This chapter is an orientation map of active modules in the current codebase.
 - `hhplab/cli/main.py`: top-level Typer app and command registration
 - `hhplab/cli/build_xwalks.py`: crosswalk generation
 - `hhplab/cli/aggregate.py`: dataset aggregation commands (`acs`, `zori`, `pep`, `pit`)
-- `hhplab/cli/status.py`: one-shot environment readiness report (`coclab status`)
+- `hhplab/cli/status.py`: one-shot environment readiness report (`hhplab status`)
 - `hhplab/cli/list_curated.py`: curated dataset discovery with metadata (row counts, columns, sizes)
 - `hhplab/cli/list_*.py`: dataset discovery commands with optional JSON output
 - `hhplab/cli/ingest_acs1_metro.py`: ACS 1-year CBSA-level metro unemployment ingestion
