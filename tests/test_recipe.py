@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import geopandas as gpd
 import pandas as pd
 import pytest
+from shapely.geometry import Polygon
 from typer.testing import CliRunner
 
 from hhplab.cli.main import app
@@ -1387,13 +1389,28 @@ def _setup_pipeline_fixtures(tmp_path: Path) -> None:
     """Create the crosswalk + dataset files needed by _recipe_with_pipeline."""
     # Crosswalk
     xwalk_dir = tmp_path / "data" / "curated" / "xwalks"
+    boundaries_dir = tmp_path / "data" / "curated" / "coc_boundaries"
     xwalk_dir.mkdir(parents=True)
+    boundaries_dir.mkdir(parents=True)
     xwalk = pd.DataFrame({
         "coc_id": ["COC1", "COC2"],
         "tract_geoid": ["T1", "T2"],
         "area_share": [1.0, 1.0],
     })
     xwalk.to_parquet(xwalk_dir / "xwalk__B2025xT2020.parquet")
+    gpd.GeoDataFrame(
+        {
+            "coc_id": ["COC1", "COC2"],
+            "coc_name": ["Test CoC 1", "Test CoC 2"],
+            "boundary_vintage": ["2025", "2025"],
+            "source": ["test_fixture", "test_fixture"],
+        },
+        geometry=[
+            Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]),
+            Polygon([(1, 0), (2, 0), (2, 1), (1, 1), (1, 0)]),
+        ],
+        crs="EPSG:4326",
+    ).to_parquet(boundaries_dir / "coc__B2025.parquet")
 
     # PIT dataset (identity passthrough) — includes both universe years
     pit_path = tmp_path / "data" / "pit.parquet"
@@ -1775,7 +1792,7 @@ class TestTargetOutputsEnforcement:
         assert len(diag_files) == 1
 
     def test_map_output_adds_explicit_failure_step(self, tmp_path: Path):
-        """Map outputs should produce a dedicated actionable failure until implemented."""
+        """Map outputs should persist a recipe-native HTML artifact."""
         _setup_pipeline_fixtures(tmp_path)
         data = _recipe_with_pipeline()
         data["datasets"]["pit"]["path"] = "data/pit.parquet"
@@ -1785,19 +1802,20 @@ class TestTargetOutputsEnforcement:
             "layers": [
                 {
                     "geometry": {"type": "coc", "vintage": 2025},
-                    "selector_ids": ["CO-500"],
+                    "selector_ids": ["COC1"],
                 }
             ]
         }
         recipe = load_recipe(data)
-        with pytest.raises(ExecutorError, match="persist map") as exc_info:
-            execute_recipe(recipe, project_root=tmp_path)
-        map_steps = [
-            s for s in exc_info.value.partial_results[0].steps if s.step_kind == "persist_map"
-        ]
+        results = execute_recipe(recipe, project_root=tmp_path)
+        map_steps = [s for s in results[0].steps if s.step_kind == "persist_map"]
         assert len(map_steps) == 1
-        assert not exc_info.value.partial_results[0].success
-        assert "not implemented yet" in (map_steps[0].error or "")
+        assert results[0].success
+        assert map_steps[0].success
+        assert (
+            _default_recipe_output_dir(tmp_path, "executor-test")
+            / "map__Y2020-2021@B2025.html"
+        ).exists()
 
 
 class TestPersistDiagnostics:
@@ -4922,7 +4940,7 @@ class TestRecipeJsonMode:
             "layers": [
                 {
                     "geometry": {"type": "coc", "vintage": 2025},
-                    "selector_ids": ["CO-500"],
+                    "selector_ids": ["COC1"],
                 }
             ]
         }
@@ -4932,15 +4950,16 @@ class TestRecipeJsonMode:
             "--recipe", str(rf),
             "--json",
         ])
-        assert result.exit_code == 1
+        assert result.exit_code == 0
         out = json.loads(result.output)
-        assert out["status"] == "error"
+        assert out["status"] == "ok"
         assert out["artifacts"] == {
             "map_path": "outputs/executor-test/map__Y2020-2021@B2025.html",
         }
-        assert out["pipelines"][0]["success"] is False
+        assert out["pipelines"][0]["success"] is True
         steps = out["pipelines"][0]["steps"]
         assert any(step["step_kind"] == "persist_map" for step in steps)
+        assert (tmp_path / out["artifacts"]["map_path"]).exists()
 
     def test_json_suppresses_progress(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

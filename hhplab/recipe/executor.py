@@ -742,28 +742,39 @@ def _persist_map_output(
     plan: ExecutionPlan,
     ctx: ExecutionContext,
 ) -> StepResult:
-    """Acknowledge recipe-native map outputs and fail with clear remediation."""
+    """Render a recipe-native HTML map artifact."""
     output_file = _resolve_map_output_file(
         ctx.recipe,
         plan.pipeline_id,
         ctx.project_root,
         storage_config=ctx.storage_config,
     )
+    _pipeline, target = _resolve_pipeline_target(ctx.recipe, plan.pipeline_id)
     try:
-        display = str(output_file.relative_to(ctx.project_root))
+        from hhplab.viz.map_folium import render_recipe_map
+
+        rendered = render_recipe_map(
+            target,
+            project_root=ctx.project_root,
+            out_html=output_file,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        return StepResult(
+            step_kind="persist_map",
+            detail=f"persist map: {output_file}",
+            success=False,
+            error=str(exc),
+        )
+
+    try:
+        display = str(rendered.relative_to(ctx.project_root))
     except ValueError:
-        display = str(output_file)
+        display = str(rendered)
 
     return StepResult(
         step_kind="persist_map",
         detail=f"persist map: {display}",
-        success=False,
-        error=(
-            "Recipe target requested output kind 'map', but the recipe-native "
-            "map renderer and geometry resolvers are not implemented yet. "
-            "Continue with coclab-ogze.2 (multi-layer Folium renderer) plus "
-            "coclab-ogze.4/.5 for MSA and metro boundary sources."
-        ),
+        success=True,
     )
 
 

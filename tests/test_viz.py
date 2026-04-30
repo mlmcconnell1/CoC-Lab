@@ -3,11 +3,13 @@
 from datetime import UTC, datetime
 
 import geopandas as gpd
+import pandas as pd
 import pytest
 from shapely.geometry import Polygon
 
 from hhplab.registry import register_vintage
-from hhplab.viz import render_coc_map
+from hhplab.recipe.recipe_schema import GeometryRef, MapLayerSpec, MapSpec, MapViewportSpec, TargetSpec
+from hhplab.viz import render_coc_map, render_recipe_map
 
 
 @pytest.fixture
@@ -87,6 +89,114 @@ def sample_boundaries(temp_data_dir):
     )
 
     return {"vintage": vintage, "parquet_path": parquet_path, "gdf": gdf}
+
+
+@pytest.fixture
+def sample_overlay_artifacts(temp_data_dir):
+    """Create minimal county, MSA, and metro artifacts for mixed overlays."""
+    tiger_dir = temp_data_dir / "data" / "curated" / "tiger"
+    msa_dir = temp_data_dir / "data" / "curated" / "msa"
+    metro_dir = temp_data_dir / "data" / "curated" / "metro"
+    tiger_dir.mkdir(parents=True, exist_ok=True)
+    msa_dir.mkdir(parents=True, exist_ok=True)
+    metro_dir.mkdir(parents=True, exist_ok=True)
+
+    gpd.GeoDataFrame(
+        {"GEOID": ["08001", "08005"]},
+        geometry=[
+            Polygon(
+                [
+                    (-105.2, 39.4),
+                    (-104.85, 39.4),
+                    (-104.85, 39.8),
+                    (-105.2, 39.8),
+                    (-105.2, 39.4),
+                ]
+            ),
+            Polygon(
+                [
+                    (-104.85, 39.4),
+                    (-104.45, 39.4),
+                    (-104.45, 39.8),
+                    (-104.85, 39.8),
+                    (-104.85, 39.4),
+                ]
+            ),
+        ],
+        crs="EPSG:4326",
+    ).to_parquet(tiger_dir / "counties__C2025.parquet")
+
+    pd.DataFrame(
+        {
+            "msa_id": ["19740"],
+            "cbsa_code": ["19740"],
+            "msa_name": ["Denver-Aurora-Lakewood, CO"],
+            "area_type": ["Metropolitan Statistical Area"],
+            "definition_version": ["census_msa_2023"],
+            "source": ["census_msa_delineation_2023"],
+            "source_ref": ["https://example.com/msa"],
+        }
+    ).to_parquet(msa_dir / "msa_definitions__census_msa_2023.parquet")
+    pd.DataFrame(
+        {
+            "msa_id": ["19740", "19740"],
+            "cbsa_code": ["19740", "19740"],
+            "county_fips": ["08001", "08005"],
+            "county_name": ["Adams", "Arapahoe"],
+            "state_name": ["Colorado", "Colorado"],
+            "central_outlying": ["Central", "Central"],
+            "definition_version": ["census_msa_2023", "census_msa_2023"],
+        }
+    ).to_parquet(msa_dir / "msa_county_membership__census_msa_2023.parquet")
+
+    pd.DataFrame(
+        {
+            "metro_id": ["GF21"],
+            "metro_name": ["Denver, CO"],
+            "membership_type": ["multi_county"],
+            "definition_version": ["glynn_fox_v1"],
+            "source": ["glynn_fox_2019"],
+            "source_ref": ["https://example.com/metro"],
+        }
+    ).to_parquet(metro_dir / "metro_definitions__glynn_fox_v1.parquet")
+    pd.DataFrame(
+        {
+            "metro_id": ["GF21", "GF21"],
+            "county_fips": ["08001", "08005"],
+            "definition_version": ["glynn_fox_v1", "glynn_fox_v1"],
+        }
+    ).to_parquet(metro_dir / "metro_county_membership__glynn_fox_v1.parquet")
+
+
+def _mixed_overlay_target() -> TargetSpec:
+    return TargetSpec(
+        id="overlay_map",
+        geometry=GeometryRef(type="coc", vintage=2025),
+        outputs=["map"],
+        map_spec=MapSpec(
+            layers=[
+                MapLayerSpec(
+                    geometry=GeometryRef(type="coc", vintage=2025),
+                    selector_ids=["CO-500"],
+                    label="CoC layer",
+                    tooltip_fields=["coc_id", "coc_name"],
+                ),
+                MapLayerSpec(
+                    geometry=GeometryRef(type="msa", vintage=2025, source="census_msa_2023"),
+                    selector_ids=["19740"],
+                    label="MSA layer",
+                    tooltip_fields=["msa_id", "msa_name"],
+                ),
+                MapLayerSpec(
+                    geometry=GeometryRef(type="metro", vintage=2025, source="glynn_fox_v1"),
+                    selector_ids=["GF21"],
+                    label="Metro layer",
+                    tooltip_fields=["metro_id", "metro_name"],
+                ),
+            ],
+            viewport=MapViewportSpec(fit_layers=True, padding=18),
+        ),
+    )
 
 
 class TestRenderCocMap:
@@ -175,3 +285,65 @@ class TestRenderCocMap:
         assert "CO-500" in content
         assert "Colorado Balance of State CoC" in content
         assert "2025" in content
+
+
+class TestRenderRecipeMap:
+    """Tests for recipe-native multi-layer map rendering."""
+
+    def test_render_mixed_overlay_map(
+        self,
+        sample_boundaries,
+        sample_overlay_artifacts,
+        temp_data_dir,
+    ):
+        out_path = render_recipe_map(
+            _mixed_overlay_target(),
+            project_root=temp_data_dir,
+            out_html=temp_data_dir / "outputs" / "overlay.html",
+        )
+
+        assert out_path.exists()
+        content = out_path.read_text()
+        assert "CoC layer" in content
+        assert "MSA layer" in content
+        assert "Metro layer" in content
+        assert "Denver-Aurora-Lakewood, CO" in content
+        assert "Denver, CO" in content
+        assert "fitBounds" in content
+
+    def test_render_map_missing_selector_raises(
+        self,
+        sample_boundaries,
+        sample_overlay_artifacts,
+        temp_data_dir,
+    ):
+        target = _mixed_overlay_target()
+        target.map_spec.layers[1].selector_ids = ["99999"]
+
+        with pytest.raises(ValueError, match="selector values not found"):
+            render_recipe_map(
+                target,
+                project_root=temp_data_dir,
+                out_html=temp_data_dir / "outputs" / "missing.html",
+            )
+
+    def test_render_map_explicit_viewport_skips_fit_bounds(
+        self,
+        sample_boundaries,
+        sample_overlay_artifacts,
+        temp_data_dir,
+    ):
+        target = _mixed_overlay_target()
+        target.map_spec.viewport = MapViewportSpec(
+            fit_layers=False,
+            center=(39.65, -104.9),
+            zoom=9,
+        )
+        out_path = render_recipe_map(
+            target,
+            project_root=temp_data_dir,
+            out_html=temp_data_dir / "outputs" / "explicit-view.html",
+        )
+
+        content = out_path.read_text()
+        assert "fitBounds" not in content
