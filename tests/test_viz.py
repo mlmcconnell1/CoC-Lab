@@ -10,7 +10,7 @@ from shapely.geometry import Polygon
 from hhplab.registry import register_vintage
 from hhplab.recipe.recipe_schema import GeometryRef, MapLayerSpec, MapSpec, MapViewportSpec, TargetSpec
 from hhplab.viz import render_coc_map, render_recipe_map
-from hhplab.viz.map_folium import _distinct_palette_color
+from hhplab.viz.map_folium import _distinct_palette_colors_for_ids
 
 
 @pytest.fixture
@@ -453,10 +453,17 @@ class TestRenderRecipeMap:
         content = out_path.read_text()
         assert "__map_fill_color" in content
         assert "__map_stroke_color" in content
-        expected_colors = {
-            _distinct_palette_color("CO-500"),
-            _distinct_palette_color("NY-600"),
-        }
+        expected_colors = set(
+            _distinct_palette_colors_for_ids(["CO-500", "NY-600"]).values()
+        )
         assert len(expected_colors) == 2
         for color in expected_colors:
             assert color in content
+
+    def test_distinct_style_mode_assigns_unique_colors_within_layer(self):
+        color_map = _distinct_palette_colors_for_ids(
+            ["OH-500", "OH-501", "OH-502", "OH-503", "OH-504"],
+        )
+
+        assert len(color_map) == 5
+        assert len(set(color_map.values())) == 5

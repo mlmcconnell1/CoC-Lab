@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import colorsys
 import hashlib
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -231,11 +232,37 @@ def _darken_hex(color: str, factor: float = 0.65) -> str:
     return "#{:02x}{:02x}{:02x}".format(*channels)
 
 
-def _distinct_palette_color(feature_id: str) -> str:
-    """Map a feature id to a deterministic palette color."""
-    digest = hashlib.sha256(feature_id.encode("utf-8")).digest()
-    index = int.from_bytes(digest[:2], "big") % len(DISTINCT_FILL_PALETTE)
-    return DISTINCT_FILL_PALETTE[index]
+def _rgb_to_hex(red: float, green: float, blue: float) -> str:
+    """Convert normalized RGB values to a hex color string."""
+    return "#{:02x}{:02x}{:02x}".format(
+        round(red * 255),
+        round(green * 255),
+        round(blue * 255),
+    )
+
+
+def _generate_distinct_colors(count: int) -> list[str]:
+    """Generate a deterministic list of visually distinct colors."""
+    if count <= 0:
+        return []
+    if count <= len(DISTINCT_FILL_PALETTE):
+        return list(DISTINCT_FILL_PALETTE[:count])
+
+    colors: list[str] = []
+    for index in range(count):
+        hue = (index * 0.618033988749895) % 1.0
+        lightness = 0.58 if index % 2 == 0 else 0.66
+        saturation = 0.62 if index % 3 else 0.74
+        colors.append(
+            _rgb_to_hex(*colorsys.hls_to_rgb(hue, lightness, saturation))
+        )
+    return colors
+
+
+def _distinct_palette_colors_for_ids(feature_ids: list[str]) -> dict[str, str]:
+    """Assign deterministic unique colors within one rendered layer."""
+    normalized_ids = sorted({_normalize_selector(feature_id) for feature_id in feature_ids})
+    return dict(zip(normalized_ids, _generate_distinct_colors(len(normalized_ids)), strict=True))
 
 
 def _apply_distinct_feature_styles(
@@ -246,7 +273,8 @@ def _apply_distinct_feature_styles(
     """Assign deterministic fill and stroke colors to each selected feature."""
     styled = gdf.copy()
     normalized_ids = styled[id_column].astype(str).map(_normalize_selector)
-    styled[STYLE_FILL_COLOR_FIELD] = normalized_ids.map(_distinct_palette_color)
+    color_map = _distinct_palette_colors_for_ids(normalized_ids.tolist())
+    styled[STYLE_FILL_COLOR_FIELD] = normalized_ids.map(color_map)
     styled[STYLE_STROKE_COLOR_FIELD] = styled[STYLE_FILL_COLOR_FIELD].map(_darken_hex)
     return styled
 
