@@ -168,6 +168,31 @@ class TestListXwalksJson:
         payload = json.loads(result.output)
         assert payload == {"status": "ok", "count": 0, "crosswalks": []}
 
+    def test_json_output_msa_crosswalk(self, tmp_path):
+        xwalk_dir = tmp_path / "xwalks"
+        xwalk_dir.mkdir()
+        pd.DataFrame({
+            "coc_id": ["CO-500"],
+            "msa_id": ["35620"],
+            "allocation_share": [1.0],
+        }).to_parquet(
+            xwalk_dir / "msa_coc_xwalk__B2025xMcensus_msa_2023xC2023.parquet"
+        )
+
+        result = runner.invoke(
+            app, ["list", "xwalks", "--dir", str(xwalk_dir), "--json"]
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["status"] == "ok"
+        assert payload["count"] == 1
+        xw = payload["crosswalks"][0]
+        assert xw["type"] == "msa"
+        assert xw["boundary_vintage"] == "2025"
+        assert xw["definition_version"] == "census_msa_2023"
+        assert xw["census_vintage"] == "2023"
+
 
 class TestDiagnosticsXwalkJson:
 

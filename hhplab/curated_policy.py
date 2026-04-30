@@ -61,6 +61,7 @@ CANONICAL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
     "xwalks": [
         re.compile(r"^xwalk__B\d{4}xT\d{4}\.parquet$"),
         re.compile(r"^xwalk__B\d{4}xC\d{4}\.parquet$"),
+        re.compile(r"^msa_coc_xwalk__B\d{4}xM\w+xC\d{4}\.parquet$"),
     ],
     "acs": [
         re.compile(r"^acs5_tracts__A\d{4}xT\d{4}\.parquet$"),

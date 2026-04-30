@@ -1,6 +1,8 @@
 """Tests for MSA definition naming helpers."""
 
 from hhplab.naming import (
+    msa_coc_xwalk_filename,
+    msa_coc_xwalk_path,
     msa_county_membership_filename,
     msa_county_membership_path,
     msa_definitions_filename,
@@ -33,3 +35,15 @@ def test_msa_county_membership_path():
         "data/curated/msa/msa_county_membership__census_msa_2023.parquet"
     )
 
+
+def test_msa_coc_xwalk_filename():
+    assert (
+        msa_coc_xwalk_filename("2025", "census_msa_2023", 2023)
+        == "msa_coc_xwalk__B2025xMcensus_msa_2023xC2023.parquet"
+    )
+
+
+def test_msa_coc_xwalk_path():
+    assert str(msa_coc_xwalk_path("2025", "census_msa_2023", 2023)).endswith(
+        "data/curated/xwalks/msa_coc_xwalk__B2025xMcensus_msa_2023xC2023.parquet"
+    )

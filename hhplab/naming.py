@@ -147,6 +147,28 @@ def county_xwalk_filename(boundary_vintage: str, county_vintage: str | int) -> s
     return f"xwalk__B{boundary_vintage}xC{county_vintage}.parquet"
 
 
+def msa_coc_xwalk_filename(
+    boundary_vintage: str,
+    definition_version: str,
+    county_vintage: str | int,
+) -> str:
+    """Generate filename for CoC-to-MSA crosswalk.
+
+    Args:
+        boundary_vintage: CoC boundary vintage (e.g., "2025")
+        definition_version: MSA definition version (e.g., "census_msa_2023")
+        county_vintage: County geometry vintage used to derive the overlap
+
+    Returns:
+        Filename like
+        ``msa_coc_xwalk__B2025xMcensus_msa_2023xC2023.parquet``
+    """
+    return (
+        f"msa_coc_xwalk__B{boundary_vintage}"
+        f"xM{definition_version}xC{county_vintage}.parquet"
+    )
+
+
 def tract_relationship_filename(
     from_vintage: str | int = 2010,
     to_vintage: str | int = 2020,
@@ -383,6 +405,34 @@ def county_path(county_vintage: str | int, base_dir: Path | str | None = None) -
     else:
         base_dir = Path(base_dir)
     return base_dir / "curated" / "tiger" / county_filename(county_vintage)
+
+
+def msa_coc_xwalk_path(
+    boundary_vintage: str,
+    definition_version: str,
+    county_vintage: str | int,
+    base_dir: Path | str | None = None,
+) -> Path:
+    """Get canonical path for CoC-to-MSA crosswalk file.
+
+    Args:
+        boundary_vintage: CoC boundary vintage
+        definition_version: MSA definition version
+        county_vintage: County geometry vintage used to derive the overlap
+        base_dir: Base data directory (defaults to ``data``)
+
+    Returns:
+        Path like
+        ``data/curated/xwalks/msa_coc_xwalk__B2025xMcensus_msa_2023xC2023.parquet``
+    """
+    if base_dir is None:
+        base_dir = Path("data")
+    else:
+        base_dir = Path(base_dir)
+    return (
+        base_dir / "curated" / "xwalks"
+        / msa_coc_xwalk_filename(boundary_vintage, definition_version, county_vintage)
+    )
 
 
 def pit_path(pit_year: str | int, base_dir: Path | str | None = None) -> Path:

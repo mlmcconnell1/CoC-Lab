@@ -79,6 +79,20 @@ def _parse_county_filename(filename: str) -> dict | None:
     return None
 
 
+def _parse_msa_filename(filename: str) -> dict | None:
+    """Parse CoC-to-MSA crosswalk filename to extract versions."""
+    pattern = r"^msa_coc_xwalk__B(\d{4})xM(\w+)xC(\d{4})\.parquet$"
+    match = re.match(pattern, filename)
+    if match:
+        return {
+            "type": "msa",
+            "boundary_vintage": match.group(1),
+            "definition_version": match.group(2),
+            "census_vintage": match.group(3),
+        }
+    return None
+
+
 def _get_parquet_row_count(filepath: Path) -> int:
     """Get the row count from a parquet file without loading all data."""
     parquet_file = pq.ParquetFile(filepath)
@@ -91,7 +105,7 @@ def list_xwalks(
         typer.Option(
             "--type",
             "-t",
-            help="Filter by crosswalk type: 'tract', 'county', or 'all'.",
+            help="Filter by crosswalk type: 'tract', 'county', 'msa', or 'all'.",
         ),
     ] = "all",
     directory: Annotated[
@@ -128,7 +142,7 @@ def list_xwalks(
         directory = curated_dir("xwalks")
 
     # Validate type option
-    valid_types = ("all", "tract", "county")
+    valid_types = ("all", "tract", "county", "msa")
     if xwalk_type not in valid_types:
         typer.echo(
             f"Error: Invalid type '{xwalk_type}'. Must be one of: {', '.join(valid_types)}",
@@ -168,6 +182,8 @@ def list_xwalks(
         parsed = _parse_tract_filename(filename)
         if parsed is None:
             parsed = _parse_county_filename(filename)
+        if parsed is None:
+            parsed = _parse_msa_filename(filename)
 
         if parsed is None:
             # Skip unrecognized files
@@ -193,6 +209,7 @@ def list_xwalks(
                 "type": parsed["type"],
                 "boundary_vintage": parsed["boundary_vintage"],
                 "census_vintage": parsed["census_vintage"],
+                "definition_version": parsed.get("definition_version"),
                 "rows": row_count,
                 "size": file_size,
                 "modified": modified_time,
@@ -219,6 +236,7 @@ def list_xwalks(
                 "type": c["type"],
                 "boundary_vintage": c["boundary_vintage"],
                 "census_vintage": c["census_vintage"],
+                "definition_version": c.get("definition_version"),
                 "rows": c["rows"],
                 "bytes": c["size"],
                 "modified_at": c["modified"].isoformat(),
