@@ -229,6 +229,7 @@ class TestLoadRecipeFromDict:
                     "geometry": {"type": "coc", "vintage": 2025},
                     "selector_ids": ["CO-500"],
                     "tooltip_fields": ["coc_id", "coc_name"],
+                    "style_mode": "distinct",
                 }
             ],
             "viewport": {"fit_layers": True, "padding": 24},
@@ -236,6 +237,7 @@ class TestLoadRecipeFromDict:
         recipe = load_recipe(data)
         assert isinstance(recipe.targets[0].map_spec, MapSpec)
         assert recipe.targets[0].map_spec.layers[0].selector_ids == ["CO-500"]
+        assert recipe.targets[0].map_spec.layers[0].style_mode == "distinct"
 
 
 class TestLoadRecipeFromFile:

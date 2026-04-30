@@ -157,7 +157,13 @@ targets:
           selector_ids: [CO-500]
           label: Primary CoC
           tooltip_fields: [coc_id, coc_name]
+          style_mode: distinct
 ```
+
+Set `style_mode: distinct` when you want the renderer to assign deterministic
+per-feature colors within a single layer so adjacent CoCs or multiple selected
+MSAs can be told apart visually. Omit it, or use `style_mode: uniform`, when
+one shared layer style is preferable.
 
 Map layer prerequisites are geometry-specific:
 

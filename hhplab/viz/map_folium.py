@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -34,6 +35,20 @@ DEFAULT_TOOLTIP_FIELDS = {
     "msa": ["msa_id", "msa_name", "cbsa_code", "definition_version"],
     "metro": ["metro_id", "metro_name", "definition_version"],
 }
+DISTINCT_FILL_PALETTE = (
+    "#f4a261",
+    "#2a9d8f",
+    "#e76f51",
+    "#457b9d",
+    "#8d99ae",
+    "#ffb703",
+    "#90be6d",
+    "#b56576",
+    "#577590",
+    "#fb8500",
+)
+STYLE_FILL_COLOR_FIELD = "__map_fill_color"
+STYLE_STROKE_COLOR_FIELD = "__map_stroke_color"
 
 
 @dataclass
@@ -45,6 +60,7 @@ class ResolvedMapLayer:
     tooltip_fields: list[str]
     show: bool
     style: dict[str, Any]
+    id_column: str
 
 
 def _normalize_selector(value: object) -> str:
@@ -203,6 +219,38 @@ def _resolve_tooltip_fields(
     return fields
 
 
+def _darken_hex(color: str, factor: float = 0.65) -> str:
+    """Return a darker hex color suitable for feature outlines."""
+    value = color.lstrip("#")
+    if len(value) != 6:
+        return color
+    channels = [
+        max(0, min(255, int(int(value[i:i + 2], 16) * factor)))
+        for i in range(0, 6, 2)
+    ]
+    return "#{:02x}{:02x}{:02x}".format(*channels)
+
+
+def _distinct_palette_color(feature_id: str) -> str:
+    """Map a feature id to a deterministic palette color."""
+    digest = hashlib.sha256(feature_id.encode("utf-8")).digest()
+    index = int.from_bytes(digest[:2], "big") % len(DISTINCT_FILL_PALETTE)
+    return DISTINCT_FILL_PALETTE[index]
+
+
+def _apply_distinct_feature_styles(
+    gdf: gpd.GeoDataFrame,
+    *,
+    id_column: str,
+) -> gpd.GeoDataFrame:
+    """Assign deterministic fill and stroke colors to each selected feature."""
+    styled = gdf.copy()
+    normalized_ids = styled[id_column].astype(str).map(_normalize_selector)
+    styled[STYLE_FILL_COLOR_FIELD] = normalized_ids.map(_distinct_palette_color)
+    styled[STYLE_STROKE_COLOR_FIELD] = styled[STYLE_FILL_COLOR_FIELD].map(_darken_hex)
+    return styled
+
+
 def _resolve_map_layer(layer: MapLayerSpec, *, base_dir: Path) -> ResolvedMapLayer:
     geo_type = layer.geometry.type
     if geo_type not in IDENTIFIER_COLUMNS:
@@ -230,12 +278,18 @@ def _resolve_map_layer(layer: MapLayerSpec, *, base_dir: Path) -> ResolvedMapLay
         "fillOpacity": layer.style.fill_opacity,
         "opacity": layer.style.stroke_opacity,
     }
+    if layer.style_mode == "distinct":
+        selected = _apply_distinct_feature_styles(
+            selected,
+            id_column=id_column,
+        )
     return ResolvedMapLayer(
         name=label,
         gdf=selected.to_crs(epsg=4326),
         tooltip_fields=tooltip_fields,
         show=layer.initial_visibility,
         style=style,
+        id_column=id_column,
     )
 
 
@@ -308,9 +362,24 @@ def render_overlay_map(
                         else value
                     )
                 )
+
+        def _style_function(
+            feature: dict[str, Any],
+            base_style: dict[str, Any] = layer.style,
+        ) -> dict[str, Any]:
+            properties = feature.get("properties", {})
+            style = dict(base_style)
+            fill_color = properties.get(STYLE_FILL_COLOR_FIELD)
+            stroke_color = properties.get(STYLE_STROKE_COLOR_FIELD)
+            if fill_color is not None:
+                style["fillColor"] = fill_color
+            if stroke_color is not None:
+                style["color"] = stroke_color
+            return style
+
         folium.GeoJson(
             data=layer_data.__geo_interface__,
-            style_function=lambda _feature, style=layer.style: style,
+            style_function=_style_function,
             tooltip=geojson_tooltip,
         ).add_to(feature_group)
         feature_group.add_to(m)
@@ -378,6 +447,7 @@ def render_coc_map(
             "fillOpacity": 0.3,
             "opacity": 1.0,
         },
+        id_column="coc_id",
     )
 
     if out_html is None:

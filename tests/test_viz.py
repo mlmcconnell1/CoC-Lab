@@ -10,6 +10,7 @@ from shapely.geometry import Polygon
 from hhplab.registry import register_vintage
 from hhplab.recipe.recipe_schema import GeometryRef, MapLayerSpec, MapSpec, MapViewportSpec, TargetSpec
 from hhplab.viz import render_coc_map, render_recipe_map
+from hhplab.viz.map_folium import _distinct_palette_color
 
 
 @pytest.fixture
@@ -247,6 +248,26 @@ def _mixed_overlay_target() -> TargetSpec:
     )
 
 
+def _distinct_coc_target() -> TargetSpec:
+    return TargetSpec(
+        id="distinct_coc_map",
+        geometry=GeometryRef(type="coc", vintage=2025),
+        outputs=["map"],
+        map_spec=MapSpec(
+            layers=[
+                MapLayerSpec(
+                    geometry=GeometryRef(type="coc", vintage=2025),
+                    selector_ids=["CO-500", "NY-600"],
+                    label="Distinct CoCs",
+                    tooltip_fields=["coc_id", "coc_name"],
+                    style_mode="distinct",
+                ),
+            ],
+            viewport=MapViewportSpec(fit_layers=True, padding=18),
+        ),
+    )
+
+
 class TestRenderCocMap:
     """Tests for render_coc_map function."""
 
@@ -417,3 +438,25 @@ class TestRenderRecipeMap:
 
         content = out_path.read_text()
         assert "fitBounds" not in content
+
+    def test_render_map_distinct_style_mode_assigns_multiple_colors(
+        self,
+        sample_boundaries,
+        temp_data_dir,
+    ):
+        out_path = render_recipe_map(
+            _distinct_coc_target(),
+            project_root=temp_data_dir,
+            out_html=temp_data_dir / "outputs" / "distinct.html",
+        )
+
+        content = out_path.read_text()
+        assert "__map_fill_color" in content
+        assert "__map_stroke_color" in content
+        expected_colors = {
+            _distinct_palette_color("CO-500"),
+            _distinct_palette_color("NY-600"),
+        }
+        assert len(expected_colors) == 2
+        for color in expected_colors:
+            assert color in content

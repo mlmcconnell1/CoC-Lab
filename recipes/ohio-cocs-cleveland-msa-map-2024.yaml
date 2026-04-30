@@ -22,6 +22,7 @@ targets:
             [OH-500, OH-501, OH-502, OH-503, OH-504, OH-505, OH-506, OH-507, OH-508]
           label: Ohio CoCs
           tooltip_fields: [coc_id, coc_name, state_abbrev]
+          style_mode: distinct
           style:
             fill_color: "#f4a261"
             stroke_color: "#7f5539"

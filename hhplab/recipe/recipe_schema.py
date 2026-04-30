@@ -486,6 +486,9 @@ class MapViewportSpec(BaseModel):
         return self
 
 
+MapStyleMode = Literal["uniform", "distinct"]
+
+
 class MapLayerSpec(BaseModel):
     """One overlay layer within a recipe-native map target."""
     model_config = ConfigDict(extra="forbid")
@@ -502,6 +505,13 @@ class MapLayerSpec(BaseModel):
     style: MapLayerStyle = Field(
         default_factory=MapLayerStyle,
         description="Render style for the selected features.",
+    )
+    style_mode: MapStyleMode = Field(
+        default="uniform",
+        description=(
+            "How styles are applied within the layer. 'uniform' uses one style "
+            "for every feature; 'distinct' assigns deterministic per-feature colors."
+        ),
     )
     tooltip_fields: list[str] = Field(
         default_factory=list,
