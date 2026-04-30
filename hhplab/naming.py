@@ -1037,6 +1037,19 @@ def metro_county_membership_filename(definition_version: str) -> str:
     return f"metro_county_membership__{definition_version}.parquet"
 
 
+def metro_boundaries_filename(
+    definition_version: str,
+    county_vintage: str | int,
+) -> str:
+    """Filename for materialized metro boundary polygons.
+
+    Pattern: ``metro_boundaries__{version}xC{county}.parquet``
+
+    See :func:`metro_definitions_filename` for normalization note.
+    """
+    return f"metro_boundaries__{definition_version}xC{county_vintage}.parquet"
+
+
 # =============================================================================
 # Metro definition artifact paths
 # =============================================================================
@@ -1096,6 +1109,26 @@ def metro_county_membership_path(
     return (
         base_dir / "curated" / "metro"
         / metro_county_membership_filename(definition_version)
+    )
+
+
+def metro_boundaries_path(
+    definition_version: str,
+    county_vintage: str | int,
+    base_dir: Path | str | None = None,
+) -> Path:
+    """Canonical path for metro boundary polygons file.
+
+    Returns:
+        Path like data/curated/metro/metro_boundaries__glynn_fox_v1xC2025.parquet
+    """
+    if base_dir is None:
+        base_dir = Path("data")
+    else:
+        base_dir = Path(base_dir)
+    return (
+        base_dir / "curated" / "metro"
+        / metro_boundaries_filename(definition_version, county_vintage)
     )
 
 

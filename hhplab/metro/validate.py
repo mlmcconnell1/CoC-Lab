@@ -7,6 +7,7 @@ referential consistency of the three metro definition tables.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 import pandas as pd
 
@@ -92,8 +93,6 @@ def validate_metro_artifacts(
     )
 
     # -- metro_id format: GFnn ---------------------------------------------
-    import re
-
     gf_pattern = re.compile(r"^GF\d{2}$")
     for name, df, col in [
         ("definitions", definitions_df, "metro_id"),
@@ -213,6 +212,99 @@ def validate_metro_artifacts(
                 f"county_membership: {dups} duplicate "
                 f"(metro_id, county_fips) pair(s)"
             )
+
+    return MetroValidationResult(
+        passed=len(errors) == 0,
+        errors=errors,
+        warnings=warnings,
+    )
+
+
+def validate_metro_boundaries(
+    boundaries_df: pd.DataFrame,
+    definitions_df: pd.DataFrame,
+    *,
+    county_vintage: str | int,
+) -> MetroValidationResult:
+    """Validate materialized metro boundary polygons against definitions."""
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    def _check_cols(df: pd.DataFrame, name: str, required: list[str]) -> None:
+        missing = [c for c in required if c not in df.columns]
+        if missing:
+            errors.append(f"{name}: missing columns {missing}")
+
+    _check_cols(
+        boundaries_df,
+        "boundaries",
+        [
+            "metro_id",
+            "metro_name",
+            "definition_version",
+            "geometry_vintage",
+            "source",
+            "source_ref",
+            "ingested_at",
+            "geometry",
+        ],
+    )
+
+    if errors:
+        return MetroValidationResult(
+            passed=False,
+            errors=errors,
+            warnings=warnings,
+        )
+
+    gf_pattern = re.compile(r"^GF\d{2}$")
+    bad_ids = [
+        v for v in boundaries_df["metro_id"].dropna().unique()
+        if not gf_pattern.match(str(v))
+    ]
+    if bad_ids:
+        errors.append(f"boundaries: invalid metro_id format (expected GFnn): {bad_ids[:5]}")
+
+    if not pd.api.types.is_datetime64_any_dtype(boundaries_df["ingested_at"]):
+        errors.append("boundaries: ingested_at must be datetime-like")
+
+    if boundaries_df["metro_id"].duplicated().any():
+        errors.append(
+            f"boundaries: {int(boundaries_df['metro_id'].duplicated().sum())} duplicate metro_id(s)"
+        )
+
+    if boundaries_df["geometry"].isna().any():
+        errors.append("boundaries: null geometry values are not allowed")
+    elif hasattr(boundaries_df["geometry"], "is_empty") and boundaries_df["geometry"].is_empty.any():
+        errors.append("boundaries: empty geometry values are not allowed")
+
+    if "geometry_vintage" in boundaries_df.columns:
+        vintages = list(pd.Series(boundaries_df["geometry_vintage"]).dropna().astype(str).unique())
+        expected = str(county_vintage)
+        if vintages != [expected]:
+            errors.append(
+                f"boundaries: geometry_vintage mismatch; expected '{expected}', found {vintages}"
+            )
+
+    versions = list(pd.Series(boundaries_df["definition_version"]).dropna().unique())
+    if versions != [DEFINITION_VERSION]:
+        errors.append(
+            f"boundaries: definition_version mismatch; expected "
+            f"'{DEFINITION_VERSION}', found {versions}"
+        )
+
+    def_ids = set(definitions_df["metro_id"].dropna().unique())
+    boundary_ids = set(boundaries_df["metro_id"].dropna().unique())
+    missing = sorted(def_ids - boundary_ids)
+    extra = sorted(boundary_ids - def_ids)
+    if missing:
+        errors.append(
+            f"boundaries: missing polygons for metro ids {missing[:10]}"
+        )
+    if extra:
+        errors.append(
+            f"boundaries: found polygons without matching definitions {extra[:10]}"
+        )
 
     return MetroValidationResult(
         passed=len(errors) == 0,

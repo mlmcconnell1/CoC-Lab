@@ -124,3 +124,34 @@ def validate_curated_metro(
     coc_df = read_metro_coc_membership(definition_version, base_dir)
     county_df = read_metro_county_membership(definition_version, base_dir)
     return validate_metro_artifacts(defs_df, coc_df, county_df)
+
+
+def read_metro_boundaries(
+    definition_version: str = DEFINITION_VERSION,
+    county_vintage: str | int = 2020,
+    base_dir: Path | str | None = None,
+):
+    """Read materialized metro boundary polygons from the curated artifact."""
+    from hhplab.metro.boundaries import read_metro_boundaries as _read
+
+    return _read(
+        definition_version=definition_version,
+        county_vintage=county_vintage,
+        base_dir=base_dir,
+    )
+
+
+def validate_curated_metro_boundaries(
+    definition_version: str = DEFINITION_VERSION,
+    *,
+    county_vintage: str | int,
+    base_dir: Path | str | None = None,
+):
+    """Load curated metro boundaries and validate them."""
+    from hhplab.metro.boundaries import validate_curated_metro_boundaries as _validate
+
+    return _validate(
+        definition_version=definition_version,
+        county_vintage=county_vintage,
+        base_dir=base_dir,
+    )

@@ -5,6 +5,8 @@ import pytest
 from hhplab.naming import (
     geo_map_filename,
     geo_panel_filename,
+    metro_boundaries_filename,
+    metro_boundaries_path,
     metro_coc_membership_filename,
     metro_county_membership_filename,
     metro_definitions_filename,
@@ -77,6 +79,17 @@ class TestMetroDefinitionFilenames:
         assert (
             metro_county_membership_filename("glynn_fox_v1")
             == "metro_county_membership__glynn_fox_v1.parquet"
+        )
+
+    def test_boundaries(self):
+        assert (
+            metro_boundaries_filename("glynn_fox_v1", 2025)
+            == "metro_boundaries__glynn_fox_v1xC2025.parquet"
+        )
+
+    def test_boundaries_path(self):
+        assert str(metro_boundaries_path("glynn_fox_v1", 2025)).endswith(
+            "data/curated/metro/metro_boundaries__glynn_fox_v1xC2025.parquet"
         )
 
 

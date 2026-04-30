@@ -1,0 +1,96 @@
+"""CLI command for validating curated metro artifacts."""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+import typer
+
+from hhplab.metro.definitions import DEFINITION_VERSION
+
+
+def validate_metro(
+    definition_version: Annotated[
+        str,
+        typer.Option(
+            "--definition-version",
+            "-d",
+            help="Metro definition version to validate.",
+        ),
+    ] = DEFINITION_VERSION,
+    county_vintage: Annotated[
+        int,
+        typer.Option(
+            "--counties",
+            "-c",
+            help="County geometry vintage for the metro boundary artifact.",
+        ),
+    ] = ...,
+    json_output: Annotated[
+        bool,
+        typer.Option(
+            "--json",
+            help="Output machine-readable JSON instead of human text.",
+        ),
+    ] = False,
+) -> None:
+    """Validate curated metro definitions, memberships, and boundary polygons."""
+    import json as json_mod
+
+    from hhplab.metro.io import validate_curated_metro
+    from hhplab.metro.boundaries import validate_curated_metro_boundaries
+
+    try:
+        definition_result = validate_curated_metro(definition_version)
+        boundary_result = validate_curated_metro_boundaries(
+            definition_version=definition_version,
+            county_vintage=county_vintage,
+        )
+    except FileNotFoundError as exc:
+        payload = {
+            "status": "error",
+            "definition_version": definition_version,
+            "county_vintage": county_vintage,
+            "errors": [str(exc)],
+            "warnings": [],
+        }
+        if json_output:
+            typer.echo(json_mod.dumps(payload))
+        else:
+            typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    errors = definition_result.errors + boundary_result.errors
+    warnings = definition_result.warnings + boundary_result.warnings
+    status = "ok" if not errors else "error"
+
+    if json_output:
+        typer.echo(
+            json_mod.dumps(
+                {
+                    "status": status,
+                    "definition_version": definition_version,
+                    "county_vintage": county_vintage,
+                    "errors": errors,
+                    "warnings": warnings,
+                }
+            )
+        )
+        if errors:
+            raise typer.Exit(1)
+        return
+
+    if errors:
+        typer.echo("Metro validation failed:", err=True)
+        for error in errors:
+            typer.echo(f"  ERROR: {error}", err=True)
+        for warning in warnings:
+            typer.echo(f"  WARN:  {warning}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(
+        f"Metro validation passed for {definition_version} "
+        f"with county vintage {county_vintage} ({len(warnings)} warning(s))."
+    )
+    for warning in warnings:
+        typer.echo(f"  WARN:  {warning}")

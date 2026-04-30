@@ -72,22 +72,6 @@ def _find_coc_boundary_file(vintage: str, *, base_dir: Path) -> Path:
     return resolve_curated_boundary_path(vintage, base_dir)
 
 
-def _standardize_county_geometry_columns(county_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    if "GEOID" in county_gdf.columns:
-        result = county_gdf.copy()
-        result["county_fips"] = result["GEOID"].astype(str)
-        return result
-    if "geoid" in county_gdf.columns:
-        result = county_gdf.rename(columns={"geoid": "GEOID"}).copy()
-        result["county_fips"] = result["GEOID"].astype(str)
-        return result
-    if "county_fips" in county_gdf.columns:
-        result = county_gdf.rename(columns={"county_fips": "GEOID"}).copy()
-        result["county_fips"] = result["GEOID"].astype(str)
-        return result
-    raise ValueError("County geometry artifact must include GEOID, geoid, or county_fips.")
-
-
 def _load_coc_boundaries(
     boundary_vintage: str,
     *,
@@ -100,83 +84,25 @@ def _load_coc_boundaries(
     return gdf
 
 
-def _load_counties(
-    county_vintage: str | int,
-    *,
-    base_dir: Path,
-) -> gpd.GeoDataFrame:
-    from hhplab.naming import county_path
-
-    path = county_path(county_vintage, base_dir)
-    gdf = gpd.read_parquet(path)
-    return _standardize_county_geometry_columns(gdf)
-
-
-def _validate_membership_counties(
-    membership: pd.DataFrame,
-    counties: gpd.GeoDataFrame,
-    *,
-    label: str,
-    county_vintage: str | int,
-) -> None:
-    available = set(counties["county_fips"].astype(str))
-    required = set(membership["county_fips"].astype(str))
-    missing = sorted(required - available)
-    if not missing:
-        return
-    preview = ", ".join(missing[:5])
-    if len(missing) > 5:
-        preview += ", ..."
-    raise ValueError(
-        f"{label} membership references counties missing from county geometry vintage "
-        f"{county_vintage}: {preview}. Run: hhplab ingest tiger --year {county_vintage} --type counties"
-    )
-
-
-def _dissolve_county_membership(
-    *,
-    counties: gpd.GeoDataFrame,
-    membership: pd.DataFrame,
-    definitions: pd.DataFrame,
-    id_column: str,
-    name_columns: list[str],
-) -> gpd.GeoDataFrame:
-    joined = counties.merge(membership, on="county_fips", how="inner")
-    if joined.empty:
-        raise ValueError(
-            f"County membership did not match any county geometries for '{id_column}'."
-        )
-    dissolved = joined.dissolve(by=id_column, as_index=False, aggfunc="first")
-    merge_columns = [id_column, *name_columns]
-    dedup_defs = definitions[merge_columns].drop_duplicates(subset=[id_column])
-    dissolved = dissolved.drop(columns=[col for col in name_columns if col in dissolved.columns])
-    return dissolved.merge(dedup_defs, on=id_column, how="left")
-
-
 def _load_msa_boundaries(
     *,
     definition_version: str,
     county_vintage: str | int,
     base_dir: Path,
 ) -> gpd.GeoDataFrame:
-    from hhplab.msa.io import read_msa_county_membership, read_msa_definitions
+    from hhplab.msa.boundaries import read_msa_boundaries
 
-    counties = _load_counties(county_vintage, base_dir=base_dir)
-    membership = read_msa_county_membership(definition_version, base_dir)
-    definitions = read_msa_definitions(definition_version, base_dir)
-    _validate_membership_counties(
-        membership,
-        counties,
-        label="MSA",
-        county_vintage=county_vintage,
-    )
-    return _dissolve_county_membership(
-        counties=counties,
-        membership=membership,
-        definitions=definitions,
-        id_column="msa_id",
-        name_columns=["msa_name", "cbsa_code", "definition_version"],
-    )
+    gdf = read_msa_boundaries(definition_version, base_dir)
+    if "geometry_vintage" in gdf.columns:
+        vintages = set(gdf["geometry_vintage"].astype(str))
+        expected = str(county_vintage)
+        if expected not in vintages:
+            raise ValueError(
+                f"MSA boundaries artifact for {definition_version} does not match "
+                f"requested county geometry vintage {county_vintage}. "
+                f"Available geometry_vintage values: {sorted(vintages)}"
+            )
+    return gdf
 
 
 def _load_metro_boundaries(
@@ -185,23 +111,12 @@ def _load_metro_boundaries(
     county_vintage: str | int,
     base_dir: Path,
 ) -> gpd.GeoDataFrame:
-    from hhplab.metro.io import read_metro_county_membership, read_metro_definitions
+    from hhplab.metro.boundaries import read_metro_boundaries
 
-    counties = _load_counties(county_vintage, base_dir=base_dir)
-    membership = read_metro_county_membership(definition_version, base_dir)
-    definitions = read_metro_definitions(definition_version, base_dir)
-    _validate_membership_counties(
-        membership,
-        counties,
-        label="Metro",
+    return read_metro_boundaries(
+        definition_version=definition_version,
         county_vintage=county_vintage,
-    )
-    return _dissolve_county_membership(
-        counties=counties,
-        membership=membership,
-        definitions=definitions,
-        id_column="metro_id",
-        name_columns=["metro_name", "definition_version"],
+        base_dir=base_dir,
     )
 
 

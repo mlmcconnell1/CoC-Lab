@@ -19,6 +19,13 @@ from hhplab.metro.definitions import (
     cbsa_to_metro_id,
     metro_name_for_id,
 )
+from hhplab.metro.boundaries import (
+    build_metro_boundaries,
+    generate_metro_boundaries,
+    read_metro_boundaries,
+    validate_curated_metro_boundaries,
+    write_metro_boundaries,
+)
 from hhplab.metro.io import (
     read_metro_coc_membership,
     read_metro_county_membership,
@@ -26,7 +33,11 @@ from hhplab.metro.io import (
     validate_curated_metro,
     write_metro_artifacts,
 )
-from hhplab.metro.validate import MetroValidationResult, validate_metro_artifacts
+from hhplab.metro.validate import (
+    MetroValidationResult,
+    validate_metro_artifacts,
+    validate_metro_boundaries,
+)
 
 __all__ = [
     "DEFINITION_VERSION",
@@ -39,13 +50,19 @@ __all__ = [
     "build_definitions_df",
     "build_coc_membership_df",
     "build_county_membership_df",
+    "build_metro_boundaries",
     "cbsa_to_metro_id",
+    "generate_metro_boundaries",
     "metro_name_for_id",
     "read_metro_definitions",
     "read_metro_coc_membership",
     "read_metro_county_membership",
+    "read_metro_boundaries",
     "write_metro_artifacts",
+    "write_metro_boundaries",
     "validate_curated_metro",
+    "validate_curated_metro_boundaries",
     "MetroValidationResult",
     "validate_metro_artifacts",
+    "validate_metro_boundaries",
 ]

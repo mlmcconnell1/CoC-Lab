@@ -161,6 +161,51 @@ def _scan_msa(curated: Path) -> dict:
     }
 
 
+def _scan_metro(curated: Path) -> dict:
+    """Scan curated metro definition, membership, and boundary artifacts."""
+    import re
+
+    mdir = curated / "metro"
+    definitions: list[str] = []
+    coc_memberships: list[str] = []
+    county_memberships: list[str] = []
+    boundaries: list[dict] = []
+    if mdir.exists():
+        for p in sorted(mdir.glob("*.parquet")):
+            m = re.match(r"^metro_definitions__(\w+)\.parquet$", p.name)
+            if m:
+                definitions.append(m.group(1))
+                continue
+            m = re.match(r"^metro_coc_membership__(\w+)\.parquet$", p.name)
+            if m:
+                coc_memberships.append(m.group(1))
+                continue
+            m = re.match(r"^metro_county_membership__(\w+)\.parquet$", p.name)
+            if m:
+                county_memberships.append(m.group(1))
+                continue
+            m = re.match(r"^metro_boundaries__(\w+)xC(\d{4})\.parquet$", p.name)
+            if m:
+                boundaries.append(
+                    {
+                        "definition_version": m.group(1),
+                        "county_vintage": int(m.group(2)),
+                    }
+                )
+    complete_versions = sorted(
+        set(definitions) & set(coc_memberships) & set(county_memberships)
+    )
+    boundary_versions = sorted({item["definition_version"] for item in boundaries})
+    return {
+        "definitions": definitions,
+        "coc_memberships": coc_memberships,
+        "county_memberships": county_memberships,
+        "boundaries": boundaries,
+        "boundary_versions": boundary_versions,
+        "complete_versions": complete_versions,
+    }
+
+
 def _scan_measures(curated: Path) -> dict:
     """Scan measures files."""
     import re
@@ -334,6 +379,75 @@ def _check_prerequisites(assets: dict) -> list[dict]:
             "hint": f"Run: hhplab generate msa --definition-version {version} --force",
         })
 
+    metro = assets["metro"]
+    metro_definitions = set(metro["definitions"])
+    metro_coc = set(metro["coc_memberships"])
+    metro_county = set(metro["county_memberships"])
+    metro_boundaries = set(metro["boundary_versions"])
+    missing_metro_coc = sorted(metro_definitions - metro_coc)
+    missing_metro_county = sorted(metro_definitions - metro_county)
+    missing_metro_boundaries = sorted(metro_definitions - metro_boundaries)
+    orphan_metro_coc = sorted(metro_coc - metro_definitions)
+    orphan_metro_county = sorted(metro_county - metro_definitions)
+    orphan_metro_boundaries = sorted(metro_boundaries - metro_definitions)
+    for version in missing_metro_coc:
+        issues.append({
+            "severity": "warning",
+            "area": "metro",
+            "message": (
+                f"Metro definition version '{version}' is missing CoC membership artifacts."
+            ),
+            "hint": f"Run: hhplab generate metro --definition-version {version} --force",
+        })
+    for version in orphan_metro_coc:
+        issues.append({
+            "severity": "warning",
+            "area": "metro",
+            "message": (
+                f"Metro CoC membership version '{version}' is missing definitions artifacts."
+            ),
+            "hint": f"Run: hhplab generate metro --definition-version {version} --force",
+        })
+    for version in orphan_metro_county:
+        issues.append({
+            "severity": "warning",
+            "area": "metro",
+            "message": (
+                f"Metro county membership version '{version}' is missing definitions artifacts."
+            ),
+            "hint": f"Run: hhplab generate metro --definition-version {version} --force",
+        })
+    for version in orphan_metro_boundaries:
+        issues.append({
+            "severity": "warning",
+            "area": "metro",
+            "message": (
+                f"Metro boundary version '{version}' is missing definitions artifacts."
+            ),
+            "hint": f"Run: hhplab generate metro --definition-version {version} --force",
+        })
+    for version in missing_metro_county:
+        issues.append({
+            "severity": "warning",
+            "area": "metro",
+            "message": (
+                f"Metro definition version '{version}' is missing county membership artifacts."
+            ),
+            "hint": f"Run: hhplab generate metro --definition-version {version} --force",
+        })
+    for version in missing_metro_boundaries:
+        issues.append({
+            "severity": "warning",
+            "area": "metro",
+            "message": (
+                f"Metro definition version '{version}' is missing boundary polygon artifacts."
+            ),
+            "hint": (
+                f"Run: hhplab generate metro-boundaries "
+                f"--definition-version {version} --counties <YEAR>"
+            ),
+        })
+
     return issues
 
 
@@ -381,6 +495,7 @@ def status_cmd(
         "census": _scan_census(curated),
         "crosswalks": _scan_xwalks(curated),
         "pit": _scan_pit(curated),
+        "metro": _scan_metro(curated),
         "msa": _scan_msa(curated),
         "measures": _scan_measures(curated),
         "acs": _scan_acs(curated),
@@ -439,6 +554,20 @@ def status_cmd(
         for item in p["msa_items"]
     ) if p["msa_items"] else "-"
     typer.echo(f"MSA PIT:    {p['msa_count']} file(s)  {msa_pit_versions}")
+
+    metro = assets["metro"]
+    typer.echo(
+        "Metro Artifacts: "
+        f"{len(metro['complete_versions'])} complete version(s)  "
+        f"{', '.join(metro['complete_versions']) if metro['complete_versions'] else '-'}"
+    )
+    metro_boundary_versions = ", ".join(
+        f"D{item['definition_version']}xC{item['county_vintage']}"
+        for item in metro["boundaries"]
+    ) if metro["boundaries"] else "-"
+    typer.echo(
+        f"Metro Boundaries: {len(metro['boundaries'])} file(s)  {metro_boundary_versions}"
+    )
 
     msa = assets["msa"]
     typer.echo(

@@ -148,6 +148,31 @@ def sample_overlay_artifacts(temp_data_dir):
             "definition_version": ["census_msa_2023", "census_msa_2023"],
         }
     ).to_parquet(msa_dir / "msa_county_membership__census_msa_2023.parquet")
+    gpd.GeoDataFrame(
+        {
+            "msa_id": ["19740"],
+            "cbsa_code": ["19740"],
+            "msa_name": ["Denver-Aurora-Lakewood, CO"],
+            "area_type": ["Metropolitan Statistical Area"],
+            "definition_version": ["census_msa_2023"],
+            "geometry_vintage": ["2025"],
+            "source": ["census_tiger_cbsa"],
+            "source_ref": ["https://example.com/msa-boundaries"],
+            "ingested_at": [datetime.now(UTC)],
+        },
+        geometry=[
+            Polygon(
+                [
+                    (-105.2, 39.4),
+                    (-104.45, 39.4),
+                    (-104.45, 39.8),
+                    (-105.2, 39.8),
+                    (-105.2, 39.4),
+                ]
+            )
+        ],
+        crs="EPSG:4326",
+    ).to_parquet(msa_dir / "msa_boundaries__census_msa_2023.parquet")
 
     pd.DataFrame(
         {
@@ -166,6 +191,29 @@ def sample_overlay_artifacts(temp_data_dir):
             "definition_version": ["glynn_fox_v1", "glynn_fox_v1"],
         }
     ).to_parquet(metro_dir / "metro_county_membership__glynn_fox_v1.parquet")
+    gpd.GeoDataFrame(
+        {
+            "metro_id": ["GF21"],
+            "metro_name": ["Denver, CO"],
+            "definition_version": ["glynn_fox_v1"],
+            "geometry_vintage": ["2025"],
+            "source": ["derived_metro_county_union"],
+            "source_ref": ["https://example.com/metro"],
+            "ingested_at": [datetime.now(UTC)],
+        },
+        geometry=[
+            Polygon(
+                [
+                    (-105.2, 39.4),
+                    (-104.45, 39.4),
+                    (-104.45, 39.8),
+                    (-105.2, 39.8),
+                    (-105.2, 39.4),
+                ]
+            )
+        ],
+        crs="EPSG:4326",
+    ).to_parquet(metro_dir / "metro_boundaries__glynn_fox_v1xC2025.parquet")
 
 
 def _mixed_overlay_target() -> TargetSpec:
@@ -325,6 +373,28 @@ class TestRenderRecipeMap:
                 target,
                 project_root=temp_data_dir,
                 out_html=temp_data_dir / "outputs" / "missing.html",
+            )
+
+    def test_render_map_missing_metro_boundary_artifact_is_actionable(
+        self,
+        sample_boundaries,
+        sample_overlay_artifacts,
+        temp_data_dir,
+    ):
+        metro_boundary_path = (
+            temp_data_dir
+            / "data"
+            / "curated"
+            / "metro"
+            / "metro_boundaries__glynn_fox_v1xC2025.parquet"
+        )
+        metro_boundary_path.unlink()
+
+        with pytest.raises(FileNotFoundError, match="generate metro-boundaries"):
+            render_recipe_map(
+                _mixed_overlay_target(),
+                project_root=temp_data_dir,
+                out_html=temp_data_dir / "outputs" / "missing-metro.html",
             )
 
     def test_render_map_explicit_viewport_skips_fit_bounds(

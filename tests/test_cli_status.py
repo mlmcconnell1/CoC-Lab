@@ -59,6 +59,22 @@ def _scaffold_curated(tmp_path: Path) -> Path:
         msadir / "msa_boundaries__census_msa_2023.parquet"
     )
 
+    # Metro
+    metrodir = curated / "metro"
+    metrodir.mkdir(parents=True)
+    pd.DataFrame({"metro_id": ["GF21"]}).to_parquet(
+        metrodir / "metro_definitions__glynn_fox_v1.parquet"
+    )
+    pd.DataFrame({"metro_id": ["GF21"], "coc_id": ["CO-503"]}).to_parquet(
+        metrodir / "metro_coc_membership__glynn_fox_v1.parquet"
+    )
+    pd.DataFrame({"metro_id": ["GF21"], "county_fips": ["08001"]}).to_parquet(
+        metrodir / "metro_county_membership__glynn_fox_v1.parquet"
+    )
+    pd.DataFrame({"metro_id": ["GF21"]}).to_parquet(
+        metrodir / "metro_boundaries__glynn_fox_v1xC2023.parquet"
+    )
+
     # ACS
     adir = curated / "acs"
     adir.mkdir(parents=True)
@@ -127,6 +143,8 @@ class TestStatusHuman:
         assert "B2025xMcensus_msa_2023xC2023" in result.output
         assert "PIT Counts: 1 year(s)" in result.output
         assert "MSA PIT:    1 file(s)" in result.output
+        assert "Metro Artifacts: 1 complete version(s)" in result.output
+        assert "Metro Boundaries: 1 file(s)" in result.output
         assert "MSA Artifacts: 1 complete version(s)" in result.output
         assert "MSA Boundaries: 1 version(s)" in result.output
         assert "ACS Tracts: 1 file(s)" in result.output
@@ -213,6 +231,14 @@ class TestStatusJSON:
             "boundary_vintage": 2025,
             "county_vintage": 2023,
         }]
+        assert payload["assets"]["metro"]["definitions"] == ["glynn_fox_v1"]
+        assert payload["assets"]["metro"]["coc_memberships"] == ["glynn_fox_v1"]
+        assert payload["assets"]["metro"]["county_memberships"] == ["glynn_fox_v1"]
+        assert payload["assets"]["metro"]["boundary_versions"] == ["glynn_fox_v1"]
+        assert payload["assets"]["metro"]["complete_versions"] == ["glynn_fox_v1"]
+        assert payload["assets"]["metro"]["boundaries"] == [
+            {"definition_version": "glynn_fox_v1", "county_vintage": 2023}
+        ]
         assert payload["assets"]["msa"]["definitions"] == ["census_msa_2023"]
         assert payload["assets"]["msa"]["county_memberships"] == ["census_msa_2023"]
         assert payload["assets"]["msa"]["boundaries"] == ["census_msa_2023"]
@@ -263,7 +289,7 @@ class TestStatusJSON:
         payload = json.loads(result.output)
         assert set(payload.keys()) == {"status", "assets", "builds", "issues"}
         assert set(payload["assets"].keys()) == {
-            "boundaries", "census", "crosswalks", "pit", "msa", "measures", "acs", "zori", "laus",
+            "boundaries", "census", "crosswalks", "pit", "metro", "msa", "measures", "acs", "zori", "laus",
         }
 
     def test_status_json_warns_on_partial_msa_artifacts(self, tmp_path):
@@ -292,6 +318,30 @@ class TestStatusJSON:
             == msa_issues[0]["hint"]
         )
         assert any("missing boundary polygon" in issue["message"].lower() for issue in msa_issues)
+
+    def test_status_json_warns_on_partial_metro_artifacts(self, tmp_path):
+        data_dir = tmp_path / "data"
+        curated = data_dir / "curated"
+        metrodir = curated / "metro"
+        metrodir.mkdir(parents=True)
+
+        import pandas as pd
+
+        pd.DataFrame({"metro_id": ["GF21"]}).to_parquet(
+            metrodir / "metro_definitions__glynn_fox_v1.parquet"
+        )
+
+        result = runner.invoke(
+            app,
+            ["status", "--json", "--data-dir", str(data_dir), "--builds-dir", str(tmp_path / "builds")],
+        )
+
+        payload = json.loads(result.output)
+        metro_issues = [issue for issue in payload["issues"] if issue["area"] == "metro"]
+        assert metro_issues
+        assert any("missing coc membership" in issue["message"].lower() for issue in metro_issues)
+        assert any("missing county membership" in issue["message"].lower() for issue in metro_issues)
+        assert any("missing boundary polygon" in issue["message"].lower() for issue in metro_issues)
 
 
 class TestStatusBuilds:
