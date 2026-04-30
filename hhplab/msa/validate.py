@@ -174,3 +174,102 @@ def validate_msa_artifacts(
         warnings=warnings,
     )
 
+
+def validate_msa_boundaries(
+    boundaries_df: pd.DataFrame,
+    definitions_df: pd.DataFrame,
+) -> MSAValidationResult:
+    """Validate curated MSA boundary polygons against definitions."""
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    def _check_cols(df: pd.DataFrame, name: str, required: list[str]) -> None:
+        missing = [col for col in required if col not in df.columns]
+        if missing:
+            errors.append(f"{name}: missing columns {missing}")
+
+    _check_cols(
+        boundaries_df,
+        "boundaries",
+        [
+            "msa_id",
+            "cbsa_code",
+            "msa_name",
+            "area_type",
+            "definition_version",
+            "geometry_vintage",
+            "source",
+            "source_ref",
+            "ingested_at",
+            "geometry",
+        ],
+    )
+
+    if errors:
+        return MSAValidationResult(
+            passed=False,
+            errors=errors,
+            warnings=warnings,
+        )
+
+    code_pattern = re.compile(r"^\d{5}$")
+    for col in ["msa_id", "cbsa_code"]:
+        bad = [
+            value
+            for value in boundaries_df[col].dropna().unique()
+            if not code_pattern.match(str(value))
+        ]
+        if bad:
+            errors.append(f"boundaries: invalid {col} format (expected 5 digits): {bad[:5]}")
+
+    if "area_type" in boundaries_df.columns:
+        bad_types = sorted(set(boundaries_df["area_type"]) - {MSA_AREA_TYPE})
+        if bad_types:
+            errors.append(
+                f"boundaries: unexpected area_type values {bad_types}; "
+                f"expected only '{MSA_AREA_TYPE}'"
+            )
+
+    if not pd.api.types.is_datetime64_any_dtype(boundaries_df["ingested_at"]):
+        errors.append("boundaries: ingested_at must be datetime-like")
+
+    if boundaries_df["msa_id"].duplicated().any():
+        errors.append(
+            f"boundaries: {int(boundaries_df['msa_id'].duplicated().sum())} duplicate msa_id(s)"
+        )
+
+    if (boundaries_df["msa_id"] != boundaries_df["cbsa_code"]).any():
+        errors.append("boundaries: msa_id must match cbsa_code for the current identifier contract")
+
+    if boundaries_df["geometry"].isna().any():
+        errors.append("boundaries: null geometry values are not allowed")
+    elif hasattr(boundaries_df["geometry"], "is_empty") and boundaries_df["geometry"].is_empty.any():
+        errors.append("boundaries: empty geometry values are not allowed")
+
+    def_ids = set(definitions_df["msa_id"].dropna().unique())
+    boundary_ids = set(boundaries_df["msa_id"].dropna().unique())
+    missing_boundaries = sorted(def_ids - boundary_ids)
+    extra_boundaries = sorted(boundary_ids - def_ids)
+    if missing_boundaries:
+        errors.append(
+            "boundaries: missing MSA polygons for definition ids "
+            f"{missing_boundaries[:10]}"
+        )
+    if extra_boundaries:
+        errors.append(
+            "boundaries: found polygons without matching definitions "
+            f"{extra_boundaries[:10]}"
+        )
+
+    definition_versions = list(pd.Series(boundaries_df["definition_version"]).dropna().unique())
+    if definition_versions != [DEFINITION_VERSION]:
+        errors.append(
+            f"boundaries: definition_version mismatch; expected "
+            f"'{DEFINITION_VERSION}', found {definition_versions}"
+        )
+
+    return MSAValidationResult(
+        passed=not errors,
+        errors=errors,
+        warnings=warnings,
+    )

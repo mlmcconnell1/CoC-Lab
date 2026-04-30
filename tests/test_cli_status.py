@@ -55,6 +55,9 @@ def _scaffold_curated(tmp_path: Path) -> Path:
     pd.DataFrame({"msa_id": ["35620"], "county_fips": ["36061"]}).to_parquet(
         msadir / "msa_county_membership__census_msa_2023.parquet"
     )
+    pd.DataFrame({"msa_id": ["35620"]}).to_parquet(
+        msadir / "msa_boundaries__census_msa_2023.parquet"
+    )
 
     # ACS
     adir = curated / "acs"
@@ -125,6 +128,7 @@ class TestStatusHuman:
         assert "PIT Counts: 1 year(s)" in result.output
         assert "MSA PIT:    1 file(s)" in result.output
         assert "MSA Artifacts: 1 complete version(s)" in result.output
+        assert "MSA Boundaries: 1 version(s)" in result.output
         assert "ACS Tracts: 1 file(s)" in result.output
         assert "Measures:   1 file(s)" in result.output
         assert "ZORI:       1 file(s)" in result.output
@@ -211,7 +215,9 @@ class TestStatusJSON:
         }]
         assert payload["assets"]["msa"]["definitions"] == ["census_msa_2023"]
         assert payload["assets"]["msa"]["county_memberships"] == ["census_msa_2023"]
+        assert payload["assets"]["msa"]["boundaries"] == ["census_msa_2023"]
         assert payload["assets"]["msa"]["complete_versions"] == ["census_msa_2023"]
+        assert payload["assets"]["msa"]["fully_materialized_versions"] == ["census_msa_2023"]
         assert payload["assets"]["acs"]["count"] == 1
         assert payload["assets"]["measures"]["count"] == 1
         assert payload["assets"]["zori"]["count"] == 1
@@ -285,6 +291,7 @@ class TestStatusJSON:
             "Run: hhplab generate msa --definition-version census_msa_2023 --force"
             == msa_issues[0]["hint"]
         )
+        assert any("missing boundary polygon" in issue["message"].lower() for issue in msa_issues)
 
 
 class TestStatusBuilds:

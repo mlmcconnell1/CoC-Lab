@@ -136,6 +136,7 @@ def _scan_msa(curated: Path) -> dict:
     mdir = curated / "msa"
     definitions: list[str] = []
     county_memberships: list[str] = []
+    boundaries: list[str] = []
     if mdir.exists():
         for p in sorted(mdir.glob("*.parquet")):
             m = re.match(r"^msa_definitions__(\w+)\.parquet$", p.name)
@@ -145,11 +146,18 @@ def _scan_msa(curated: Path) -> dict:
             m = re.match(r"^msa_county_membership__(\w+)\.parquet$", p.name)
             if m:
                 county_memberships.append(m.group(1))
+                continue
+            m = re.match(r"^msa_boundaries__(\w+)\.parquet$", p.name)
+            if m:
+                boundaries.append(m.group(1))
     complete_versions = sorted(set(definitions) & set(county_memberships))
+    fully_materialized_versions = sorted(set(complete_versions) & set(boundaries))
     return {
         "definitions": definitions,
         "county_memberships": county_memberships,
+        "boundaries": boundaries,
         "complete_versions": complete_versions,
+        "fully_materialized_versions": fully_materialized_versions,
     }
 
 
@@ -284,8 +292,11 @@ def _check_prerequisites(assets: dict) -> list[dict]:
     msa = assets["msa"]
     definition_set = set(msa["definitions"])
     membership_set = set(msa["county_memberships"])
+    boundary_set = set(msa["boundaries"])
     missing_membership = sorted(definition_set - membership_set)
     missing_definitions = sorted(membership_set - definition_set)
+    missing_boundaries = sorted(definition_set - boundary_set)
+    orphan_boundaries = sorted(boundary_set - definition_set)
     for version in missing_membership:
         issues.append({
             "severity": "warning",
@@ -301,6 +312,24 @@ def _check_prerequisites(assets: dict) -> list[dict]:
             "area": "msa",
             "message": (
                 f"MSA county membership version '{version}' is missing definitions artifacts."
+            ),
+            "hint": f"Run: hhplab generate msa --definition-version {version} --force",
+        })
+    for version in missing_boundaries:
+        issues.append({
+            "severity": "warning",
+            "area": "msa",
+            "message": (
+                f"MSA definition version '{version}' is missing boundary polygon artifacts."
+            ),
+            "hint": f"Run: hhplab ingest msa-boundaries --definition-version {version} --force",
+        })
+    for version in orphan_boundaries:
+        issues.append({
+            "severity": "warning",
+            "area": "msa",
+            "message": (
+                f"MSA boundary version '{version}' is missing definitions artifacts."
             ),
             "hint": f"Run: hhplab generate msa --definition-version {version} --force",
         })
@@ -416,6 +445,11 @@ def status_cmd(
         "MSA Artifacts: "
         f"{len(msa['complete_versions'])} complete version(s)  "
         f"{', '.join(msa['complete_versions']) if msa['complete_versions'] else '-'}"
+    )
+    typer.echo(
+        "MSA Boundaries: "
+        f"{len(msa['boundaries'])} version(s)  "
+        f"{', '.join(msa['boundaries']) if msa['boundaries'] else '-'}"
     )
 
     # ACS

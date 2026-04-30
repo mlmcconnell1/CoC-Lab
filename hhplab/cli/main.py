@@ -25,6 +25,7 @@ from hhplab.cli.ingest_acs1_metro import ingest_acs1_metro
 from hhplab.cli.ingest_acs_population import ingest_acs_population
 from hhplab.cli.ingest_census import ingest_tiger
 from hhplab.cli.ingest_laus_metro import ingest_laus_metro
+from hhplab.cli.ingest_msa_boundaries import ingest_msa_boundaries
 from hhplab.cli.ingest_nhgis import ingest_nhgis
 from hhplab.cli.ingest_pit import ingest_pit
 from hhplab.cli.ingest_pit_vintage import ingest_pit_vintage
@@ -47,6 +48,7 @@ from hhplab.cli.registry_rebuild import registry_rebuild
 from hhplab.cli.show_measures import show_measures
 from hhplab.cli.status import status_cmd
 from hhplab.cli.validate_curated import validate_curated_layout_cmd
+from hhplab.cli.validate_msa import validate_msa
 from hhplab.cli.zori import (
     ingest_zori,
     zori_diagnostics,
@@ -682,6 +684,7 @@ ingest_app.command("acs1-metro")(ingest_acs1_metro)
 ingest_app.command("laus-metro")(ingest_laus_metro)
 ingest_app.command("acs5-tract")(ingest_acs_population)
 ingest_app.command("boundaries")(ingest_boundaries)
+ingest_app.command("msa-boundaries")(ingest_msa_boundaries)
 ingest_app.command("tiger")(ingest_tiger)
 ingest_app.command("nhgis")(ingest_nhgis)
 ingest_app.command("pit")(ingest_pit)
@@ -695,6 +698,7 @@ list_app.command("curated")(list_curated)
 list_app.command("measures")(list_measures)
 list_app.command("xwalks")(list_xwalks)
 validate_app.command("boundaries")(validate_boundaries)
+validate_app.command("msa")(validate_msa)
 validate_app.command("pit-vintages")(validate_pit_vintages)
 validate_app.command("population")(validate_population)
 validate_app.command("curated-layout")(validate_curated_layout_cmd)

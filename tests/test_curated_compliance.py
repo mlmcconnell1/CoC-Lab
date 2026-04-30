@@ -49,6 +49,7 @@ def _build_clean_curated(base: Path) -> None:
         "pit": "pit_vintage__P2024.parquet",
         "panel": "panel__Y2015-2024@B2025.parquet",
         "metro": "metro_definitions__glynn_fox_v1.parquet",
+        "msa": "msa_boundaries__census_msa_2023.parquet",
         "maps": "CO-500__2025.html",
     }
     for subdir, filename in canonical_examples.items():
@@ -153,6 +154,7 @@ class TestCanonicalFilenamesAccepted:
             ("metro", "metro_definitions__glynn_fox_v1.parquet"),
             ("metro", "metro_coc_membership__glynn_fox_v1.parquet"),
             ("metro", "metro_county_membership__glynn_fox_v1.parquet"),
+            ("msa", "msa_boundaries__census_msa_2023.parquet"),
             ("maps", "CO-500__2025.html"),
         ],
     )

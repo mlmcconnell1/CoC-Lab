@@ -2,6 +2,8 @@
 
 from hhplab.naming import (
     geo_panel_filename,
+    msa_boundaries_filename,
+    msa_boundaries_path,
     msa_pit_filename,
     msa_coc_xwalk_filename,
     msa_coc_xwalk_path,
@@ -26,6 +28,13 @@ def test_msa_county_membership_filename():
     )
 
 
+def test_msa_boundaries_filename():
+    assert (
+        msa_boundaries_filename("census_msa_2023")
+        == "msa_boundaries__census_msa_2023.parquet"
+    )
+
+
 def test_msa_definitions_path():
     assert str(msa_definitions_path("census_msa_2023")).endswith(
         "data/curated/msa/msa_definitions__census_msa_2023.parquet"
@@ -35,6 +44,12 @@ def test_msa_definitions_path():
 def test_msa_county_membership_path():
     assert str(msa_county_membership_path("census_msa_2023")).endswith(
         "data/curated/msa/msa_county_membership__census_msa_2023.parquet"
+    )
+
+
+def test_msa_boundaries_path():
+    assert str(msa_boundaries_path("census_msa_2023")).endswith(
+        "data/curated/msa/msa_boundaries__census_msa_2023.parquet"
     )
 
 

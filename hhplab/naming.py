@@ -1120,6 +1120,14 @@ def msa_county_membership_filename(definition_version: str) -> str:
     return f"msa_county_membership__{definition_version}.parquet"
 
 
+def msa_boundaries_filename(definition_version: str) -> str:
+    """Filename for curated MSA boundary polygons.
+
+    Pattern: ``msa_boundaries__{version}.parquet``.
+    """
+    return f"msa_boundaries__{definition_version}.parquet"
+
+
 # =============================================================================
 # MSA definition artifact paths
 # =============================================================================
@@ -1152,6 +1160,21 @@ def msa_county_membership_path(
     return (
         base_dir / "curated" / "msa"
         / msa_county_membership_filename(definition_version)
+    )
+
+
+def msa_boundaries_path(
+    definition_version: str,
+    base_dir: Path | str | None = None,
+) -> Path:
+    """Canonical path for curated MSA boundary polygons."""
+    if base_dir is None:
+        base_dir = Path("data")
+    else:
+        base_dir = Path(base_dir)
+    return (
+        base_dir / "curated" / "msa"
+        / msa_boundaries_filename(definition_version)
     )
 
 
