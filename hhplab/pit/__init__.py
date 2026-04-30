@@ -28,6 +28,7 @@ from hhplab.pit.ingest import (
     parse_pit_vintage,
     write_pit_parquet,
 )
+from hhplab.pit.msa import aggregate_pit_to_msa, save_msa_pit
 from hhplab.pit.metro import aggregate_pit_to_metro
 from hhplab.pit.qa import QAReport, QAIssue, Severity, validate_pit_data
 from hhplab.pit.registry import (
@@ -50,6 +51,7 @@ __all__ = [
     "QAIssue",
     "Severity",
     "aggregate_pit_to_metro",
+    "aggregate_pit_to_msa",
     "check_pit_availability",
     "PitRegistryEntry",
     "compute_file_hash",
@@ -69,4 +71,5 @@ __all__ = [
     "register_pit_year",
     "validate_pit_data",
     "write_pit_parquet",
+    "save_msa_pit",
 ]

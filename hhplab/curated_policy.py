@@ -88,6 +88,7 @@ CANONICAL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
     "pit": [
         re.compile(r"^pit__P\d{4}(@B\d{4})?\.parquet$"),
         re.compile(r"^pit__metro__P\d{4}@D\w+\.parquet$"),
+        re.compile(r"^pit__msa__P\d{4}@M\w+xB\d{4}xC\d{4}\.parquet$"),
         re.compile(r"^pit_vintage__P\d{4}\.parquet$"),
         re.compile(r"^pit_vintage_registry\.parquet$"),
         re.compile(r"^pit_registry\.parquet$"),

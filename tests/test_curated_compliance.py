@@ -136,6 +136,7 @@ class TestCanonicalFilenamesAccepted:
             ("pep", "coc_pep__B2024xC2024__warea_share__2010_2024.parquet"),
             ("pit", "pit__P2024.parquet"),
             ("pit", "pit__P2024@B2024.parquet"),
+            ("pit", "pit__msa__P2024@Mcensusmsa2023xB2024xC2024.parquet"),
             ("pit", "pit_vintage__P2024.parquet"),
             ("pit", "pit_vintage_registry.parquet"),
             ("pit", "pit_registry.parquet"),

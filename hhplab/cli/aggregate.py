@@ -415,33 +415,62 @@ def aggregate_pit(
             help="Year spec (e.g. '2018-2024'). Required when --build is omitted.",
         ),
     ] = None,
+    geo_type: Annotated[
+        str,
+        typer.Option(
+            "--geo-type",
+            help="Target analysis geography. One of: coc, msa.",
+        ),
+    ] = "coc",
+    definition_version: Annotated[
+        str,
+        typer.Option(
+            "--definition-version",
+            help="MSA definition version to use when --geo-type=msa.",
+        ),
+    ] = "census_msa_2023",
+    counties: Annotated[
+        int | None,
+        typer.Option(
+            "--counties",
+            help="County geometry vintage for the CoC-to-MSA crosswalk. Defaults to the PIT year.",
+        ),
+    ] = None,
 ) -> None:
-    """Aggregate PIT counts into build-scoped CoC artifacts.
+    """Aggregate PIT counts into build-scoped CoC or MSA artifacts.
 
     PIT data already contains coc_id, so this command filters and
     aligns PIT count data to the build's year scope.  Produces one
-    output file per boundary year for downstream panel assembly.
+    output file per year for downstream panel assembly.
     """
     build_dir: Path | None = _validate_build(build) if build else None
     _validate_align(align, PIT_ALIGN_MODES, "pit")
     parsed_years = _resolve_years(years, build_dir)
+    if geo_type not in {"coc", "msa"}:
+        typer.echo(
+            "Error: --geo-type must be one of: coc, msa",
+            err=True,
+        )
+        raise typer.Exit(2)
 
     curated_dir = build_curated_dir(build_dir) if build_dir else curated_root()
     output_dir = curated_dir / "pit"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     label = f"build '{build}'" if build else "global curated"
-    typer.echo(f"Aggregating PIT to CoC ({label}, align '{align}')...")
+    target_label = "CoC" if geo_type == "coc" else "MSA"
+    typer.echo(f"Aggregating PIT to {target_label} ({label}, align '{align}')...")
     typer.echo(f"  Years: {parsed_years}")
-
-    import pandas as pd
 
     from hhplab.naming import (
         coc_pit_filename,
         discover_pit_vintages,
+        msa_pit_filename,
         pit_path,
         pit_vintage_path,
     )
+    from hhplab.pit import aggregate_pit_to_msa, save_msa_pit
+    from hhplab.msa import read_coc_msa_crosswalk
 
     # --- Load all available PIT data for requested years ---
     collected: dict[int, pd.DataFrame] = {}
@@ -506,9 +535,51 @@ def aggregate_pit(
     all_outputs: list[str] = []
     for year in sorted(collected):
         df = collected[year]
-        out_name = coc_pit_filename(year, year)
-        out_path = output_dir / out_name
-        df.to_parquet(out_path, index=False)
+        if geo_type == "coc":
+            out_name = coc_pit_filename(year, year)
+            out_path = output_dir / out_name
+            df.to_parquet(out_path, index=False)
+        else:
+            boundary_vintage = str(year)
+            county_vintage = str(counties if counties is not None else year)
+            try:
+                crosswalk = read_coc_msa_crosswalk(
+                    boundary_vintage,
+                    definition_version,
+                    county_vintage,
+                )
+            except FileNotFoundError as exc:
+                typer.echo(f"Error: {exc}", err=True)
+                raise typer.Exit(1) from exc
+
+            try:
+                msa_df = aggregate_pit_to_msa(
+                    df,
+                    crosswalk,
+                    definition_version=definition_version,
+                    boundary_vintage=boundary_vintage,
+                    county_vintage=county_vintage,
+                )
+            except ValueError as exc:
+                typer.echo(f"Error: {exc}", err=True)
+                raise typer.Exit(1) from exc
+
+            out_name = msa_pit_filename(
+                year,
+                definition_version,
+                boundary_vintage,
+                county_vintage,
+            )
+            out_path = output_dir / out_name
+            save_msa_pit(
+                msa_df,
+                pit_year=year,
+                definition_version=definition_version,
+                boundary_vintage=boundary_vintage,
+                county_vintage=county_vintage,
+                output_dir=output_dir,
+            )
+
         all_outputs.append(
             out_path.relative_to(build_dir).as_posix()
             if build_dir and out_path.is_relative_to(build_dir) else str(out_path)
@@ -517,13 +588,19 @@ def aggregate_pit(
     materialized = sorted(int(k) for k in collected.keys())
     total_records = sum(len(df) for df in collected.values())
     sample_df = next(iter(collected.values()))
-    coc_count = sample_df["coc_id"].nunique() if "coc_id" in sample_df.columns else "n/a"
+    source_coc_count = sample_df["coc_id"].nunique() if "coc_id" in sample_df.columns else "n/a"
     typer.echo(f"Wrote PIT aggregate: {len(materialized)} files to {output_dir}")
-    typer.echo(f"  CoCs: {coc_count}, Records: {total_records:,}")
+    if geo_type == "coc":
+        typer.echo(f"  CoCs: {source_coc_count}, Records: {total_records:,}")
+    else:
+        typer.echo(
+            f"  Source CoCs: {source_coc_count}, Records: {total_records:,}, "
+            f"MSA definition: {definition_version}"
+        )
 
     _maybe_record_run(
         build_dir,
-        dataset="pit",
+        dataset="pit" if geo_type == "coc" else "pit_msa",
         alignment=align,
         years_requested=parsed_years,
         years_materialized=materialized,

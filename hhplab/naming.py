@@ -851,6 +851,23 @@ def metro_pit_filename(
     return f"pit__metro__P{pit_year}@D{defn}.parquet"
 
 
+def msa_pit_filename(
+    pit_year: str | int,
+    definition_version: str,
+    boundary_vintage: str | int,
+    county_vintage: str | int,
+) -> str:
+    """Generate filename for MSA-scoped PIT aggregate.
+
+    Pattern: ``pit__msa__P{year}@M{def}xB{boundary}xC{county}.parquet``
+    """
+    defn = _normalize_definition_version(definition_version)
+    return (
+        f"pit__msa__P{pit_year}@M{defn}"
+        f"xB{boundary_vintage}xC{county_vintage}.parquet"
+    )
+
+
 def metro_pep_filename(
     definition_version: str,
     county_vintage: int | str,

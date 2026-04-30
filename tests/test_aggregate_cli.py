@@ -495,3 +495,122 @@ def test_aggregate_pit_vintage_partial_coverage(tmp_path):
     assert result.exit_code == 0
     assert "Using vintage P2021" in result.output
     assert "PIT data missing for years: [2025]" in result.output
+
+
+def test_aggregate_pit_to_msa_materializes_weighted_outputs(tmp_path):
+    """MSA PIT aggregate should use the stored CoC-to-MSA crosswalk."""
+    import os
+
+    import pandas as pd
+
+    from hhplab.naming import msa_coc_xwalk_filename, msa_pit_filename
+
+    _create_build_at(tmp_path, years=[2020])
+
+    pit_dir = tmp_path / "data" / "curated" / "pit"
+    xwalk_dir = tmp_path / "data" / "curated" / "xwalks"
+    pit_dir.mkdir(parents=True)
+    xwalk_dir.mkdir(parents=True)
+
+    pd.DataFrame(
+        {
+            "coc_id": ["CO-100", "CO-200", "CO-300"],
+            "pit_year": [2020, 2020, 2020],
+            "pit_total": [100.0, 80.0, 60.0],
+            "pit_sheltered": [60.0, 40.0, 30.0],
+            "pit_unsheltered": [40.0, 40.0, 30.0],
+        }
+    ).to_parquet(pit_dir / "pit__P2020.parquet", index=False)
+
+    pd.DataFrame(
+        {
+            "coc_id": ["CO-100", "CO-200", "CO-200", "CO-300"],
+            "msa_id": ["35620", "35620", "41180", "41180"],
+            "cbsa_code": ["35620", "35620", "41180", "41180"],
+            "boundary_vintage": ["2020"] * 4,
+            "county_vintage": ["2020"] * 4,
+            "definition_version": ["census_msa_2023"] * 4,
+            "allocation_method": ["area"] * 4,
+            "share_column": ["allocation_share"] * 4,
+            "allocation_share": [1.0, 0.5, 0.5, 1.0],
+        }
+    ).to_parquet(
+        xwalk_dir / msa_coc_xwalk_filename("2020", "census_msa_2023", 2020),
+        index=False,
+    )
+
+    old_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+        result = runner.invoke(
+            app,
+            [
+                "aggregate",
+                "pit",
+                "--build",
+                "test_build",
+                "--geo-type",
+                "msa",
+                "--definition-version",
+                "census_msa_2023",
+                "--counties",
+                "2020",
+            ],
+            catch_exceptions=False,
+        )
+    finally:
+        os.chdir(old_cwd)
+
+    assert result.exit_code == 0
+    assert "Aggregating PIT to MSA" in result.output
+    out_dir = tmp_path / "builds" / "test_build" / "data" / "curated" / "pit"
+    out_file = out_dir / msa_pit_filename(2020, "census_msa_2023", 2020, 2020)
+    assert out_file.exists()
+
+    msa_df = pd.read_parquet(out_file).sort_values("msa_id").reset_index(drop=True)
+    assert list(msa_df["msa_id"]) == ["35620", "41180"]
+    assert list(msa_df["pit_total"].astype(float)) == pytest.approx([140.0, 100.0])
+
+
+def test_aggregate_pit_to_msa_missing_crosswalk_is_actionable(tmp_path):
+    """MSA PIT aggregate should report the exact missing crosswalk command."""
+    import os
+
+    import pandas as pd
+
+    _create_build_at(tmp_path, years=[2020])
+
+    pit_dir = tmp_path / "data" / "curated" / "pit"
+    pit_dir.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "coc_id": ["CO-100"],
+            "pit_year": [2020],
+            "pit_total": [100.0],
+        }
+    ).to_parquet(pit_dir / "pit__P2020.parquet", index=False)
+
+    old_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+        result = runner.invoke(
+            app,
+            [
+                "aggregate",
+                "pit",
+                "--build",
+                "test_build",
+                "--geo-type",
+                "msa",
+                "--definition-version",
+                "census_msa_2023",
+                "--counties",
+                "2020",
+            ],
+            catch_exceptions=False,
+        )
+    finally:
+        os.chdir(old_cwd)
+
+    assert result.exit_code == 1
+    assert "generate msa-xwalk --boundary 2020 --definition-version census_msa_2023 --counties 2020" in result.output
