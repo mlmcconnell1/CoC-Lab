@@ -3,10 +3,10 @@
 These recipes are intended to be runnable, high-signal examples for future
 users. Together they cover the current recipe surface:
 
-- CoC and metro targets
+- CoC, metro, and MSA targets
 - PIT, ACS5 tract inputs, PEP county inputs, ZORI county inputs, and ACS1 metro inputs
 - Identity and aggregate resampling
-- CoC crosswalks and generated metro transforms
+- CoC crosswalks and generated metro/MSA transforms
 - `file_set`-driven year/geometry switching
 - Point-in-time and calendar-mean temporal filters
 
@@ -42,6 +42,17 @@ the output downstream.
 - `metro-glynnfox-pit-pep-acs1-2023.yaml`
   One-year metro panel showing ACS1 metro-native identity resampling alongside
   PIT and PEP.
+- `msa-census-pit-acs-pep-2020-2021.yaml`
+  Census MSA panel that uses CoC-native PIT allocated through the generated
+  CoC-to-MSA crosswalk, plus county PEP and lagged ACS5 tract measures.
+
+## Geography Notes
+
+- Use `metro` for the custom Glynn/Fox metro definition.
+- Use `msa` for official Census delineations keyed by `msa_id` / CBSA code.
+- MSA PIT values are derived from the stored CoC-to-MSA crosswalk rather than
+  published natively by HUD. See [background/msa_geography.md](../../background/msa_geography.md)
+  for the allocation rule and prerequisites.
 
 ## Suggested Commands
 

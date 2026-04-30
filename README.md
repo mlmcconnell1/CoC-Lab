@@ -2,12 +2,17 @@
 
 HHP-Lab is a Python toolkit and CLI for building analysis-ready homelessness panels from HUD Continuum of Care data, Census geography and population products, ACS tract measures, and Zillow rent data.
 
-The project started as CoC boundary infrastructure, but it now supports two analysis geography families:
+The project started as CoC boundary infrastructure, but it now supports three
+analysis geography families:
 
 - `coc`: HUD Continuum of Care geographies with explicit boundary vintages
 - `metro`: synthetic researcher-defined metro geographies keyed by a `definition_version`
+- `msa`: Census Metropolitan Statistical Areas keyed by 5-digit CBSA/MSA identifiers plus a delineation `definition_version`
 
-The current metro implementation includes the 25 Glynn/Fox metros from *Dynamics of Homelessness in Urban America* via `glynn_fox_v1`.
+The current `metro` implementation includes the 25 Glynn/Fox metros from
+*Dynamics of Homelessness in Urban America* via `glynn_fox_v1`. The `msa`
+surface is separate and uses official Census delineations such as
+`census_msa_2023`.
 
 Full operational documentation lives in [manual-obsidian/HHP-Lab-Manual.md](manual-obsidian/HHP-Lab-Manual.md).
 
@@ -116,9 +121,24 @@ Most recipe builds consume curated source artifacts directly. Use the
 `aggregate` command group only when you want standalone CoC aggregate
 artifacts or when a specific recipe explicitly points at those outputs.
 
-## Metro Geography Support
+## Analysis Geography Support
 
-Metro support is a first-class part of the analysis model. The repository includes ready-made recipe examples in [recipes/metro25-glynnfox.yaml](recipes/metro25-glynnfox.yaml) and [recipes/metro25-glynnfox-acs1.yaml](recipes/metro25-glynnfox-acs1.yaml).
+Use the three geography families differently:
+
+| Geography | Choose it when | Primary identifier | Common artifact family |
+| --- | --- | --- | --- |
+| `coc` | You want official HUD CoC units with explicit boundary vintages. | `coc_id` | `coc__B...`, `panel__Y...@B...` |
+| `metro` | You want the project’s custom Glynn/Fox metros. | `metro_id` + `definition_version` | `metro_definitions__...`, `panel__metro__...` |
+| `msa` | You want official Census MSAs / CBSAs. | `msa_id` + `definition_version` | `msa_definitions__...`, `pit__msa__...`, `panel__msa__...` |
+
+`metro` and `msa` are intentionally separate. A custom metro recipe should use
+`metro_id`; a Census MSA recipe should use `msa_id`. Do not treat one as a
+renamed version of the other.
+
+The repository includes committed examples for all three surfaces under
+[recipes/examples](recipes/examples/README.md). For the MSA-specific workflow,
+see [background/msa_geography.md](background/msa_geography.md) and
+[recipes/examples/msa-census-pit-acs-pep-2020-2021.yaml](recipes/examples/msa-census-pit-acs-pep-2020-2021.yaml).
 
 ## Project Layout
 

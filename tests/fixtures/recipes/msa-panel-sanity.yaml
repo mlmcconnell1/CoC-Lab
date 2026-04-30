@@ -1,0 +1,124 @@
+version: 1
+name: msa-panel-sanity
+description: >
+  Minimal synthetic Census MSA panel recipe fixture for contract tests against
+  persisted parquet output and generated MSA transforms.
+
+universe:
+  range: "2020-2021"
+
+targets:
+  - id: msa_panel
+    geometry: { type: msa, source: census_msa_2023 }
+    outputs: [panel]
+
+datasets:
+  pit:
+    provider: hud
+    product: pit
+    version: 1
+    native_geometry: { type: coc }
+    years: "2020-2021"
+    year_column: pit_year
+    geo_column: coc_id
+    path: data/curated/pit/pit_vintage__P2024.parquet
+
+  pep_county:
+    provider: census
+    product: pep
+    version: 1
+    native_geometry: { type: county, vintage: 2020 }
+    years: "2020-2021"
+    year_column: year
+    geo_column: county_fips
+    path: data/curated/pep/pep_county__v2020.parquet
+
+  acs_tract:
+    provider: census
+    product: acs5
+    version: 1
+    native_geometry: { type: tract }
+    geo_column: tract_geoid
+    file_set:
+      path_template: "data/curated/acs/acs5_tracts__A{acs_end}xT{tract}.parquet"
+      segments:
+        - years: "2020-2020"
+          geometry: { type: tract, vintage: 2010 }
+          constants: { tract: 2010 }
+          year_offsets: { acs_end: -1 }
+        - years: "2021-2021"
+          geometry: { type: tract, vintage: 2020 }
+          constants: { tract: 2020 }
+          year_offsets: { acs_end: -1 }
+
+transforms:
+  - id: coc_to_msa
+    type: crosswalk
+    from: { type: coc, vintage: 2020 }
+    to: { type: msa, source: census_msa_2023 }
+    spec:
+      weighting:
+        scheme: area
+
+  - id: county_to_msa
+    type: crosswalk
+    from: { type: county, vintage: 2020 }
+    to: { type: msa, source: census_msa_2023 }
+    spec:
+      weighting:
+        scheme: area
+
+  - id: tract_to_msa_2010
+    type: crosswalk
+    from: { type: tract, vintage: 2010 }
+    to: { type: msa, source: census_msa_2023 }
+    spec:
+      weighting:
+        scheme: area
+
+  - id: tract_to_msa_2020
+    type: crosswalk
+    from: { type: tract, vintage: 2020 }
+    to: { type: msa, source: census_msa_2023 }
+    spec:
+      weighting:
+        scheme: area
+
+pipelines:
+  - id: build_msa_panel
+    target: msa_panel
+    steps:
+      - materialize:
+          transforms: [coc_to_msa, county_to_msa, tract_to_msa_2010, tract_to_msa_2020]
+
+      - resample:
+          dataset: pit
+          to_geometry: { type: msa, source: census_msa_2023 }
+          method: aggregate
+          via: coc_to_msa
+          measures: [pit_total, pit_sheltered, pit_unsheltered]
+          aggregation: sum
+
+      - resample:
+          dataset: pep_county
+          to_geometry: { type: msa, source: census_msa_2023 }
+          method: aggregate
+          via: county_to_msa
+          measures: [population]
+          aggregation: sum
+
+      - resample:
+          dataset: acs_tract
+          to_geometry: { type: msa, source: census_msa_2023 }
+          method: aggregate
+          via: auto
+          measures:
+            total_population: { aggregation: sum }
+            adult_population: { aggregation: sum }
+            population_below_poverty: { aggregation: sum }
+            median_household_income: { aggregation: weighted_mean }
+            median_gross_rent: { aggregation: weighted_mean }
+
+      - join:
+          datasets: [pit, pep_county, acs_tract]
+          join_on: [geo_id, year]

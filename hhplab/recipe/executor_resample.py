@@ -215,9 +215,18 @@ def _resample_aggregate(
             f"Crosswalk columns: {sorted(xwalk.columns)}"
         )
 
-    if "area_share" not in xwalk.columns:
+    base_weight_col = "area_share"
+    if base_weight_col not in xwalk.columns:
+        declared_weight_col = (
+            str(xwalk["share_column"].dropna().iloc[0])
+            if "share_column" in xwalk.columns and xwalk["share_column"].notna().any()
+            else None
+        )
+        if declared_weight_col is not None and declared_weight_col in xwalk.columns:
+            base_weight_col = declared_weight_col
+    if base_weight_col not in xwalk.columns:
         raise ExecutorError(
-            "Crosswalk missing weight column 'area_share'. "
+            "Crosswalk missing weight column for aggregate resampling. "
             f"Available: {sorted(xwalk.columns)}"
         )
     has_pop_share = "pop_share" in xwalk.columns and xwalk["pop_share"].notna().any()
@@ -226,7 +235,7 @@ def _resample_aggregate(
     target_col = _detect_xwalk_target_col(xwalk, xwalk_key)
 
     # Merge dataset with crosswalk
-    xwalk_cols = [target_col, xwalk_key, "area_share"]
+    xwalk_cols = [target_col, xwalk_key, base_weight_col]
     if "pop_share" in xwalk.columns:
         xwalk_cols.append("pop_share")
     merged = df.merge(
@@ -259,7 +268,7 @@ def _resample_aggregate(
                 f"{lost} non-numeric value(s) in measure '{m}' coerced to NaN.",
                 stacklevel=2,
             )
-    merged["area_share"] = merged["area_share"].astype("float64")
+    merged[base_weight_col] = merged[base_weight_col].astype("float64")
     if "pop_share" in merged.columns:
         merged["pop_share"] = pd.to_numeric(merged["pop_share"], errors="coerce").astype("float64")
 
@@ -274,12 +283,12 @@ def _resample_aggregate(
         if agg == "sum":
             part = merged.copy()
             for m in measures:
-                part[m] = part[m] * part["area_share"]
+                part[m] = part[m] * part[base_weight_col]
             result_parts.append(part.groupby(target_col)[measures].sum().reset_index())
         elif agg == "mean":
             result_parts.append(merged.groupby(target_col)[measures].mean().reset_index())
         elif agg == "weighted_mean":
-            weight_col = "pop_share" if has_pop_share else "area_share"
+            weight_col = "pop_share" if has_pop_share else base_weight_col
             rows = []
             for geo_id, group in merged.groupby(target_col):
                 w = group[weight_col].values

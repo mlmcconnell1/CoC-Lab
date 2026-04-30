@@ -78,6 +78,14 @@ EXAMPLE_RECIPE_CASES: tuple[ExampleRecipeCase, ...] = (
         years=(2023,),
         datasets=("pit", "pep_county", "acs1_metro"),
     ),
+    ExampleRecipeCase(
+        path="msa-census-pit-acs-pep-2020-2021.yaml",
+        pipeline_id="build_msa_panel",
+        recipe_name="msa_census_pit_acs_pep_2020_2021",
+        target_type="msa",
+        years=(2020, 2021),
+        datasets=("pit", "pep_county", "acs_tract"),
+    ),
 )
 
 
@@ -104,6 +112,15 @@ AUTO_TRANSFORM_EXPECTATIONS: tuple[tuple[str, str, str, dict[int, str]], ...] = 
         {
             2016: "tract_to_metro_2010", 2020: "tract_to_metro_2010",
             2021: "tract_to_metro_2020", 2024: "tract_to_metro_2020",
+        },
+    ),
+    (
+        "msa-census-pit-acs-pep-2020-2021.yaml",
+        "build_msa_panel",
+        "acs_tract",
+        {
+            2020: "tract_to_msa_2010",
+            2021: "tract_to_msa_2020",
         },
     ),
 )

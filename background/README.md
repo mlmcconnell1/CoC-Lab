@@ -4,6 +4,9 @@ This directory now keeps only active planning references and a compact legacy su
 
 ## Active
 
+- `msa_geography.md`
+  - Contributor-facing guide to `coc` vs `metro` vs `msa`, MSA artifact
+    families, and the CoC-to-MSA PIT allocation method.
 - `coclab_build_aggregate_spec.md`
   - Accepted v1 spec for the new build-scope + explicit aggregate command model.
 - `temporal-terminology.md`

@@ -297,6 +297,8 @@ def _resolve_msa_transform_df(
                 "MSA CoC transforms require a CoC boundary vintage so the executor "
                 "can build the CoC-to-MSA allocation crosswalk."
             )
+        import geopandas as gpd
+
         boundary_vintage = str(base_ref.vintage)
         county_vintage = boundary_vintage
         cached_path = msa_coc_xwalk_path(
@@ -308,8 +310,8 @@ def _resolve_msa_transform_df(
         if cached_path.exists():
             return pd.read_parquet(cached_path)
 
-        coc_boundaries = pd.read_parquet(coc_base_path(boundary_vintage, data_root))
-        counties = pd.read_parquet(county_path(county_vintage, data_root))
+        coc_boundaries = gpd.read_parquet(coc_base_path(boundary_vintage, data_root))
+        counties = gpd.read_parquet(county_path(county_vintage, data_root))
         membership = read_msa_county_membership(
             definition_version=definition_version,
             base_dir=data_root,
