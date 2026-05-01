@@ -23,3 +23,161 @@
 {"id":"el:file-generate-metro-boundaries-py-v4vhvgzqvpw7","summary":"Adds the hhplab generate metro-boundaries CLI entrypoint, enforcing explicit county-vintage selection, force semantics, and structured JSON output for the materialized metro boundary artifact.","ai":{"architectural_layer":"cli","confidence":0.96}}
 {"id":"el:file-validate-metro-py-5e91jm3gdrsh","summary":"Adds hhplab validate metro, combining metro definition-table checks with county-vintage-specific metro boundary validation and JSON-friendly failure reporting.","ai":{"architectural_layer":"cli","confidence":0.96}}
 {"id":"el:file-test-generate-metro-boundaries-py-vp5dhx4b0c31","summary":"Exercises the metro boundary generation and validation CLI surfaces with JSON output assertions, complementing renderer tests that now require materialized metro polygons instead of runtime dissolves.","ai":{"architectural_layer":"tests","confidence":0.95}}
+{"id":"el:file-acs-py-8651wp3b3bpt","summary":"Compatibility wrappers for ACS-owned metro aggregation helpers.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-adapters-py-cgtkd8qgbnrb","summary":"Runtime adapter registries for recipe semantic validation.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-aggregate-py-29mb385kg307","summary":"ACS measure builders for CoC-level and metro-level statistics.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-aggregate-py-9mkgb2eht7t3","summary":"CLI command group for aggregating source datasets into standalone CoC artifacts.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-aggregate-py-sggnt55sy41b","summary":"Aggregate PEP county population estimates to CoC boundaries.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-aggregate-py-w52ecwt0a25c","summary":"ZORI aggregation from county to CoC geography.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-analysis-geo-py-4030fe771d27","summary":"Analysis geography model for HHP-Lab.","ai":{"architectural_layer":"analytics","confidence":0.95}}
+{"id":"el:file-assemble-py-ssc2enr0wtjz","summary":"Panel assembly engine for HHP-Lab Phase 3.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-audit-panels-py-3wcnzn68yx6b","summary":"Frozen panel builder for the Glynn-Fox claims audit.","ai":{"architectural_layer":"analytics","confidence":0.95}}
+{"id":"el:file-bls-laus-py-h6xnjeg3s40h","summary":"BLS LAUS yearly metro ingest.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:file-build-xwalks-py-031s703fgx0z","summary":"CLI command for building CoC crosswalks.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-builds-py-w8yzty9rw8d0","summary":"Helpers for named build directories.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-cache-py-amqrcmvcfa4m","summary":"Recipe-level asset caching.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-compare-vintages-py-cfsptmwfj1a3","summary":"CLI command for comparing CoC boundaries between two vintages.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-config-py-9xzmjy0khn6w","summary":"Runtime configuration with layered precedence for storage roots.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-conformance-py-gwcd1vqzkwnt","summary":"Post-build conformance report infrastructure for HHP-Lab panels.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-county-py-azqav6780e2d","summary":"Area-weighted county crosswalk generation.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-crosscheck-pit-vintages-py-40qfh858ay5m","summary":"CLI command for validating PIT counts between two vintage releases.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-crosscheck-population-py-139jfkryngw8","summary":"CLI command for validating population totals from crosswalk aggregation.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-ct-planning-regions-py-gken2hz02s1d","summary":"Connecticut planning region helper utilities.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-curated-migrate-py-bpkp09zzn8w0","summary":"Curated data migration utility for rename and dedupe.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-curated-policy-py-nbx7ypr2gx4y","summary":"Curated data layout policy enforcement.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-default-adapters-py-g0q81n1hsgkc","summary":"Bootstrap built-in recipe adapters.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-default-dataset-adapters-py-mw8fccae9jyd","summary":"Built-in dataset adapters for recipe validation.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-default-geometry-adapters-py-a45jbk9am5da","summary":"Built-in geometry adapters for recipe validation.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-definitions-py-y2s0n64fdqst","summary":"Authoritative Glynn/Fox metro definition data.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-diagnostics-py-23wex31qa4rb","summary":"Diagnostics and reporting for CoC-level ZORI data.","ai":{"architectural_layer":"analytics","confidence":0.95}}
+{"id":"el:file-diagnostics-py-4xgx8szkrre4","summary":"Attribution diagnostics and coverage reporting for crosswalks.","ai":{"architectural_layer":"analytics","confidence":0.95}}
+{"id":"el:file-diagnostics-py-7d9wygc9gwnx","summary":"Panel diagnostics and sensitivity checks for HHP-Lab Phase 3.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-diagnostics-py-crwt73ay6269","summary":"Diagnostics and reporting for CoC-level PEP population data.","ai":{"architectural_layer":"analytics","confidence":0.95}}
+{"id":"el:file-diagnostics-py-jck45vf2nazj","summary":"CLI command for running crosswalk quality diagnostics.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-executor-core-py-ppxr1r7yc0pn","summary":"Shared primitives for the recipe executor and its submodules.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-executor-ct-alignment-py-v4mxneq684d4","summary":"Connecticut planning-region → legacy-county alignment helpers.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-executor-inputs-py-8y7dnxrqw0pd","summary":"Dataset input preparation: column resolution, year filtering, temporal filters.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-executor-manifest-py-kk77xebr5m64","summary":"Manifest, provenance, and output-path helpers for recipe execution.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-executor-panel-policies-py-hbnjhmkngeda","summary":"Panel policy appliers: ZORI, ACS1, and BLS LAUS branches.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-executor-panel-py-v06gqsp40qav","summary":"Panel assembly from recipe execution intermediates.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-executor-persistence-py-bqwcq2hmsm7z","summary":"Parquet, manifest, and diagnostics persistence for recipe execution.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-executor-py-1h0ct30khqqk","summary":"Recipe execution orchestrator.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-executor-resample-py-8v03d6775y7s","summary":"Resample algorithms: identity, aggregate, allocate, and pop_share enrichment.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-executor-transforms-py-q108shqwd930","summary":"Transform artifact resolution helpers for recipe execution.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-finalize-py-qnkpwwgbh5yp","summary":"Shared panel finalization layer.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-generate-metro-py-agc3jq9ypzj4","summary":"CLI command for generating curated metro definition artifacts.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-hud-exchange-gis-py-35w9zgz5rbee","summary":"HUD Exchange CoC GIS Tools ingester.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:file-hud-exchange-py-wpv1xeq2smav","summary":"HUD User PIT data source discovery and download.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:file-hud-opendata-arcgis-py-ep02ve7bgqtm","summary":"HUD Open Data ArcGIS Hub ingester for CoC Grantee Areas.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:file-ingest-acs-population-py-2pgzcasky405","summary":"CLI command for ingesting ACS tract-level data.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-ingest-acs1-metro-py-ynvt7fqv64y9","summary":"CLI command for ingesting ACS 1-year metro-native unemployment data.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-ingest-census-py-dk06vjk1w7xj","summary":"CLI command for ingesting TIGER geometries.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-ingest-laus-metro-py-py0mfbccq2nr","summary":"CLI command for ingesting BLS LAUS yearly metro labor-market data.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-ingest-nhgis-py-xfv4fs8524nr","summary":"CLI command for ingesting NHGIS shapefiles (tracts and counties).","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-ingest-pit-py-34zm21en3v9y","summary":"CLI command for ingesting PIT (Point-in-Time) count data from HUD User.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-ingest-pit-vintage-py-gf06gp1v013h","summary":"CLI command for ingesting all years from a PIT vintage file.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-ingest-py-9bps0111fwf6","summary":"NHGIS tract shapefile ingestion via ipumspy.","ai":{"architectural_layer":"ingest","confidence":0.95}}
+{"id":"el:file-ingest-py-j1c854zsrxx5","summary":"PEP (Population Estimates Program) county-level data ingestion.","ai":{"architectural_layer":"ingest","confidence":0.95}}
+{"id":"el:file-ingest-py-t2fgnzzx9c5y","summary":"ZORI (Zillow Observed Rent Index) ingestion and normalization.","ai":{"architectural_layer":"ingest","confidence":0.95}}
+{"id":"el:file-ingest-tract-relationship-py-mjhkcz8yq2mp","summary":"CLI command for ingesting Census tract relationship file.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-init-py-09wpefhxzcwp","summary":"Panel assembly module for HHP-Lab Phase 3.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-init-py-1dp1yhb52cnd","summary":"PEP (Population Estimates Program) data ingestion and aggregation.","ai":{"architectural_layer":"ingest","confidence":0.95}}
+{"id":"el:file-init-py-1f6gm4p5nh78","summary":"Exports the public recipe entrypoints for downstream imports.","ai":{"architectural_layer":"application","confidence":0.88}}
+{"id":"el:file-init-py-2js1rqy43yk7","summary":"HUD boundary ingestion entrypoints.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:file-init-py-4aa619zctak7","summary":"Crosswalk generation for analysis geographies.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-init-py-4mbr24ttmyar","summary":"ZORI (Zillow Observed Rent Index) data ingestion and aggregation.","ai":{"architectural_layer":"ingest","confidence":0.95}}
+{"id":"el:file-init-py-5dmzbnh2ercs","summary":"Geospatial utilities for CoC boundary processing.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-init-py-8xgt5jb396k1","summary":"Registry module for tracking boundary vintages.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-init-py-9e7xz78q89rx","summary":"ACS data ingestion subpackage.","ai":{"architectural_layer":"ingest","confidence":0.95}}
+{"id":"el:file-init-py-bvh7dcv7mr2y","summary":"NHGIS geometry ingest entrypoints.","ai":{"architectural_layer":"ingest","confidence":0.95}}
+{"id":"el:file-init-py-cbyh9ea1kna2","summary":"Exports the public census/ingest entrypoints for downstream imports.","ai":{"architectural_layer":"ingest","confidence":0.88}}
+{"id":"el:file-init-py-e4m1xepjf9ny","summary":"Shared Glynn/Fox metro definitions, IO, and validation utilities.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-init-py-jrc85pvw7n86","summary":"Visualization module for CoC boundary maps and recipe-native overlays.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-init-py-mzsrepddc2cy","summary":"HHP-Lab - Continuum of Care boundary data infrastructure.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-init-py-ph7f3r94scy9","summary":"Census geometry and tract-relationship entrypoints.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-init-py-pt1m3tt9tpe5","summary":"Measures from ACS and other data sources.","ai":{"architectural_layer":"analytics","confidence":0.95}}
+{"id":"el:file-init-py-pxhxw5vmrcsd","summary":"Compatibility entrypoints for legacy generic ingest imports.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:file-init-py-qxrd5rxj8my6","summary":"BLS source helpers and metro-native LAUS workflows.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:file-init-py-tcfsgsfcytrz","summary":"PIT (Point-in-Time) homelessness count data processing.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-init-py-xeks31ww85th","summary":"PIT data ingestion and parsing modules.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:file-init-py-yny0xqmbwf75","summary":"CLI module for HHP-Lab.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-io-py-gyqz41p6t0fk","summary":"Read and write curated metro definition artifacts.","ai":{"architectural_layer":"ingest","confidence":0.95}}
+{"id":"el:file-io-py-wd2v4ta6h1hz","summary":"GeoParquet I/O utilities for CoC boundary data.","ai":{"architectural_layer":"ingest","confidence":0.95}}
+{"id":"el:file-laus-py-r5d2pyx03dzf","summary":"Compatibility wrappers for BLS-owned LAUS metro helpers.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-list-census-py-4nnhbtz1hnh2","summary":"CLI command for listing available census geometry files.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-list-curated-py-84bhp0rfx2bp","summary":"CLI command for listing curated dataset files by provider/product.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-list-measures-py-2dbhws4mvb4a","summary":"CLI command for listing available measure files.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-list-xwalks-py-v6pkybtd1jwm","summary":"CLI command for listing available crosswalk files.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-loader-py-gwad634ydwka","summary":"Recipe YAML loader with versioned schema dispatch.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-main-py-cxtybcgdcnjt","summary":"CLI commands for HHP-Lab using Typer.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-manifest-py-88d74x0fjaad","summary":"Recipe-level provenance manifest and replication export.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-map-folium-py-j4fs3fdgjhmg","summary":"Folium-based interactive map rendering for CoC, MSA, and metro overlays.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-metro-acs1-py-49kc9sqb6gqz","summary":"ACS 1-year metro-native data fetcher.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:file-metro-py-54dq70kncsvj","summary":"Metro-level ACS measure aggregation from tract-native inputs.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-metro-py-nxak2dyedh4s","summary":"Metro-level PEP population aggregation from county-native inputs.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-metro-py-tyn0ggecsav2","summary":"Metro-level PIT aggregation from CoC-native PIT counts.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-metro-py-vrq4fhy5jmcd","summary":"Metro-level ZORI aggregation from county-native inputs.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-migrate-curated-py-psdc8qhczx32","summary":"CLI command for curated data migration.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-naming-py-6dezjk7tk081","summary":"Centralized filename generation using temporal shorthand notation.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-normalize-py-mcm69erd1r37","summary":"Geometry normalization utilities for CoC boundary data.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-panel-diagnostics-py-2xz51cerf0sx","summary":"CLI command for running panel diagnostics.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-parser-py-hz0spy3dr2h3","summary":"PIT data parsing and canonicalization.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:file-paths-py-836rn79h0ty7","summary":"Centralized path resolution for storage roots.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-pep-py-gb84g329pq86","summary":"CLI commands for PEP (Population Estimates Program) ingestion.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-pep-py-khx750yhxz5v","summary":"Compatibility wrappers for PEP-owned metro aggregation helpers.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-pit-py-rqhyt6y1a230","summary":"Compatibility wrappers for PIT-owned metro aggregation helpers.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-planner-py-vtn0zfjvnqjv","summary":"Resolution planner: deterministic expansion of recipe → execution plan.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-policies-py-ap6vb56x15ye","summary":"Panel assembly policies for HHP-Lab Phase 3.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-preflight-py-s5ede77zapwj","summary":"Recipe preflight analyzer: validate readiness without executing.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-probes-py-h0s1p0n9q9wp","summary":"Non-executing dataset and transform probes for recipe preflight.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-provenance-py-nh9qahk86kk2","summary":"Dataset provenance tracking via Parquet metadata.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-qa-py-98jv9awc7ny2","summary":"PIT data quality assurance and validation.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-raw-snapshot-py-6kz6jqmaq1rs","summary":"Shared raw snapshot utilities for data retention compliance.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:file-recipe-py-checvhvght0j","summary":"CLI commands for recipe-driven builds.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-recipe-schema-py-xjjctdzdjg2s","summary":"hhplab recipe schema (v1) - Pydantic v2 models.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-registry-py-37105hgeqkkf","summary":"Registry for tracking and managing PIT survey data vintages.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-registry-py-xy1s45y6rq5x","summary":"Registry for tracking and managing boundary vintages.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-registry-rebuild-py-ezcxdzhf7jry","summary":"CLI command for rebuilding the source registry.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-schema-py-e1tm1tpnczcq","summary":"Schema definitions for the boundary registry.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-show-measures-py-2gyk782zyzn3","summary":"CLI command for displaying CoC-level ACS measures.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-source-registry-py-hskdt0t836vk","summary":"Unified source data registry for tracking external data ingestion.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:file-sources-py-c4kytegkh2jm","summary":"Centralized source URLs and templates for ingest modules.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:file-status-py-n7xv9stc2ywc","summary":"CLI command for one-shot environment readiness report.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-tiger-counties-py-rsbbw4d4qxpw","summary":"TIGER/Line county geometry ingestion.","ai":{"architectural_layer":"ingest","confidence":0.95}}
+{"id":"el:file-tiger-tracts-py-wz8vstswfy72","summary":"TIGER/Line tract geometry ingestion.","ai":{"architectural_layer":"ingest","confidence":0.95}}
+{"id":"el:file-tract-population-py-k3c4804n1r3q","summary":"ACS tract-level data fetcher.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:file-tract-py-97ygswkesch3","summary":"Area-weighted tract crosswalk generation.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-tract-relationship-py-gwfgbas1jh0c","summary":"Census tract relationship file ingestion (2010↔2020).","ai":{"architectural_layer":"ingest","confidence":0.95}}
+{"id":"el:file-translate-py-7tfmmc9zq7k2","summary":"Tract vintage translation for ACS data.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-validate-curated-py-zdxncexxxzvb","summary":"CLI command for curated layout validation.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:file-validate-py-chht34nr7xmh","summary":"Validation for metro definition artifacts.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-validate-py-fbnp56x2j1yp","summary":"Boundary validation utilities for CoC GeoDataFrames.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-variables-acs1-py-tmaf7np642ga","summary":"ACS 1-year variable definitions for metro-native unemployment data.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-variables-py-03b7feadng1k","summary":"Centralized ACS variable definitions and column classification.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-weights-py-5g46sbdvz8zf","summary":"County-level ACS weight computation for ZORI aggregation.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-year-spec-py-7vx28ffjvp89","summary":"Year-spec parser for build creation.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-zori-eligibility-py-pszx0gz4gb42","summary":"ZORI eligibility rules and provenance for panel integration.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:file-zori-py-twy7bpcc90e2","summary":"Compatibility wrappers for rents-owned metro aggregation helpers.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-zori-py-xpfs6dfb5px7","summary":"CLI commands for ZORI (Zillow Observed Rent Index) ingestion and aggregation.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:package-hhplab-z0s3ev1sa5b0","summary":"Core shared package for HHP-Lab configuration, naming, provenance, source metadata, and cross-package utilities.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:package-acs-qvx0en7j4krd","summary":"ACS aggregation package covering tract translation, CoC and metro measure builders, and canonical ACS variable definitions.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:package-ingest-drjqxstf806n","summary":"ACS source-ingest package for tract population fetches and metro-native ACS1 unemployment extracts.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:package-bls-mks94fh3we9q","summary":"BLS source package for metro-native LAUS series definitions and ingestion helpers.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:package-census-b20jsd5gdtcn","summary":"Census entrypoint package for curated geometry ingest and tract-relationship workflows.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:package-ingest-f2wfck615ekw","summary":"Census geometry ingest package for TIGER/Line counties, TIGER/Line tracts, and 2010-to-2020 tract relationship artifacts.","ai":{"architectural_layer":"ingest","confidence":0.95}}
+{"id":"el:package-cli-te4eyc2pcar3","summary":"Typer CLI package exposing the project's ingest, aggregation, validation, diagnostics, and recipe workflow commands.","ai":{"architectural_layer":"cli","confidence":0.95}}
+{"id":"el:package-geo-ay4bdrd68rmr","summary":"Shared CoC geography package for normalization, validation, GeoParquet I/O, and Connecticut planning-region helpers.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:package-hud-nk3ak3k20w5d","summary":"HUD source entrypoint package for CoC boundary ingest workflows.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:package-ingest-gsfyhvxcj7cp","summary":"Legacy-compatible source-ingest package for BLS and HUD raw data acquisition helpers.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:package-measures-7g5nrmrjgmk3","summary":"Measures compatibility package for legacy ACS measure imports and crosswalk attribution diagnostics.","ai":{"architectural_layer":"analytics","confidence":0.95}}
+{"id":"el:package-metro-j0spgbja8e3q","summary":"Shared metro package for curated definitions, boundary artifacts, validation, and metro-level ACS, PIT, PEP, LAUS, and ZORI aggregation helpers.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:package-nhgis-d0hc5a3s9rsp","summary":"NHGIS ingest package for tract and county geometry acquisition workflows.","ai":{"architectural_layer":"ingest","confidence":0.95}}
+{"id":"el:package-panel-mpr00swdk4jd","summary":"Panel-building package for assembly, policies, conformance checks, diagnostics, finalization, and ZORI eligibility handling.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:package-pep-8vc5ky6jrbt7","summary":"PEP population package for county ingestion, CoC aggregation, metro rollups, and diagnostic reporting.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:package-pit-2fwhr922v9rh","summary":"PIT homelessness package for curated ingest, QA, vintage registry management, and metro/MSA aggregation workflows.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:package-ingest-vr8p9mwtr17d","summary":"PIT raw-source package for HUD User discovery, download, and parsing of annual PIT files.","ai":{"architectural_layer":"source","confidence":0.95}}
+{"id":"el:package-recipe-t5n8mghsspyt","summary":"Recipe execution package for schema validation, planning, adapter resolution, execution, caching, manifests, and preflight analysis.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:package-registry-g9t10qynx0j0","summary":"Boundary registry package for schema definitions and curated vintage tracking.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:package-rents-m60qpy0d671w","summary":"ZORI rent package for county ingestion, ACS weighting, CoC and metro aggregation, and diagnostics.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:package-viz-7tr7zbydqkdp","summary":"Visualization package for Folium-based map rendering across CoC, MSA, metro, and recipe-driven overlays.","ai":{"architectural_layer":"application","confidence":0.95}}
+{"id":"el:package-xwalks-aqgbe12na4xd","summary":"Crosswalk package for area-weighted county and tract allocation tables across supported analysis geographies.","ai":{"architectural_layer":"domain","confidence":0.95}}
