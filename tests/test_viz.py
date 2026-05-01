@@ -10,7 +10,11 @@ from shapely.geometry import Polygon
 from hhplab.registry import register_vintage
 from hhplab.recipe.recipe_schema import GeometryRef, MapLayerSpec, MapSpec, MapViewportSpec, TargetSpec
 from hhplab.viz import render_coc_map, render_recipe_map
-from hhplab.viz.map_folium import _distinct_palette_colors_for_ids
+from hhplab.viz.map_folium import (
+    DISTINCT_FILL_PALETTE,
+    _apply_distinct_feature_styles,
+    _distinct_palette_colors_for_ids,
+)
 
 
 @pytest.fixture
@@ -94,7 +98,7 @@ def sample_boundaries(temp_data_dir):
 
 @pytest.fixture
 def sample_overlay_artifacts(temp_data_dir):
-    """Create minimal county, MSA, and metro artifacts for mixed overlays."""
+    """Create minimal county, MSA, metro, and tract artifacts for mixed overlays."""
     tiger_dir = temp_data_dir / "data" / "curated" / "tiger"
     msa_dir = temp_data_dir / "data" / "curated" / "msa"
     metro_dir = temp_data_dir / "data" / "curated" / "metro"
@@ -126,6 +130,43 @@ def sample_overlay_artifacts(temp_data_dir):
         ],
         crs="EPSG:4326",
     ).to_parquet(tiger_dir / "counties__C2025.parquet")
+    gpd.GeoDataFrame(
+        {
+            "geoid": ["08001000100", "08001000200", "08001000300"],
+            "geo_vintage": ["2020", "2020", "2020"],
+            "source": ["tiger_line", "tiger_line", "tiger_line"],
+        },
+        geometry=[
+            Polygon(
+                [
+                    (-105.20, 39.40),
+                    (-105.00, 39.40),
+                    (-105.00, 39.60),
+                    (-105.20, 39.60),
+                    (-105.20, 39.40),
+                ]
+            ),
+            Polygon(
+                [
+                    (-105.00, 39.40),
+                    (-104.80, 39.40),
+                    (-104.80, 39.60),
+                    (-105.00, 39.60),
+                    (-105.00, 39.40),
+                ]
+            ),
+            Polygon(
+                [
+                    (-105.20, 39.80),
+                    (-105.00, 39.80),
+                    (-105.00, 40.00),
+                    (-105.20, 40.00),
+                    (-105.20, 39.80),
+                ]
+            ),
+        ],
+        crs="EPSG:4326",
+    ).to_parquet(tiger_dir / "tracts__T2020.parquet")
 
     pd.DataFrame(
         {
@@ -241,6 +282,38 @@ def _mixed_overlay_target() -> TargetSpec:
                     selector_ids=["GF21"],
                     label="Metro layer",
                     tooltip_fields=["metro_id", "metro_name"],
+                ),
+            ],
+            viewport=MapViewportSpec(fit_layers=True, padding=18),
+        ),
+    )
+
+
+def _mixed_overlay_with_tract_target() -> TargetSpec:
+    return TargetSpec(
+        id="overlay_map_with_tracts",
+        geometry=GeometryRef(type="coc", vintage=2025),
+        outputs=["map"],
+        map_spec=MapSpec(
+            layers=[
+                MapLayerSpec(
+                    geometry=GeometryRef(type="coc", vintage=2025),
+                    selector_ids=["CO-500"],
+                    label="CoC layer",
+                    tooltip_fields=["coc_id", "coc_name"],
+                ),
+                MapLayerSpec(
+                    geometry=GeometryRef(type="msa", vintage=2025, source="census_msa_2023"),
+                    selector_ids=["19740"],
+                    label="MSA layer",
+                    tooltip_fields=["msa_id", "msa_name"],
+                ),
+                MapLayerSpec(
+                    geometry=GeometryRef(type="tract", vintage=2020),
+                    selector_ids=["08001000100", "08001000200", "08001000300"],
+                    label="Tract layer",
+                    style_mode="distinct",
+                    tooltip_fields=["tract_geoid", "geo_vintage"],
                 ),
             ],
             viewport=MapViewportSpec(fit_layers=True, padding=18),
@@ -453,12 +526,7 @@ class TestRenderRecipeMap:
         content = out_path.read_text()
         assert "__map_fill_color" in content
         assert "__map_stroke_color" in content
-        expected_colors = set(
-            _distinct_palette_colors_for_ids(["CO-500", "NY-600"]).values()
-        )
-        assert len(expected_colors) == 2
-        for color in expected_colors:
-            assert color in content
+        assert any(color in content for color in DISTINCT_FILL_PALETTE)
 
     def test_distinct_style_mode_assigns_unique_colors_within_layer(self):
         color_map = _distinct_palette_colors_for_ids(
@@ -467,3 +535,66 @@ class TestRenderRecipeMap:
 
         assert len(color_map) == 5
         assert len(set(color_map.values())) == 5
+
+    def test_render_mixed_overlay_map_with_tract_layer(
+        self,
+        sample_boundaries,
+        sample_overlay_artifacts,
+        temp_data_dir,
+    ):
+        out_path = render_recipe_map(
+            _mixed_overlay_with_tract_target(),
+            project_root=temp_data_dir,
+            out_html=temp_data_dir / "outputs" / "overlay-with-tracts.html",
+        )
+
+        content = out_path.read_text()
+        assert "CoC layer" in content
+        assert "MSA layer" in content
+        assert "Tract layer" in content
+        assert "08001000100" in content
+        assert "08001000300" in content
+
+    def test_distinct_style_mode_reuses_colors_for_noncontiguous_polygons(self):
+        gdf = gpd.GeoDataFrame(
+            {"tract_geoid": ["08001000100", "08001000200", "08001000300"]},
+            geometry=[
+                Polygon(
+                    [
+                        (0.0, 0.0),
+                        (1.0, 0.0),
+                        (1.0, 1.0),
+                        (0.0, 1.0),
+                        (0.0, 0.0),
+                    ]
+                ),
+                Polygon(
+                    [
+                        (1.0, 0.0),
+                        (2.0, 0.0),
+                        (2.0, 1.0),
+                        (1.0, 1.0),
+                        (1.0, 0.0),
+                    ]
+                ),
+                Polygon(
+                    [
+                        (0.0, 2.0),
+                        (1.0, 2.0),
+                        (1.0, 3.0),
+                        (0.0, 3.0),
+                        (0.0, 2.0),
+                    ]
+                ),
+            ],
+            crs="EPSG:4326",
+        )
+
+        styled = _apply_distinct_feature_styles(gdf, id_column="tract_geoid")
+
+        first_color = styled.loc[0, "__map_fill_color"]
+        second_color = styled.loc[1, "__map_fill_color"]
+        third_color = styled.loc[2, "__map_fill_color"]
+
+        assert first_color != second_color
+        assert first_color == third_color

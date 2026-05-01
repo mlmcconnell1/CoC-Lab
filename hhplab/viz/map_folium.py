@@ -13,6 +13,7 @@ import folium
 import geopandas as gpd
 import pandas as pd
 
+from hhplab.naming import tract_path
 from hhplab.paths import curated_dir
 from hhplab.registry import latest_vintage
 
@@ -30,11 +31,13 @@ IDENTIFIER_COLUMNS = {
     "coc": "coc_id",
     "msa": "msa_id",
     "metro": "metro_id",
+    "tract": "tract_geoid",
 }
 DEFAULT_TOOLTIP_FIELDS = {
     "coc": ["coc_id", "coc_name", "boundary_vintage", "source"],
     "msa": ["msa_id", "msa_name", "cbsa_code", "definition_version"],
     "metro": ["metro_id", "metro_name", "definition_version"],
+    "tract": ["tract_geoid", "geo_vintage", "source"],
 }
 DISTINCT_FILL_PALETTE = (
     "#f4a261",
@@ -137,6 +140,36 @@ def _load_metro_boundaries(
     )
 
 
+def _load_tract_boundaries(
+    tract_vintage: str | int,
+    *,
+    base_dir: Path,
+) -> gpd.GeoDataFrame:
+    canonical_path = tract_path(tract_vintage, base_dir)
+    legacy_path = canonical_path.with_name(f"tracts__{tract_vintage}.parquet")
+    path = canonical_path if canonical_path.exists() else legacy_path
+    gdf = gpd.read_parquet(path)
+
+    geoid_column = next(
+        (
+            column
+            for column in ("tract_geoid", "geoid", "GEOID", "GEOID10", "GEOID20")
+            if column in gdf.columns
+        ),
+        None,
+    )
+    if geoid_column is None:
+        raise ValueError(
+            "Tract geometry artifact must contain one of "
+            "'tract_geoid', 'geoid', 'GEOID', 'GEOID10', or 'GEOID20'."
+        )
+
+    if "tract_geoid" not in gdf.columns:
+        gdf = gdf.rename(columns={geoid_column: "tract_geoid"})
+    gdf["tract_geoid"] = gdf["tract_geoid"].astype(str).str.strip()
+    return gdf
+
+
 def _load_layer_geometries(layer: MapLayerSpec, *, base_dir: Path) -> gpd.GeoDataFrame:
     geo_type = layer.geometry.type
     vintage = layer.geometry.vintage
@@ -177,8 +210,15 @@ def _load_layer_geometries(layer: MapLayerSpec, *, base_dir: Path) -> gpd.GeoDat
             base_dir=base_dir,
         )
 
+    if geo_type == "tract":
+        if vintage is None:
+            raise ValueError(
+                "Tract map layers require geometry.vintage to name the tract geometry vintage."
+            )
+        return _load_tract_boundaries(vintage, base_dir=base_dir)
+
     raise ValueError(
-        f"Unsupported map layer geometry '{geo_type}'. Supported types: coc, msa, metro."
+        f"Unsupported map layer geometry '{geo_type}'. Supported types: coc, msa, metro, tract."
     )
 
 
@@ -259,10 +299,81 @@ def _generate_distinct_colors(count: int) -> list[str]:
     return colors
 
 
+def _nth_distinct_color(index: int) -> str:
+    """Return the deterministic color at one palette index."""
+    if index < len(DISTINCT_FILL_PALETTE):
+        return DISTINCT_FILL_PALETTE[index]
+    overflow_index = index - len(DISTINCT_FILL_PALETTE)
+    hue = (overflow_index * 0.618033988749895) % 1.0
+    lightness = 0.58 if overflow_index % 2 == 0 else 0.66
+    saturation = 0.62 if overflow_index % 3 else 0.74
+    return _rgb_to_hex(*colorsys.hls_to_rgb(hue, lightness, saturation))
+
+
 def _distinct_palette_colors_for_ids(feature_ids: list[str]) -> dict[str, str]:
     """Assign deterministic unique colors within one rendered layer."""
     normalized_ids = sorted({_normalize_selector(feature_id) for feature_id in feature_ids})
     return dict(zip(normalized_ids, _generate_distinct_colors(len(normalized_ids)), strict=True))
+
+
+def _build_feature_adjacency(gdf: gpd.GeoDataFrame) -> dict[int, set[int]]:
+    """Build an undirected adjacency map for features that touch or overlap."""
+    adjacency = {index: set() for index in range(len(gdf))}
+    if gdf.empty:
+        return adjacency
+
+    geometries = gdf.geometry.reset_index(drop=True)
+    spatial_index = geometries.sindex
+    for index, geometry in geometries.items():
+        if geometry is None or geometry.is_empty:
+            continue
+        candidate_indexes = spatial_index.query(geometry)
+        for candidate in candidate_indexes:
+            neighbor = int(candidate)
+            if neighbor <= index:
+                continue
+            other = geometries.iloc[neighbor]
+            if other is None or other.is_empty:
+                continue
+            if geometry.disjoint(other):
+                continue
+            adjacency[index].add(neighbor)
+            adjacency[neighbor].add(index)
+    return adjacency
+
+
+def _distinct_palette_colors_for_layer(
+    gdf: gpd.GeoDataFrame,
+    *,
+    id_column: str,
+) -> dict[str, str]:
+    """Assign deterministic colors while reusing palette entries for non-neighbors."""
+    normalized_ids = gdf[id_column].astype(str).map(_normalize_selector).reset_index(drop=True)
+    adjacency = _build_feature_adjacency(gdf)
+    order = sorted(range(len(gdf)), key=lambda index: (normalized_ids.iloc[index], index))
+    color_by_index: dict[int, str] = {}
+    palette = [_nth_distinct_color(index) for index in range(len(DISTINCT_FILL_PALETTE))]
+
+    for index in order:
+        used_colors = {
+            color_by_index[neighbor]
+            for neighbor in adjacency[index]
+            if neighbor in color_by_index
+        }
+        palette_index = 0
+        while True:
+            if palette_index == len(palette):
+                palette.append(_nth_distinct_color(palette_index))
+            color = palette[palette_index]
+            if color not in used_colors:
+                color_by_index[index] = color
+                break
+            palette_index += 1
+
+    return {
+        normalized_ids.iloc[index]: color_by_index[index]
+        for index in order
+    }
 
 
 def _apply_distinct_feature_styles(
@@ -273,7 +384,7 @@ def _apply_distinct_feature_styles(
     """Assign deterministic fill and stroke colors to each selected feature."""
     styled = gdf.copy()
     normalized_ids = styled[id_column].astype(str).map(_normalize_selector)
-    color_map = _distinct_palette_colors_for_ids(normalized_ids.tolist())
+    color_map = _distinct_palette_colors_for_layer(styled, id_column=id_column)
     styled[STYLE_FILL_COLOR_FIELD] = normalized_ids.map(color_map)
     styled[STYLE_STROKE_COLOR_FIELD] = styled[STYLE_FILL_COLOR_FIELD].map(_darken_hex)
     return styled
@@ -283,7 +394,7 @@ def _resolve_map_layer(layer: MapLayerSpec, *, base_dir: Path) -> ResolvedMapLay
     geo_type = layer.geometry.type
     if geo_type not in IDENTIFIER_COLUMNS:
         raise ValueError(
-            f"Unsupported map layer geometry '{geo_type}'. Supported types: coc, msa, metro."
+            f"Unsupported map layer geometry '{geo_type}'. Supported types: coc, msa, metro, tract."
         )
 
     gdf = _load_layer_geometries(layer, base_dir=base_dir)
