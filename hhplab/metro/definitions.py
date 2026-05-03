@@ -48,6 +48,80 @@ METRO_COUNT: int = 25
 #: Source reference for provenance.
 SOURCE_REF: str = "Glynn and Fox (2019), Table 1, p. 577"
 
+#: USPS state/territory abbreviations mapped to 2-digit Census/BLS FIPS codes.
+#: Used to derive principal-state FIPS for canonical CBSA/MSA universe rows.
+STATE_ABBREV_TO_FIPS: dict[str, str] = {
+    "AL": "01",
+    "AK": "02",
+    "AZ": "04",
+    "AR": "05",
+    "CA": "06",
+    "CO": "08",
+    "CT": "09",
+    "DE": "10",
+    "DC": "11",
+    "FL": "12",
+    "GA": "13",
+    "HI": "15",
+    "ID": "16",
+    "IL": "17",
+    "IN": "18",
+    "IA": "19",
+    "KS": "20",
+    "KY": "21",
+    "LA": "22",
+    "ME": "23",
+    "MD": "24",
+    "MA": "25",
+    "MI": "26",
+    "MN": "27",
+    "MS": "28",
+    "MO": "29",
+    "MT": "30",
+    "NE": "31",
+    "NV": "32",
+    "NH": "33",
+    "NJ": "34",
+    "NM": "35",
+    "NY": "36",
+    "NC": "37",
+    "ND": "38",
+    "OH": "39",
+    "OK": "40",
+    "OR": "41",
+    "PA": "42",
+    "RI": "44",
+    "SC": "45",
+    "SD": "46",
+    "TN": "47",
+    "TX": "48",
+    "UT": "49",
+    "VT": "50",
+    "VA": "51",
+    "WA": "53",
+    "WV": "54",
+    "WI": "55",
+    "WY": "56",
+    "PR": "72",
+}
+
+#: Historical CBSA identity aliases that must resolve to the canonical metro
+#: universe IDs for year-specific source ingests.
+#:
+#: Each entry is:
+#: ``(canonical_cbsa_code, alias_cbsa_code, start_year, end_year, alias_name, note)``.
+CBSA_ALIAS_RULES: list[tuple[str, str, int, int, str, str]] = [
+    (
+        "31080",
+        "31100",
+        2012,
+        2012,
+        "Los Angeles-Long Beach-Santa Ana, CA Metro Area",
+        "Census ACS1 2012 returns Los Angeles under legacy CBSA 31100; "
+        "normalize to canonical CBSA 31080.",
+    ),
+]
+
 # ---------------------------------------------------------------------------
 # Metro definitions truth table
 # ---------------------------------------------------------------------------
@@ -362,6 +436,33 @@ def build_cbsa_mapping_df() -> pd.DataFrame:
     return df
 
 
+def build_cbsa_alias_df() -> pd.DataFrame:
+    """Build the historical CBSA alias truth table as a DataFrame."""
+    rows = [
+        {
+            "canonical_cbsa_code": canonical_cbsa_code,
+            "alias_cbsa_code": alias_cbsa_code,
+            "start_year": start_year,
+            "end_year": end_year,
+            "canonical_metro_id": _CBSA_TO_METRO.get(canonical_cbsa_code),
+            "canonical_metro_name": _CBSA_METRO_NAMES.get(
+                _CBSA_TO_METRO.get(canonical_cbsa_code, "")
+            ),
+            "alias_name": alias_name,
+            "note": note,
+        }
+        for (
+            canonical_cbsa_code,
+            alias_cbsa_code,
+            start_year,
+            end_year,
+            alias_name,
+            note,
+        ) in CBSA_ALIAS_RULES
+    ]
+    return pd.DataFrame(rows)
+
+
 def build_metro_universe_df(msa_definitions_df: pd.DataFrame) -> pd.DataFrame:
     """Build the canonical metro-universe table from curated MSA definitions."""
     required = {
@@ -471,7 +572,25 @@ def build_glynn_fox_subset_profile_df(msa_definitions_df: pd.DataFrame) -> pd.Da
     return profile_df
 
 
-def cbsa_to_metro_id(cbsa_code: str) -> str | None:
+def canonicalize_cbsa_code(cbsa_code: str, *, year: int | None = None) -> str:
+    """Resolve a CBSA code to its canonical identity for the requested year."""
+    cbsa_code = str(cbsa_code).zfill(5)
+    if year is None:
+        return cbsa_code
+    for (
+        canonical_cbsa_code,
+        alias_cbsa_code,
+        start_year,
+        end_year,
+        _alias_name,
+        _note,
+    ) in CBSA_ALIAS_RULES:
+        if alias_cbsa_code == cbsa_code and start_year <= year <= end_year:
+            return canonical_cbsa_code
+    return cbsa_code
+
+
+def cbsa_to_metro_id(cbsa_code: str, *, year: int | None = None) -> str | None:
     """Look up the metro_id for a given CBSA code.
 
     Parameters
@@ -484,7 +603,7 @@ def cbsa_to_metro_id(cbsa_code: str) -> str | None:
     str or None
         The metro_id (e.g., "GF01") if found, otherwise None.
     """
-    return _CBSA_TO_METRO.get(cbsa_code)
+    return _CBSA_TO_METRO.get(canonicalize_cbsa_code(cbsa_code, year=year))
 
 
 def metro_name_for_id(metro_id: str) -> str | None:
@@ -520,3 +639,20 @@ def metro_state_fips_for_id(metro_id: str) -> str | None:
         2-digit state FIPS (e.g., "36" for New York) if found, otherwise None.
     """
     return METRO_STATE_FIPS.get(metro_id)
+
+
+def principal_state_fips_for_metro_name(metro_name: str) -> str:
+    """Derive the principal-state FIPS code from a canonical MSA/CBSA name."""
+    if "," not in metro_name:
+        raise ValueError(
+            f"Metro name {metro_name!r} does not contain the expected ', ST' suffix."
+        )
+    state_block = metro_name.split(",", 1)[1].strip()
+    state_abbrev = state_block.split("-", 1)[0].strip()
+    try:
+        return STATE_ABBREV_TO_FIPS[state_abbrev]
+    except KeyError:
+        raise ValueError(
+            f"Cannot derive principal-state FIPS from metro name {metro_name!r}. "
+            f"Unknown state abbreviation {state_abbrev!r}."
+        ) from None

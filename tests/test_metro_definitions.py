@@ -15,17 +15,21 @@ Truth table for metro definition structure
 import pytest
 
 from hhplab.metro.definitions import (
+    CBSA_ALIAS_RULES,
     CANONICAL_UNIVERSE_DEFINITION_VERSION,
     DEFINITION_VERSION,
     METRO_COC_MEMBERSHIP,
     METRO_COUNTY_MEMBERSHIP,
     METRO_DEFINITIONS,
     PROFILE_NAME,
+    build_cbsa_alias_df,
     build_glynn_fox_subset_profile_df,
     build_coc_membership_df,
     build_county_membership_df,
     build_definitions_df,
     build_metro_universe_df,
+    canonicalize_cbsa_code,
+    principal_state_fips_for_metro_name,
 )
 from hhplab.metro.validate import (
     validate_metro_artifacts,
@@ -249,6 +253,32 @@ class TestDataFrameBuilders:
         assert row["metro_id"] == expected_cbsa_code
         assert row["cbsa_code"] == expected_cbsa_code
         assert row["profile_rank"] == expected_rank
+
+    def test_cbsa_alias_truth_table_shape(self):
+        df = build_cbsa_alias_df()
+        assert len(df) == len(CBSA_ALIAS_RULES)
+        assert list(df.columns) == [
+            "canonical_cbsa_code",
+            "alias_cbsa_code",
+            "start_year",
+            "end_year",
+            "canonical_metro_id",
+            "canonical_metro_name",
+            "alias_name",
+            "note",
+        ]
+
+    def test_los_angeles_2012_alias_normalizes_to_canonical_cbsa(self):
+        assert canonicalize_cbsa_code("31100", year=2012) == "31080"
+        assert canonicalize_cbsa_code("31100", year=2013) == "31100"
+
+    def test_principal_state_fips_uses_first_state_in_msa_name(self):
+        assert (
+            principal_state_fips_for_metro_name(
+                "Washington-Arlington-Alexandria, DC-VA-MD-WV"
+            )
+            == "11"
+        )
 
 
 # ---------------------------------------------------------------------------

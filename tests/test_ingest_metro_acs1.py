@@ -19,6 +19,7 @@ from hhplab.acs.variables_acs1 import (
     ACS1_VARIABLES_BY_TABLE,
     acs1_tables_for_vintage,
 )
+from hhplab.metro.definitions import CANONICAL_UNIVERSE_DEFINITION_VERSION
 from hhplab.provenance import read_provenance
 
 # ---------------------------------------------------------------------------
@@ -93,6 +94,20 @@ SAMPLE_CBSAS = [
         "B23025_005E": "5000",
     },
 ]
+
+
+def build_canonical_metro_universe_fixture() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "metro_id": ["31080", "35620", "19740"],
+            "cbsa_code": ["31080", "35620", "19740"],
+            "metro_name": [
+                "Los Angeles-Long Beach-Anaheim, CA",
+                "New York-Newark-Jersey City, NY-NJ-PA",
+                "Denver-Aurora-Centennial, CO",
+            ],
+        }
+    )
 
 
 CENSUS_API_URL_PATTERN = re.compile(
@@ -193,6 +208,47 @@ class TestCbsaToMetroMapping:
 
         with pytest.raises(ValueError, match="No CBSAs.*could be mapped"):
             ingest_metro_acs1(vintage=2023)
+
+    def test_historical_los_angeles_alias_maps_in_2012(self, httpx_mock, tmp_path):
+        cbsas = [
+            {
+                "NAME": "Los Angeles-Long Beach-Santa Ana, CA Metro Area",
+                "cbsa_code": "31100",
+                "B23025_001E": "10500000",
+                "B23025_003E": "6800000",
+                "B23025_005E": "340000",
+            },
+        ]
+        queue_acs1_group_responses(httpx_mock, cbsas, vintage=2012)
+
+        path = ingest_metro_acs1(vintage=2012, project_root=tmp_path)
+        df = pd.read_parquet(path)
+
+        assert len(df) == 1
+        row = df.iloc[0]
+        assert row["metro_id"] == "GF02"
+        assert row["cbsa_code"] == "31080"
+
+        prov = read_provenance(path)
+        assert prov.extra["cbsa_alias_hits"] == 1
+        assert prov.extra["cbsa_alias_rules_applied"][0]["alias_cbsa_code"] == "31100"
+
+    def test_canonical_universe_definition_keeps_cbsa_ids(self, httpx_mock, tmp_path, monkeypatch):
+        queue_acs1_group_responses(httpx_mock, SAMPLE_CBSAS[:3], vintage=2023)
+        monkeypatch.setattr(
+            "hhplab.acs.ingest.metro_acs1.read_metro_universe",
+            lambda definition_version, base_dir=None: build_canonical_metro_universe_fixture(),
+        )
+
+        path = ingest_metro_acs1(
+            vintage=2023,
+            definition_version=CANONICAL_UNIVERSE_DEFINITION_VERSION,
+            project_root=tmp_path,
+        )
+        df = pd.read_parquet(path)
+
+        assert list(df["metro_id"]) == ["19740", "31080", "35620"]
+        assert list(df["cbsa_code"]) == ["19740", "31080", "35620"]
 
 
 class TestUnemploymentRateCalculation:

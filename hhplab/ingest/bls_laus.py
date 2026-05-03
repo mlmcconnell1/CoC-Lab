@@ -60,10 +60,14 @@ from hhplab.bls.laus import (
     build_laus_series_id,
 )
 from hhplab.metro.definitions import (
+    CANONICAL_UNIVERSE_DEFINITION_VERSION,
+    DEFINITION_VERSION as GLYNN_FOX_DEFINITION_VERSION,
     METRO_CBSA_MAPPING,
     METRO_STATE_FIPS,
     metro_name_for_id,
+    principal_state_fips_for_metro_name,
 )
+from hhplab.metro.io import read_metro_subset_membership, read_metro_universe
 from hhplab.provenance import ProvenanceBlock, write_parquet_with_provenance
 from hhplab.sources import BLS_API_REGISTRATION_URL, BLS_API_V2, BLS_LAUS_SOURCE_REF
 
@@ -127,8 +131,59 @@ def _bls_quota_message(*, has_api_key: bool) -> str:
     return key_hint
 
 
+def _load_metro_targets(
+    definition_version: str,
+    base_dir: Path | None,
+) -> pd.DataFrame:
+    if definition_version == CANONICAL_UNIVERSE_DEFINITION_VERSION:
+        universe_df = read_metro_universe(definition_version, base_dir)[
+            ["metro_id", "cbsa_code", "metro_name"]
+        ].copy()
+        universe_df["state_fips"] = universe_df["metro_name"].map(
+            principal_state_fips_for_metro_name
+        )
+        return universe_df
+
+    if definition_version == GLYNN_FOX_DEFINITION_VERSION:
+        try:
+            subset_df = read_metro_subset_membership(
+                profile_definition_version=definition_version,
+                metro_definition_version=CANONICAL_UNIVERSE_DEFINITION_VERSION,
+                base_dir=base_dir,
+            )
+            subset_df = subset_df.rename(
+                columns={
+                    "profile_metro_id": "metro_id",
+                    "profile_metro_name": "metro_name",
+                }
+            )[["metro_id", "cbsa_code", "metro_name"]].copy()
+            subset_df["state_fips"] = subset_df["metro_id"].map(METRO_STATE_FIPS)
+            return subset_df
+        except FileNotFoundError:
+            legacy_rows = [
+                {
+                    "metro_id": metro_id,
+                    "cbsa_code": cbsa_code,
+                    "metro_name": metro_name_for_id(metro_id),
+                    "state_fips": METRO_STATE_FIPS[metro_id],
+                }
+                for metro_id, cbsa_code in sorted(METRO_CBSA_MAPPING.items())
+            ]
+            return pd.DataFrame(legacy_rows)
+
+    universe_df = read_metro_universe(definition_version, base_dir)[
+        ["metro_id", "cbsa_code", "metro_name"]
+    ].copy()
+    universe_df["state_fips"] = universe_df["metro_name"].map(
+        principal_state_fips_for_metro_name
+    )
+    return universe_df
+
+
 def _build_metro_series_map(
     definition_version: str = "glynn_fox_v1",
+    *,
+    base_dir: Path | None = None,
 ) -> dict[str, dict[str, str]]:
     """Build a mapping from metro_id to {measure: series_id} for all metros.
 
@@ -140,16 +195,19 @@ def _build_metro_series_map(
     dict[str, dict[str, str]]
         Outer key: metro_id; inner key: measure name; value: BLS series ID.
     """
+    target_df = _load_metro_targets(definition_version, base_dir)
     return {
         metro_id: {
             measure: build_laus_series_id(
                 cbsa_code,
                 measure,
-                METRO_STATE_FIPS[metro_id],
+                state_fips,
             )
             for measure in LAUS_MEASURE_CODES
         }
-        for metro_id, cbsa_code in METRO_CBSA_MAPPING.items()
+        for metro_id, cbsa_code, state_fips in target_df[
+            ["metro_id", "cbsa_code", "state_fips"]
+        ].itertuples(index=False, name=None)
     }
 
 
@@ -288,9 +346,13 @@ def ingest_laus_metro(
         If the API response cannot be parsed or no metros could be populated.
     """
     ingested_at = datetime.now(UTC)
+    base_dir = Path("data") if project_root is None else project_root / "data"
+    target_df = _load_metro_targets(definition_version, base_dir)
+    target_df["metro_id"] = target_df["metro_id"].astype(str)
+    target_df["cbsa_code"] = target_df["cbsa_code"].astype(str).str.zfill(5)
 
     # Build series map: metro_id -> {measure: series_id}
-    metro_series = _build_metro_series_map(definition_version)
+    metro_series = _build_metro_series_map(definition_version, base_dir=base_dir)
 
     # Collect all series IDs in a stable order (metro ordering × measure ordering)
     measure_names = list(LAUS_MEASURE_CODES.keys())
@@ -305,13 +367,15 @@ def ingest_laus_metro(
 
     # Assemble one row per metro
     rows: list[dict] = []
+    target_lookup = target_df.set_index("metro_id")
     for metro_id in sorted(metro_series):
-        cbsa_code = METRO_CBSA_MAPPING[metro_id]
+        target_row = target_lookup.loc[metro_id]
+        cbsa_code = str(target_row["cbsa_code"])
         series_map = metro_series[metro_id]
 
         row: dict = {
             "metro_id": metro_id,
-            "metro_name": metro_name_for_id(metro_id),
+            "metro_name": target_row["metro_name"],
             "definition_version": definition_version,
             "year": year,
             "cbsa_code": cbsa_code,
@@ -398,7 +462,6 @@ def ingest_laus_metro(
     result = result.sort_values("metro_id").reset_index(drop=True)
 
     # Write output
-    base_dir = Path("data") if project_root is None else project_root / "data"
     output_path = naming.laus_metro_path(year, definition_version, base_dir=base_dir)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

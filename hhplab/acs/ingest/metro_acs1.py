@@ -55,9 +55,14 @@ from hhplab.acs.variables_acs1 import (
     acs1_unavailable_tables_for_vintage,
 )
 from hhplab.metro.definitions import (
-    cbsa_to_metro_id,
+    CANONICAL_UNIVERSE_DEFINITION_VERSION,
+    DEFINITION_VERSION as GLYNN_FOX_DEFINITION_VERSION,
+    METRO_CBSA_MAPPING,
+    build_cbsa_alias_df,
+    canonicalize_cbsa_code,
     metro_name_for_id,
 )
+from hhplab.metro.io import read_metro_subset_membership, read_metro_universe
 from hhplab.provenance import ProvenanceBlock, write_parquet_with_provenance
 from hhplab.sources import CENSUS_API_ACS1
 
@@ -65,6 +70,61 @@ logger = logging.getLogger(__name__)
 
 # Census API geography parameter for CBSA-level queries
 CBSA_GEO_PARAM = "metropolitan statistical area/micropolitan statistical area"
+
+
+def _legacy_glynn_fox_targets() -> pd.DataFrame:
+    rows = [
+        {
+            "metro_id": metro_id,
+            "cbsa_code": cbsa_code,
+            "metro_name": metro_name_for_id(metro_id),
+        }
+        for metro_id, cbsa_code in sorted(METRO_CBSA_MAPPING.items())
+    ]
+    return pd.DataFrame(rows)
+
+
+def _load_metro_targets(
+    definition_version: str,
+    base_dir: Path | None,
+) -> pd.DataFrame:
+    if definition_version == CANONICAL_UNIVERSE_DEFINITION_VERSION:
+        return read_metro_universe(definition_version, base_dir)[
+            ["metro_id", "cbsa_code", "metro_name"]
+        ].copy()
+
+    if definition_version == GLYNN_FOX_DEFINITION_VERSION:
+        try:
+            subset_df = read_metro_subset_membership(
+                profile_definition_version=definition_version,
+                metro_definition_version=CANONICAL_UNIVERSE_DEFINITION_VERSION,
+                base_dir=base_dir,
+            )
+            return subset_df.rename(
+                columns={
+                    "profile_metro_id": "metro_id",
+                    "profile_metro_name": "metro_name",
+                }
+            )[["metro_id", "cbsa_code", "metro_name"]].copy()
+        except FileNotFoundError:
+            return _legacy_glynn_fox_targets()
+
+    try:
+        return read_metro_universe(definition_version, base_dir)[
+            ["metro_id", "cbsa_code", "metro_name"]
+        ].copy()
+    except FileNotFoundError:
+        subset_df = read_metro_subset_membership(
+            profile_definition_version=definition_version,
+            metro_definition_version=CANONICAL_UNIVERSE_DEFINITION_VERSION,
+            base_dir=base_dir,
+        )
+        return subset_df.rename(
+            columns={
+                "profile_metro_id": "metro_id",
+                "profile_metro_name": "metro_name",
+            }
+        )[["metro_id", "cbsa_code", "metro_name"]].copy()
 
 
 def fetch_acs1_cbsa_data(
@@ -244,25 +304,36 @@ def ingest_metro_acs1(
     fetched_tables = df.attrs.get("acs1_tables_fetched", ACS1_TABLES)
     unavailable_tables = df.attrs.get("acs1_tables_unavailable", [])
 
-    # Map CBSA codes to metro IDs
-    df["metro_id"] = df["cbsa_code"].apply(cbsa_to_metro_id)
-    mapped = df[df["metro_id"].notna()].copy()
+    base_dir = Path("data") if project_root is None else project_root / "data"
+    target_df = _load_metro_targets(definition_version, base_dir)
+    target_df["metro_id"] = target_df["metro_id"].astype(str)
+    target_df["cbsa_code"] = target_df["cbsa_code"].astype(str).str.zfill(5)
+
+    # Normalize historical CBSA aliases before joining to the requested
+    # canonical universe or subset profile.
+    df["source_cbsa_code"] = df["cbsa_code"].astype(str).str.zfill(5)
+    df["cbsa_code"] = df["source_cbsa_code"].map(
+        lambda code: canonicalize_cbsa_code(code, year=vintage)
+    )
+    mapped = df.merge(target_df, on="cbsa_code", how="inner")
     dropped = total_cbsas - len(mapped)
 
     logger.info(
-        f"CBSA-to-metro mapping: {len(mapped)} of {total_cbsas} CBSAs mapped "
-        f"to Glynn/Fox metros ({dropped} CBSAs dropped)"
+        "CBSA-to-metro mapping: %d of %d CBSAs mapped to definition %s "
+        "(%d CBSAs dropped)",
+        len(mapped),
+        total_cbsas,
+        definition_version,
+        dropped,
     )
 
     if mapped.empty:
         raise ValueError(
             f"No CBSAs from the ACS 1-year {vintage} response could be mapped "
-            f"to Glynn/Fox metros. Check that METRO_CBSA_MAPPING in "
-            f"hhplab.metro.definitions is correct."
+            f"to metro definition {definition_version!r}. "
+            "Verify that the canonical metro-universe artifacts exist "
+            "or that the requested definition version is correct."
         )
-
-    # Add metro name
-    mapped["metro_name"] = mapped["metro_id"].apply(metro_name_for_id)
 
     # Rename raw Census variables to friendly names
     mapped = mapped.rename(columns=ACS1_VARIABLE_NAMES)
@@ -311,8 +382,12 @@ def ingest_metro_acs1(
     result = result.sort_values("metro_id").reset_index(drop=True)
 
     # Write output
-    base_dir = Path("data") if project_root is None else project_root / "data"
     output_path = naming.acs1_metro_path(vintage, definition_version, base_dir=base_dir)
+    alias_rules = build_cbsa_alias_df()
+    active_alias_rules = alias_rules[
+        (alias_rules["start_year"] <= vintage) & (alias_rules["end_year"] >= vintage)
+    ]
+    alias_hits = int((mapped["source_cbsa_code"] != mapped["cbsa_code"]).sum())
 
     provenance = ProvenanceBlock(
         acs_vintage=str(vintage),
@@ -336,6 +411,8 @@ def ingest_metro_acs1(
             "cbsas_mapped": len(result),
             "cbsas_dropped": dropped,
             "cbsa_mapping_version": definition_version,
+            "cbsa_alias_hits": alias_hits,
+            "cbsa_alias_rules_applied": active_alias_rules.to_dict(orient="records"),
         },
     )
 

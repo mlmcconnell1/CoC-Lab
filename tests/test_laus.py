@@ -37,7 +37,11 @@ from hhplab.ingest.bls_laus import (
     fetch_laus_annual_averages,
     ingest_laus_metro,
 )
-from hhplab.metro.definitions import METRO_CBSA_MAPPING, METRO_STATE_FIPS
+from hhplab.metro.definitions import (
+    CANONICAL_UNIVERSE_DEFINITION_VERSION,
+    METRO_CBSA_MAPPING,
+    METRO_STATE_FIPS,
+)
 from hhplab.naming import laus_metro_filename, laus_metro_path
 from hhplab.panel.conformance import (
     ACS1_MEASURE_COLUMNS,
@@ -194,6 +198,17 @@ class TestMetroSeriesMap:
     def test_new_york_series_ids_in_map(self):
         mapping = _build_metro_series_map()
         assert mapping["GF01"]["unemployment_rate"] == NY_SERIES_IDS["unemployment_rate"]
+
+    def test_canonical_universe_series_map_uses_cbsa_ids(self, monkeypatch):
+        monkeypatch.setattr(
+            "hhplab.ingest.bls_laus.read_metro_universe",
+            lambda definition_version, base_dir=None: build_canonical_metro_targets_fixture()[
+                ["metro_id", "cbsa_code", "metro_name"]
+            ],
+        )
+        mapping = _build_metro_series_map(CANONICAL_UNIVERSE_DEFINITION_VERSION)
+        assert set(mapping) == {"31080", "35620"}
+        assert mapping["31080"]["unemployment_rate"] == "LAUMT063108000000003"
 
 
 # ---------------------------------------------------------------------------
@@ -473,6 +488,40 @@ def _make_full_bls_response(year: int = 2023) -> dict:
     return {"status": "REQUEST_SUCCEEDED", "Results": {"series": series_list}}
 
 
+def _make_bls_response_for_targets(targets: pd.DataFrame, year: int = 2023) -> dict:
+    sample_values = {
+        "unemployment_rate": 4.5,
+        "unemployed": 50000,
+        "employed": 1000000,
+        "labor_force": 1050000,
+    }
+    series_list = []
+    for row in targets.itertuples(index=False):
+        for measure, value in sample_values.items():
+            sid = build_laus_series_id(row.cbsa_code, measure, row.state_fips)
+            series_list.append(
+                {
+                    "seriesID": sid,
+                    "data": [{"year": str(year), "period": "M13", "value": str(value)}],
+                }
+            )
+    return {"status": "REQUEST_SUCCEEDED", "Results": {"series": series_list}}
+
+
+def build_canonical_metro_targets_fixture() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "metro_id": ["31080", "35620"],
+            "cbsa_code": ["31080", "35620"],
+            "metro_name": [
+                "Los Angeles-Long Beach-Anaheim, CA",
+                "New York-Newark-Jersey City, NY-NJ-PA",
+            ],
+            "state_fips": ["06", "36"],
+        }
+    )
+
+
 def _mock_ingest(tmp_path: Path, year: int) -> Path:
     """Helper: run ingest with mocked BLS API returning valid data."""
     responses = [_make_full_bls_response(year), _make_full_bls_response(year)]
@@ -532,6 +581,32 @@ class TestIngestLausMetro:
         path = _mock_ingest(tmp_path, year)
         expected = laus_metro_path(year, "glynn_fox_v1", base_dir=tmp_path / "data")
         assert path == expected
+
+    def test_canonical_universe_definition_writes_cbsa_ids(self, tmp_path, monkeypatch):
+        targets = build_canonical_metro_targets_fixture()
+        response = _make_bls_response_for_targets(targets, year=2023)
+
+        monkeypatch.setattr(
+            "hhplab.ingest.bls_laus.read_metro_universe",
+            lambda definition_version, base_dir=None: targets[
+                ["metro_id", "cbsa_code", "metro_name"]
+            ],
+        )
+
+        with patch("hhplab.ingest.bls_laus.httpx.Client") as mock_client:
+            mock_post = mock_client.return_value.__enter__.return_value.post
+            mock_post.return_value.json.return_value = response
+            mock_post.return_value.raise_for_status.return_value = None
+
+            path = ingest_laus_metro(
+                year=2023,
+                definition_version=CANONICAL_UNIVERSE_DEFINITION_VERSION,
+                project_root=tmp_path,
+            )
+
+        df = pd.read_parquet(path)
+        assert list(df["metro_id"]) == ["31080", "35620"]
+        assert list(df["cbsa_code"]) == ["31080", "35620"]
 
     def test_data_source_column(self, tmp_path):
         path = _mock_ingest(tmp_path, 2023)
