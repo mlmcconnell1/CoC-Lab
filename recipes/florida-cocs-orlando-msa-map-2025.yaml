@@ -1,0 +1,78 @@
+version: 1
+name: florida_cocs_orlando_msa_map_2025
+description: >
+  Render all Florida CoC boundaries with the Orlando-Kissimmee-Sanford, FL
+  Census MSA boundary overlaid as a single recipe-native HTML map artifact.
+
+universe:
+  years: [2025]
+
+targets:
+  - id: florida_overlay_map
+    geometry: { type: coc, vintage: 2025, source: hud_exchange }
+    outputs: [map]
+    map_spec:
+      basemap: cartodbpositron
+      viewport:
+        fit_layers: true
+        padding: 30
+      layers:
+        - geometry: { type: coc, vintage: 2025, source: hud_exchange }
+          selector_ids:
+            [
+              FL-500,
+              FL-501,
+              FL-502,
+              FL-503,
+              FL-504,
+              FL-505,
+              FL-506,
+              FL-507,
+              FL-508,
+              FL-509,
+              FL-510,
+              FL-511,
+              FL-512,
+              FL-513,
+              FL-514,
+              FL-515,
+              FL-517,
+              FL-518,
+              FL-519,
+              FL-520,
+              FL-600,
+              FL-601,
+              FL-602,
+              FL-603,
+              FL-604,
+              FL-605,
+              FL-606,
+            ]
+          label: Florida CoCs
+          tooltip_fields: [coc_id, coc_name, state_abbrev]
+          style_mode: distinct
+          style:
+            fill_color: "#8ecae6"
+            stroke_color: "#1d3557"
+            fill_opacity: 0.24
+            stroke_opacity: 0.9
+            line_weight: 1.4
+            z_order: 0
+        - geometry: { type: msa, vintage: 2023, source: census_msa_2023 }
+          selector_ids: ["36740"]
+          label: Orlando MSA
+          tooltip_fields: [msa_id, msa_name, cbsa_code, definition_version]
+          style:
+            fill_color: "#ffb703"
+            stroke_color: "#9b2226"
+            fill_opacity: 0.12
+            stroke_opacity: 1.0
+            line_weight: 3.0
+            z_order: 1
+
+datasets: {}
+
+pipelines:
+  - id: florida_overlay_map_pipeline
+    target: florida_overlay_map
+    steps: []
