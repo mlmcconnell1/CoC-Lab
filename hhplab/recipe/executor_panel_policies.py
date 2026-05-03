@@ -22,6 +22,7 @@ from typing import Protocol
 
 import pandas as pd
 
+from hhplab.acs.variables_acs1 import ACS1_METRO_MEASURE_COLUMNS
 from hhplab.panel.conformance import (
     ACS1_MEASURE_COLUMNS,
     ACS_MEASURE_COLUMNS,
@@ -218,7 +219,16 @@ class Acs1PolicyApplier:
                 panel.loc[acs1_missing, "acs1_vintage_used"] = pd.NA
         if "acs1_vintage" in panel.columns:
             panel = panel.drop(columns=["acs1_vintage"])
-        return PolicyApplication(name=self.name, panel=panel)
+        extra_columns = tuple(
+            column
+            for column in ACS1_METRO_MEASURE_COLUMNS
+            if column in panel.columns and column not in ACS1_MEASURE_COLUMNS
+        )
+        return PolicyApplication(
+            name=self.name,
+            panel=panel,
+            extra_columns=extra_columns,
+        )
 
 
 @dataclass

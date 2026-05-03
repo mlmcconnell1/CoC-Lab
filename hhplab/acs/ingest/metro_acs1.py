@@ -1,11 +1,11 @@
 """ACS 1-year metro-native data fetcher.
 
-Fetches ACS 1-year unemployment data (Table B23025) from the Census Bureau
-API at CBSA (metropolitan statistical area) geography, maps CBSAs to
-Glynn/Fox metro IDs, and computes derived unemployment rates.
+Fetches ACS 1-year detailed-table data from the Census Bureau API at CBSA
+(metropolitan statistical area) geography, maps CBSAs to Glynn/Fox metro IDs,
+and computes derived unemployment rates.
 
-Unlike the ACS 5-year tract pipeline, ACS 1-year data is available directly
-at CBSA geography -- no crosswalk or tract aggregation is needed.
+Unlike the ACS 5-year tract pipeline, ACS 1-year data is available directly at
+CBSA geography -- no crosswalk or tract aggregation is needed.
 
 Usage
 -----
@@ -24,6 +24,8 @@ Output Schema
 - civilian_labor_force (Int64): Civilian labor force (B23025_003E)
 - unemployed_count (Int64): Unemployed civilians (B23025_005E)
 - unemployment_rate_acs1 (Float64): unemployed_count / civilian_labor_force
+- additional ACS1 income, housing-cost, utility, tenure, and housing-stock
+  measures from the requested detailed tables
 - data_source (str): always "census_acs1"
 - source_ref (str): API URL used
 - ingested_at (datetime UTC)
@@ -42,11 +44,15 @@ import hhplab.naming as naming
 
 from hhplab.acs.variables_acs1 import (
     ACS1_FIRST_RELIABLE_YEAR,
+    ACS1_FLOAT_COLUMNS,
+    ACS1_INTEGER_COLUMNS,
     ACS1_METRO_OUTPUT_COLUMNS,
     ACS1_TABLES,
     ACS1_UNAVAILABLE_VINTAGES,
-    ACS1_UNEMPLOYMENT_VARIABLES,
+    ACS1_VARIABLES_BY_TABLE,
     ACS1_VARIABLE_NAMES,
+    acs1_tables_for_vintage,
+    acs1_unavailable_tables_for_vintage,
 )
 from hhplab.metro.definitions import (
     cbsa_to_metro_id,
@@ -65,11 +71,10 @@ def fetch_acs1_cbsa_data(
     vintage: int,
     api_key: str | None = None,
 ) -> pd.DataFrame:
-    """Fetch ACS 1-year B23025 data for all CBSAs from Census API.
+    """Fetch ACS 1-year detailed-table data for all CBSAs from Census API.
 
-    Makes a single request to the Census API to retrieve ACS 1-year
-    unemployment data (Table B23025) for all metropolitan and
-    micropolitan statistical areas.
+    Makes one Census API request per requested ACS table, then merges the
+    responses on CBSA geography.
 
     Parameters
     ----------
@@ -81,7 +86,7 @@ def fetch_acs1_cbsa_data(
     Returns
     -------
     pd.DataFrame
-        DataFrame with columns for each B23025 variable and ``cbsa_code``.
+        DataFrame with columns for each fetched ACS1 variable and ``cbsa_code``.
 
     Raises
     ------
@@ -107,67 +112,93 @@ def fetch_acs1_cbsa_data(
             ACS1_FIRST_RELIABLE_YEAR,
         )
 
-    url = CENSUS_API_ACS1.format(year=vintage)
-    variables = ",".join(ACS1_UNEMPLOYMENT_VARIABLES)
+    available_tables = acs1_tables_for_vintage(vintage)
+    unavailable_tables = acs1_unavailable_tables_for_vintage(vintage)
 
-    params: dict[str, str] = {
-        "get": f"NAME,{variables}",
-        "for": f"{CBSA_GEO_PARAM}:*",
-    }
-
-    # Add API key if available
     if api_key is None:
         api_key = os.environ.get("CENSUS_API_KEY")
-    if api_key:
-        params["key"] = api_key
+    frames: list[pd.DataFrame] = []
+    url = CENSUS_API_ACS1.format(year=vintage)
 
     logger.info(
-        f"Fetching ACS 1-year {vintage} data for all CBSAs "
-        f"(variables: {', '.join(ACS1_UNEMPLOYMENT_VARIABLES)})"
+        "Fetching ACS 1-year %d data for all CBSAs across %d tables",
+        vintage,
+        len(available_tables),
     )
-
-    with httpx.Client(timeout=60.0) as client:
-        response = client.get(url, params=params)
-        response.raise_for_status()
-        data = response.json()
-
-    if not data or len(data) < 2:
-        raise ValueError(
-            f"Census API returned empty or invalid response for ACS 1-year {vintage}. "
-            f"Verify that ACS 1-year data is available for vintage {vintage} at "
-            f"{url}"
+    if unavailable_tables:
+        logger.info(
+            "Skipping ACS1 tables unavailable for vintage %d: %s",
+            vintage,
+            ", ".join(unavailable_tables),
         )
 
-    headers = data[0]
-    rows = data[1:]
+    with httpx.Client(timeout=60.0) as client:
+        for table in available_tables:
+            table_variables = ACS1_VARIABLES_BY_TABLE[table]
+            params: dict[str, str] = {
+                "get": f"NAME,{','.join(table_variables)}",
+                "for": f"{CBSA_GEO_PARAM}:*",
+            }
+            if api_key:
+                params["key"] = api_key
 
-    df = pd.DataFrame(rows, columns=headers)
+            response = client.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
 
-    # The CBSA code is in the last column
-    cbsa_col = CBSA_GEO_PARAM
-    if cbsa_col not in df.columns:
-        # Try to find it -- Census sometimes truncates the column name
-        cbsa_candidates = [c for c in df.columns if "metropolitan" in c.lower()]
-        if cbsa_candidates:
-            cbsa_col = cbsa_candidates[0]
-        else:
-            raise ValueError(
-                f"Cannot find CBSA code column in Census API response. "
-                f"Available columns: {list(df.columns)}. "
-                f"Expected a column containing 'metropolitan'."
-            )
+            if not data or len(data) < 2:
+                raise ValueError(
+                    f"Census API returned empty or invalid response for ACS 1-year "
+                    f"{vintage} table {table}. Verify that the table is available at "
+                    f"{url}"
+                )
 
-    df = df.rename(columns={cbsa_col: "cbsa_code"})
+            headers = data[0]
+            rows = data[1:]
+            table_df = pd.DataFrame(rows, columns=headers)
 
-    # Convert numeric columns; Census uses negative values for missing
-    for var_code in ACS1_UNEMPLOYMENT_VARIABLES:
-        if var_code in df.columns:
-            df[var_code] = pd.to_numeric(df[var_code], errors="coerce")
-            df.loc[df[var_code] < 0, var_code] = pd.NA
+            cbsa_col = CBSA_GEO_PARAM
+            if cbsa_col not in table_df.columns:
+                cbsa_candidates = [
+                    column
+                    for column in table_df.columns
+                    if "metropolitan" in column.lower()
+                ]
+                if cbsa_candidates:
+                    cbsa_col = cbsa_candidates[0]
+                else:
+                    raise ValueError(
+                        "Cannot find CBSA code column in Census API response for "
+                        f"table {table}. Available columns: {list(table_df.columns)}. "
+                        "Expected a column containing 'metropolitan'."
+                    )
 
-    logger.info(f"Fetched ACS 1-year data for {len(df)} CBSAs")
+            table_df = table_df.rename(columns={cbsa_col: "cbsa_code"})
 
-    return df
+            for var_code in table_variables:
+                if var_code in table_df.columns:
+                    table_df[var_code] = pd.to_numeric(
+                        table_df[var_code],
+                        errors="coerce",
+                    )
+                    table_df.loc[table_df[var_code] < 0, var_code] = pd.NA
+
+            keep_columns = ["NAME", "cbsa_code", *table_variables]
+            frames.append(table_df[keep_columns].copy())
+
+    if not frames:
+        raise ValueError(
+            f"No ACS 1-year tables were available to fetch for vintage {vintage}."
+        )
+
+    merged = frames[0]
+    for frame in frames[1:]:
+        merged = merged.merge(frame, on=["NAME", "cbsa_code"], how="inner")
+
+    logger.info("Fetched ACS 1-year data for %d CBSAs", len(merged))
+    merged.attrs["acs1_tables_fetched"] = available_tables
+    merged.attrs["acs1_tables_unavailable"] = unavailable_tables
+    return merged
 
 
 def ingest_metro_acs1(
@@ -176,11 +207,11 @@ def ingest_metro_acs1(
     project_root: Path | None = None,
     api_key: str | None = None,
 ) -> Path:
-    """Fetch ACS 1-year unemployment data at CBSA geography and map to metros.
+    """Fetch ACS 1-year detailed-table data at CBSA geography and map to metros.
 
-    Fetches ACS 1-year Table B23025 (Employment Status) data for all CBSAs,
-    maps them to Glynn/Fox metro IDs, derives unemployment rate, and writes
-    a curated Parquet file with provenance metadata.
+    Fetches requested ACS 1-year detailed tables for all CBSAs, maps them to
+    Glynn/Fox metro IDs, derives unemployment rate, and writes a curated
+    Parquet file with provenance metadata.
 
     Parameters
     ----------
@@ -207,9 +238,11 @@ def ingest_metro_acs1(
     """
     ingested_at = datetime.now(UTC)
 
-    # Fetch all CBSA data in one request
+    # Fetch all CBSA data across the requested ACS1 tables
     df = fetch_acs1_cbsa_data(vintage, api_key=api_key)
     total_cbsas = len(df)
+    fetched_tables = df.attrs.get("acs1_tables_fetched", ACS1_TABLES)
+    unavailable_tables = df.attrs.get("acs1_tables_unavailable", [])
 
     # Map CBSA codes to metro IDs
     df["metro_id"] = df["cbsa_code"].apply(cbsa_to_metro_id)
@@ -234,8 +267,7 @@ def ingest_metro_acs1(
     # Rename raw Census variables to friendly names
     mapped = mapped.rename(columns=ACS1_VARIABLE_NAMES)
 
-    # Compute derived unemployment rate
-    # unemployment_rate_acs1 = B23025_005E / B23025_003E
+    # Compute derived unemployment rate.
     mapped["unemployment_rate_acs1"] = pd.NA
     valid_denom = (
         mapped["civilian_labor_force"].notna()
@@ -246,25 +278,28 @@ def ingest_metro_acs1(
         / mapped.loc[valid_denom, "civilian_labor_force"]
     )
 
-    # Add provenance columns
+    # Add stable schema columns for tables unavailable in earlier vintages.
+    for column_name in ACS1_INTEGER_COLUMNS + ACS1_FLOAT_COLUMNS:
+        if column_name not in mapped.columns:
+            mapped[column_name] = pd.NA
+
+    # Add provenance columns.
     api_url = CENSUS_API_ACS1.format(year=vintage)
     mapped["data_source"] = "census_acs1"
-    mapped["source_ref"] = f"{api_url}?tables={'+'.join(ACS1_TABLES)}"
+    mapped["source_ref"] = f"{api_url}?tables={'+'.join(fetched_tables)}"
     mapped["ingested_at"] = ingested_at
     mapped["acs1_vintage"] = str(vintage)
     mapped["definition_version"] = definition_version
 
-    # Ensure proper column types
+    # Ensure proper column types.
     mapped["metro_id"] = mapped["metro_id"].astype(str)
     mapped["cbsa_code"] = mapped["cbsa_code"].astype(str)
 
-    int_cols = ["pop_16_plus", "civilian_labor_force", "unemployed_count"]
-    for col in int_cols:
+    for col in ACS1_INTEGER_COLUMNS:
         if col in mapped.columns:
             mapped[col] = mapped[col].astype("Int64")
 
-    float_cols = ["unemployment_rate_acs1"]
-    for col in float_cols:
+    for col in ACS1_FLOAT_COLUMNS:
         if col in mapped.columns:
             mapped[col] = mapped[col].astype("Float64")
 
@@ -284,10 +319,16 @@ def ingest_metro_acs1(
         geo_type="metro",
         definition_version=definition_version,
         extra={
-            "dataset_type": "metro_acs1_unemployment",
+            "dataset_type": "metro_acs1",
             "acs_product": "acs1",
-            "tables": ACS1_TABLES,
-            "variables": ACS1_UNEMPLOYMENT_VARIABLES,
+            "tables_requested": ACS1_TABLES,
+            "tables_fetched": fetched_tables,
+            "tables_unavailable_for_vintage": unavailable_tables,
+            "variables": [
+                variable_code
+                for table in fetched_tables
+                for variable_code in ACS1_VARIABLES_BY_TABLE[table]
+            ],
             "api_year": vintage,
             "retrieved_at": ingested_at.isoformat(),
             "row_count": len(result),
@@ -300,8 +341,9 @@ def ingest_metro_acs1(
 
     write_parquet_with_provenance(result, output_path, provenance)
     logger.info(
-        f"Wrote ACS 1-year metro unemployment data to {output_path} "
-        f"({len(result)} metros)"
+        "Wrote ACS 1-year metro data to %s (%d metros)",
+        output_path,
+        len(result),
     )
 
     return output_path

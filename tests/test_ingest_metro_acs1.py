@@ -16,7 +16,8 @@ from hhplab.acs.ingest.metro_acs1 import (
 from hhplab.acs.variables_acs1 import (
     ACS1_METRO_OUTPUT_COLUMNS,
     ACS1_UNAVAILABLE_VINTAGES,
-    ACS1_UNEMPLOYMENT_VARIABLES,
+    ACS1_VARIABLES_BY_TABLE,
+    acs1_tables_for_vintage,
 )
 from hhplab.provenance import read_provenance
 
@@ -27,32 +28,29 @@ from hhplab.provenance import read_provenance
 
 def make_cbsa_response(
     cbsas: list[dict[str, Any]],
+    variables: list[str],
 ) -> list[list[str]]:
-    """Create a mock Census API response for ACS 1-year CBSA data.
-
-    Parameters
-    ----------
-    cbsas : list[dict]
-        List of CBSA data dicts. Each should have a "cbsa_code" key and
-        optionally Census variable codes as keys. Missing variables default
-        to "0".
-
-    Returns
-    -------
-    list[list[str]]
-        Census API-style JSON response: header row + data rows.
-    """
-    headers = ["NAME"] + ACS1_UNEMPLOYMENT_VARIABLES + [CBSA_GEO_PARAM]
+    """Create a mock Census API response for one ACS 1-year table fetch."""
+    headers = ["NAME"] + variables + [CBSA_GEO_PARAM]
 
     rows = [headers]
     for cbsa in cbsas:
         row = [cbsa.get("NAME", "Test Metro Area")]
-        for var in ACS1_UNEMPLOYMENT_VARIABLES:
+        for var in variables:
             row.append(str(cbsa.get(var, "0")))
         row.append(cbsa.get("cbsa_code", "99999"))
         rows.append(row)
 
     return rows
+
+
+def queue_acs1_group_responses(httpx_mock, cbsas: list[dict[str, Any]], vintage: int) -> None:
+    """Queue one mocked Census API response per ACS1 table fetch."""
+    for table in acs1_tables_for_vintage(vintage):
+        httpx_mock.add_response(
+            url=CENSUS_API_URL_PATTERN,
+            json=make_cbsa_response(cbsas, ACS1_VARIABLES_BY_TABLE[table]),
+        )
 
 
 # Sample CBSA data: includes GF metros and non-GF metros
@@ -112,12 +110,7 @@ class TestFetchParsesCensusResponse:
 
     def test_fetch_parses_census_response(self, httpx_mock):
         """Mock API returns valid data, verify DataFrame shape and columns."""
-        response_data = make_cbsa_response(SAMPLE_CBSAS)
-
-        httpx_mock.add_response(
-            url=CENSUS_API_URL_PATTERN,
-            json=response_data,
-        )
+        queue_acs1_group_responses(httpx_mock, SAMPLE_CBSAS, vintage=2023)
 
         df = fetch_acs1_cbsa_data(vintage=2023)
 
@@ -126,7 +119,7 @@ class TestFetchParsesCensusResponse:
 
         # Should have variable columns and cbsa_code
         assert "cbsa_code" in df.columns
-        for var in ACS1_UNEMPLOYMENT_VARIABLES:
+        for var in ACS1_VARIABLES_BY_TABLE["B23025"]:
             assert var in df.columns
 
         # Verify numeric conversion happened
@@ -142,12 +135,7 @@ class TestFetchParsesCensusResponse:
                 "B23025_005E": "-666666666",
             }
         ]
-        response_data = make_cbsa_response(cbsas)
-
-        httpx_mock.add_response(
-            url=CENSUS_API_URL_PATTERN,
-            json=response_data,
-        )
+        queue_acs1_group_responses(httpx_mock, cbsas, vintage=2023)
 
         df = fetch_acs1_cbsa_data(vintage=2023)
 
@@ -172,12 +160,7 @@ class TestCbsaToMetroMapping:
 
     def test_cbsa_to_metro_mapping(self, httpx_mock, tmp_path):
         """Verify only GF metros are retained, others dropped."""
-        response_data = make_cbsa_response(SAMPLE_CBSAS)
-
-        httpx_mock.add_response(
-            url=CENSUS_API_URL_PATTERN,
-            json=response_data,
-        )
+        queue_acs1_group_responses(httpx_mock, SAMPLE_CBSAS, vintage=2023)
 
         path = ingest_metro_acs1(
             vintage=2023,
@@ -206,12 +189,7 @@ class TestCbsaToMetroMapping:
                 "B23025_005E": "8000",
             },
         ]
-        response_data = make_cbsa_response(cbsas)
-
-        httpx_mock.add_response(
-            url=CENSUS_API_URL_PATTERN,
-            json=response_data,
-        )
+        queue_acs1_group_responses(httpx_mock, cbsas, vintage=2023)
 
         with pytest.raises(ValueError, match="No CBSAs.*could be mapped"):
             ingest_metro_acs1(vintage=2023)
@@ -230,12 +208,7 @@ class TestUnemploymentRateCalculation:
                 "B23025_005E": "500000",
             },
         ]
-        response_data = make_cbsa_response(cbsas)
-
-        httpx_mock.add_response(
-            url=CENSUS_API_URL_PATTERN,
-            json=response_data,
-        )
+        queue_acs1_group_responses(httpx_mock, cbsas, vintage=2023)
 
         path = ingest_metro_acs1(vintage=2023, project_root=tmp_path)
         df = pd.read_parquet(path)
@@ -255,12 +228,7 @@ class TestUnemploymentRateCalculation:
                 "B23025_005E": "0",
             },
         ]
-        response_data = make_cbsa_response(cbsas)
-
-        httpx_mock.add_response(
-            url=CENSUS_API_URL_PATTERN,
-            json=response_data,
-        )
+        queue_acs1_group_responses(httpx_mock, cbsas, vintage=2023)
 
         path = ingest_metro_acs1(vintage=2023, project_root=tmp_path)
         df = pd.read_parquet(path)
@@ -288,12 +256,7 @@ class TestOutputSchema:
                 "B23025_005E": "48000",
             },
         ]
-        response_data = make_cbsa_response(cbsas)
-
-        httpx_mock.add_response(
-            url=CENSUS_API_URL_PATTERN,
-            json=response_data,
-        )
+        queue_acs1_group_responses(httpx_mock, cbsas, vintage=2023)
 
         path = ingest_metro_acs1(vintage=2023, project_root=tmp_path)
         df = pd.read_parquet(path)
@@ -321,12 +284,7 @@ class TestProvenanceColumns:
                 "B23025_005E": "500000",
             },
         ]
-        response_data = make_cbsa_response(cbsas)
-
-        httpx_mock.add_response(
-            url=CENSUS_API_URL_PATTERN,
-            json=response_data,
-        )
+        queue_acs1_group_responses(httpx_mock, cbsas, vintage=2023)
 
         path = ingest_metro_acs1(vintage=2023, project_root=tmp_path)
         df = pd.read_parquet(path)
@@ -335,6 +293,7 @@ class TestProvenanceColumns:
         assert row["data_source"] == "census_acs1"
         assert "acs1" in row["source_ref"]
         assert "B23025" in row["source_ref"]
+        assert "B19080" in row["source_ref"]
         assert pd.notna(row["ingested_at"])
         assert row["acs1_vintage"] == "2023"
         assert row["cbsa_code"] == "35620"
@@ -346,7 +305,7 @@ class TestProvenanceColumns:
         assert prov.geo_type == "metro"
         assert prov.definition_version == "glynn_fox_v1"
         assert prov.extra["acs_product"] == "acs1"
-        assert prov.extra["dataset_type"] == "metro_acs1_unemployment"
+        assert prov.extra["dataset_type"] == "metro_acs1"
 
 
 class TestIngestWritesParquet:
@@ -354,12 +313,7 @@ class TestIngestWritesParquet:
 
     def test_ingest_writes_parquet(self, httpx_mock, tmp_path):
         """Full pipeline: fetch from mock API, write Parquet, verify contents."""
-        response_data = make_cbsa_response(SAMPLE_CBSAS)
-
-        httpx_mock.add_response(
-            url=CENSUS_API_URL_PATTERN,
-            json=response_data,
-        )
+        queue_acs1_group_responses(httpx_mock, SAMPLE_CBSAS, vintage=2023)
 
         path = ingest_metro_acs1(
             vintage=2023,
@@ -404,6 +358,59 @@ class TestIngestWritesParquet:
         # Verify metro names are present
         assert df["metro_name"].notna().all()
         assert "New York" in df[df["metro_id"] == "GF01"].iloc[0]["metro_name"]
+
+    def test_requested_tables_are_included(self, httpx_mock, tmp_path):
+        """Key requested ACS1 tables should flow through to output columns."""
+        cbsas = [
+            {
+                "cbsa_code": "35620",
+                "B19080_001E": "32000",
+                "B25064_001E": "1764",
+                "B25088_002E": "3245",
+                "B25132_003E": "7490498",
+                "B25035_001E": "1960",
+                "B25024_009E": "150000",
+                "B25010_001E": "2.61",
+                "B23025_001E": "16000000",
+                "B23025_003E": "10000000",
+                "B23025_005E": "500000",
+            },
+        ]
+        queue_acs1_group_responses(httpx_mock, cbsas, vintage=2023)
+
+        path = ingest_metro_acs1(vintage=2023, project_root=tmp_path)
+        df = pd.read_parquet(path)
+        row = df.iloc[0]
+
+        assert row["household_income_quintile_cutoff_lowest"] == 32000
+        assert row["median_gross_rent"] == 1764
+        assert row["median_owner_costs_with_mortgage"] == 3245
+        assert row["electricity_cost_charged"] == 7490498
+        assert row["median_year_structure_built"] == 1960
+        assert row["units_in_structure_50_plus"] == 150000
+        assert float(row["average_household_size_total"]) == pytest.approx(2.61)
+
+    def test_utility_tables_backfill_na_before_2021(self, httpx_mock, tmp_path):
+        """Utility-cost tables are absent before 2021 and should backfill as NA."""
+        cbsas = [
+            {
+                "cbsa_code": "35620",
+                "B23025_001E": "16000000",
+                "B23025_003E": "10000000",
+                "B23025_005E": "500000",
+            },
+        ]
+        queue_acs1_group_responses(httpx_mock, cbsas, vintage=2019)
+
+        path = ingest_metro_acs1(vintage=2019, project_root=tmp_path)
+        df = pd.read_parquet(path)
+
+        assert "electricity_cost_total" in df.columns
+        assert "gas_cost_total" in df.columns
+        assert "water_sewer_cost_total" in df.columns
+        assert df["electricity_cost_total"].isna().all()
+        assert df["gas_cost_total"].isna().all()
+        assert df["water_sewer_cost_total"].isna().all()
 
 
 class TestAcs12020Unavailability:

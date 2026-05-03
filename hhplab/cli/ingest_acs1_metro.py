@@ -1,4 +1,4 @@
-"""CLI command for ingesting ACS 1-year metro-native unemployment data."""
+"""CLI command for ingesting ACS 1-year metro-native detailed-table data."""
 
 from __future__ import annotations
 
@@ -40,12 +40,12 @@ def ingest_acs1_metro(
         ),
     ] = False,
 ) -> None:
-    """Ingest ACS 1-year unemployment data at CBSA geography for metros.
+    """Ingest ACS 1-year detailed-table data at CBSA geography for metros.
 
-    Fetches Table B23025 (Employment Status for Population 16+) from the
-    Census Bureau API at metropolitan/micropolitan statistical area geography,
-    maps CBSAs to Glynn/Fox metro IDs, computes unemployment rates, and writes
-    a curated Parquet file.
+    Fetches the curated ACS 1-year metro table set from the Census Bureau API
+    at metropolitan/micropolitan statistical area geography, maps CBSAs to
+    Glynn/Fox metro IDs, computes unemployment rates, and writes a curated
+    Parquet file.
 
     ACS 1-year data is available only for geographies with population >= 65,000.
     All 25 Glynn/Fox metros meet this threshold.
@@ -63,10 +63,10 @@ def ingest_acs1_metro(
     from hhplab.acs.ingest.metro_acs1 import ingest_metro_acs1
 
     if not json_output:
-        typer.echo("Ingesting ACS 1-year metro unemployment data...")
+        typer.echo("Ingesting ACS 1-year metro data...")
         typer.echo(f"  Vintage:    {vintage}")
         typer.echo(f"  Definition: {definition_version}")
-        typer.echo("  Table:      B23025 (Employment Status)")
+        typer.echo("  Product:    ACS 1-year detailed tables")
         typer.echo("")
 
     try:
