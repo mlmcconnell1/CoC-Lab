@@ -1,5 +1,8 @@
 # Storage Roots Configuration Plan
 
+> Note: the repository/runtime is now HHP-Lab/`hhplab`. This file is kept in
+> its historical form, so older CoC-Lab references may remain intentionally.
+
 Status: Planned
 Version: 0.1
 Applies to: runtime configuration, path resolution, recipe execution, manifests, export CLI

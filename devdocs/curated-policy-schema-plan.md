@@ -1,5 +1,8 @@
 # Curated Data Policy + Recipe Vintage-Set Plan (Option 1)
 
+> Note: the repository/runtime is now HHP-Lab/`hhplab`. This file is kept in
+> its historical form, so older CoC-Lab references may remain intentionally.
+
 Status: Mostly Implemented (Feb 2026)
 Version: 0.2
 Applies to: `data/curated/**`, recipe schema/planner, export selection, and migration utilities

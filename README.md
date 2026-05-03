@@ -2,6 +2,11 @@
 
 HHP-Lab is a Python toolkit and CLI for building analysis-ready homelessness panels from HUD Continuum of Care data, Census geography and population products, ACS tract measures, and Zillow rent data.
 
+The repository was renamed from CoC-Lab to HHP-Lab to better reflect the
+current scope. Historical references to CoC-Lab are still preserved where they
+describe legacy artifacts or documents, including the beads database/JSONL
+files and historical files in `devdocs/`.
+
 The project started as CoC boundary infrastructure, but it now supports three
 analysis geography families:
 
@@ -138,6 +143,10 @@ If you previously used legacy commands/flags:
 
 Recipe outputs now live under `output_root/<recipe-name>/`. Curated prerequisite
 artifacts continue to live under `asset_store_root/curated/`.
+
+Bead IDs are the one intentional exception to the rename: issue tracking
+remains in the historical `coclab-*` namespace. Existing bead slugs are not
+migrated, and new beads should continue using the same `coclab-*` prefix.
 
 ## Analysis Geography Support
 

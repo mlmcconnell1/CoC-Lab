@@ -1,5 +1,8 @@
 # Metro Areas as a First-Class Analysis Geography
 
+> Note: the repository/runtime is now HHP-Lab/`hhplab`. This file is kept in
+> its historical form, so older CoC-Lab references may remain intentionally.
+
 Status: Implemented
 Version: 1.0
 Primary target: Glynn/Fox metro definitions

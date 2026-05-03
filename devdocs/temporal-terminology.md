@@ -1,5 +1,8 @@
 # Temporal Terminology (Background Reference)
 
+> Note: the repository/runtime is now HHP-Lab/`hhplab`. This file is kept in
+> its historical form, so older CoC-Lab references may remain intentionally.
+
 This is a compact reference aligned to `manual-obsidian/07-Temporal-Terminology.md`.
 Use the manual chapter as the canonical version.
 

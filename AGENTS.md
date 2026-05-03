@@ -10,6 +10,10 @@ Use `$BR` (or just the resolved command) for all beads operations below. Prefer 
 
 **Note:** `br` is non-invasive and never executes git commands. After `br sync --flush-only`, you must manually run `git add .beads/ && git commit`. The `bd sync` command commits and pushes automatically.
 
+**Repository rename note:** the repository/runtime name is now HHP-Lab/`hhplab`. Historical references to CoC-Lab may still appear in the beads database and JSONL exports, along with historical files in `devdocs/`. Keep those historical artifacts as-is unless a task explicitly requires migration.
+
+**Bead namespace note:** even though the project/runtime name is now HHP-Lab/`hhplab`, bead IDs intentionally remain in the historical `coclab-*` namespace. Do not migrate existing bead slugs and do not switch new issues to an `hhplab-*` prefix.
+
 ## Quick Reference
 
 | Action | br (preferred) | bd (fallback) |

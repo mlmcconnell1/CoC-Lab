@@ -1,5 +1,8 @@
 # CoC-Lab Recipe Schema Updates (Pydantic + Resolution Planner)
 
+> Note: the repository/runtime is now HHP-Lab/`hhplab`. This file is kept in
+> its historical form, so older CoC-Lab references may remain intentionally.
+
 **Goal:** Implement incremental improvements to the recipe system:
 1. Support **human-readable YAML** “decorator” step syntax (e.g. `- resample: {...}`, `- join: {...}`), normalized into canonical internal structures.
 2. Add dataset **`file_set` with `segments`** for time-banded geometry + paths (e.g., ACS tracts 2010 for 2015–2019; tracts 2020 for 2020–2024).

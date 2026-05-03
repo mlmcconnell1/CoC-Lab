@@ -1,5 +1,8 @@
 # Directory Structure: ingest, aggregate, build, export
 
+> Note: the repository/runtime is now HHP-Lab/`hhplab`. This file is kept in
+> its historical form, so older CoC-Lab references may remain intentionally.
+
 Derived from code review of `hhplab/naming.py`, `hhplab/builds.py`,
 `hhplab/raw_snapshot.py`, `hhplab/export/copy.py`, and all CLI modules.
 

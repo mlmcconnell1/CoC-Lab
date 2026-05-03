@@ -1,5 +1,8 @@
 # Metro ACS 1-Year + 5-Year Dual-Product Plan
 
+> Note: the repository/runtime is now HHP-Lab/`hhplab`. This file is kept in
+> its historical form, so older CoC-Lab references may remain intentionally.
+
 Status: Proposed
 Version: 0.1
 Scope: Metro analysis geography only

@@ -1,5 +1,8 @@
 # Raw Data Retention Policy
 
+> Note: the repository/runtime is now HHP-Lab/`hhplab`. This file is kept in
+> its historical form, so older CoC-Lab references may remain intentionally.
+
 Status: Implemented
 Version: 1.2
 Applies to: All ingestion pipelines that fetch external data
