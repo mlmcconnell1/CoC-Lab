@@ -67,20 +67,22 @@ Notes:
 - `curated_dir()` and `output_root()` provide stable path helpers for code that
   should follow the configured storage-root layout.
 
-## Build Helpers
+## Storage and Recipe Helpers
+
+Use storage-root helpers plus recipe manifests/artifact resolution instead of
+legacy named-build helpers.
 
 ```python
-from hhplab.builds import (
-    build_curated_dir,
-    build_manifest_path,
-    read_build_manifest,
-    require_build_dir,
-    resolve_build_dir,
-)
+from pathlib import Path
 
-build_dir = require_build_dir("demo")
-manifest = read_build_manifest(build_dir)
-curated_dir = build_curated_dir(build_dir)
+from hhplab.config import load_config
+from hhplab.paths import curated_dir, output_root
+from hhplab.recipe.manifest import read_manifest
+
+cfg = load_config()
+measures_dir = curated_dir("measures", cfg)
+recipe_outputs = output_root(cfg) / "my-recipe"
+manifest = read_manifest(recipe_outputs / "panel__Y2020-2021@B2025.manifest.json")
 ```
 
 ## Provenance Helpers

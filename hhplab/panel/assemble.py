@@ -1233,7 +1233,7 @@ def build_panel(
         if zori_df is None:
             raise ValueError(
                 "ZORI integration requested but no ZORI yearly data available. "
-                "Run 'hhplab aggregate zori --build <BUILD>' first, or provide "
+                "Run 'hhplab aggregate zori --years <YEAR-SPEC>' first, or provide "
                 "--zori-yearly-path explicitly."
             )
 

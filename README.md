@@ -52,7 +52,7 @@ uv run hhplab --help
 
 Common entry points:
 
-- `hhplab status --json`: scan curated assets and optional named-build inventories
+- `hhplab status --json`: scan curated assets, recipe outputs, and prerequisite gaps
 - `hhplab aggregate {acs|pit|pep|zori}`: produce standalone CoC aggregate artifacts
 - `hhplab build recipe --recipe <file>`: run a recipe build (validation + preflight included)
 - `hhplab build recipe-preflight --recipe <file> --json`: readiness report without execution
@@ -95,7 +95,7 @@ panels and their manifest sidecars resolve under `output_root/`.
 
 ## Quick Start
 
-Recipe-driven builds are the primary workflow.
+Recipe-driven builds are the only supported end-to-end orchestration workflow.
 
 Human path:
 
@@ -120,6 +120,24 @@ uv run hhplab build recipe-plan --recipe recipes/metro25-glynnfox.yaml --json
 Most recipe builds consume curated source artifacts directly. Use the
 `aggregate` command group only when you want standalone CoC aggregate
 artifacts or when a specific recipe explicitly points at those outputs.
+
+## Legacy CLI Migration
+
+Named build orchestration has been retired.
+
+- Use `hhplab build recipe --recipe <file>` as the single end-to-end build entrypoint.
+- Use `hhplab build recipe-preflight --recipe <file> --json` as the no-execute readiness gate.
+- Use `hhplab build recipe-plan --recipe <file> --json` only to inspect resolved tasks while authoring or debugging.
+- Use low-level commands such as `ingest`, `generate xwalks`, and `aggregate` only to materialize curated prerequisites or standalone debug artifacts.
+
+If you previously used legacy commands/flags:
+
+- `hhplab status --builds-dir ...` -> `hhplab status --output-root ...`
+- `hhplab aggregate <dataset> --build <name>` -> `hhplab aggregate <dataset> --years <spec>`
+- `hhplab generate xwalks --build <name>` -> `hhplab generate xwalks --boundary <year> --tracts <year>`
+
+Recipe outputs now live under `output_root/<recipe-name>/`. Curated prerequisite
+artifacts continue to live under `asset_store_root/curated/`.
 
 ## Analysis Geography Support
 

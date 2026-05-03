@@ -28,6 +28,7 @@ hhplab status --json
 
 `status` performs a one-shot readiness scan across:
 - curated assets under the configured data directory (`data/curated/` by default)
+- recipe output namespaces under the configured output root (`outputs/` by default)
 - missing-prerequisite checks with actionable hints
 
 Exit behavior:
@@ -41,8 +42,6 @@ hhplab generate xwalks --boundary 2025 --tracts 2023
 ```
 
 Important options:
-- `--build` (optional; writes to a named build dir instead of the canonical
-  crosswalk location under `asset_store_root/curated/xwalks/`)
 - `--boundary`
 - `--tracts`
 - `--counties`
@@ -60,13 +59,16 @@ hhplab aggregate pit --years 2018-2024
 ```
 
 All four write to `asset_store_root/curated/<dataset>/` by default
-(`data/curated/<dataset>/` with built-in defaults). `--build` is optional and
-writes to a named build directory when provided. When `--build` is omitted,
-`--years` is required.
+(`data/curated/<dataset>/` with built-in defaults). `--years` is required.
 
 These commands produce standalone CoC aggregate artifacts. They are not a
 prerequisite for recipe execution unless a recipe explicitly points to
 aggregate outputs.
+
+Use them for:
+- materializing curated prerequisites ahead of a recipe build
+- debugging a single dataset family in isolation
+- generating standalone CoC artifacts outside recipe execution
 
 Current ACS aggregation details:
 - `aggregate acs` reads cached tract files only; it does not call Census APIs
@@ -123,6 +125,22 @@ hhplab build recipe-plan --recipe recipes/metro25-glynnfox.yaml --json
 ```
 
 Use this to resolve and inspect planned tasks (`materialize`, `resample`, `join`) while authoring or debugging a recipe. For a readiness gate, use `recipe-preflight`.
+
+### Legacy CLI Migration
+
+Recipe commands are now the only supported end-to-end orchestration surface.
+Legacy named-build orchestration has been removed.
+
+Use this mapping when migrating older workflows:
+
+- `hhplab build recipe --recipe <file>` replaces named build creation + end-to-end execution.
+- `hhplab build recipe-preflight --recipe <file> --json` replaces the old “check the build state first” pattern.
+- `hhplab status --output-root <path>` replaces `hhplab status --builds-dir <path>`.
+- `hhplab aggregate <dataset> --years <spec>` replaces `hhplab aggregate <dataset> --build <name>` when you need standalone curated artifacts.
+- `hhplab generate xwalks --boundary <year> --tracts <year>` replaces `hhplab generate xwalks --build <name> ...`.
+
+Low-level commands remain supported as curated-prerequisite tools. They are no
+longer documented as a parallel orchestration framework.
 
 ### Recipe Provenance Utilities
 

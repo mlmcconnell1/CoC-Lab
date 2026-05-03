@@ -1021,6 +1021,28 @@ class TestMetroPanelAssembly:
         assert "zori_coc" in result.columns
         assert result["zori_coc"].notna().all()
 
+    def test_build_metro_panel_missing_zori_has_recipe_era_remediation(self, metro_data_dir):
+        policy = AlignmentPolicy(
+            boundary_vintage_func=lambda year: str(year),
+            acs_vintage_func=lambda year: "2019",
+            weighting_method="population",
+        )
+        missing_zori_dir = metro_data_dir["zori_dir"] / "missing"
+        missing_zori_dir.mkdir()
+
+        with pytest.raises(ValueError, match="aggregate zori --years <YEAR-SPEC>"):
+            build_panel(
+                2020,
+                2020,
+                policy=policy,
+                pit_dir=metro_data_dir["pit_dir"],
+                measures_dir=metro_data_dir["measures_dir"],
+                rents_dir=missing_zori_dir,
+                include_zori=True,
+                geo_type="metro",
+                definition_version="glynn_fox_v1",
+            )
+
     def test_save_metro_panel_uses_geo_aware_filename(self, metro_data_dir):
         policy = AlignmentPolicy(
             boundary_vintage_func=lambda year: str(year),
