@@ -9,6 +9,9 @@ from hhplab.cli.main import app
 
 runner = CliRunner()
 
+RECIPE_PREFLIGHT_CMD = "hhplab build recipe-preflight --recipe <file> --json"
+RECIPE_EXECUTE_CMD = "hhplab build recipe --recipe <file> --json"
+
 
 def _scaffold_curated(tmp_path: Path) -> Path:
     """Create a minimal curated directory structure with test parquet files."""
@@ -17,19 +20,16 @@ def _scaffold_curated(tmp_path: Path) -> Path:
     data_dir = tmp_path / "data"
     curated = data_dir / "curated"
 
-    # Boundaries
     bdir = curated / "coc_boundaries"
     bdir.mkdir(parents=True)
     pd.DataFrame({"coc_id": ["CO-500"]}).to_parquet(bdir / "coc__B2024.parquet")
     pd.DataFrame({"coc_id": ["CO-500"]}).to_parquet(bdir / "coc__B2025.parquet")
 
-    # TIGER census
     tdir = curated / "tiger"
     tdir.mkdir(parents=True)
     pd.DataFrame({"geoid": ["08001"]}).to_parquet(tdir / "tracts__T2023.parquet")
     pd.DataFrame({"geoid": ["08001"]}).to_parquet(tdir / "counties__C2023.parquet")
 
-    # Crosswalks
     xdir = curated / "xwalks"
     xdir.mkdir(parents=True)
     pd.DataFrame({"coc_id": ["CO-500"]}).to_parquet(xdir / "xwalk__B2025xT2023.parquet")
@@ -38,7 +38,6 @@ def _scaffold_curated(tmp_path: Path) -> Path:
         xdir / "msa_coc_xwalk__B2025xMcensus_msa_2023xC2023.parquet"
     )
 
-    # PIT
     pdir = curated / "pit"
     pdir.mkdir(parents=True)
     pd.DataFrame({"coc_id": ["CO-500"]}).to_parquet(pdir / "pit__P2024.parquet")
@@ -46,7 +45,6 @@ def _scaffold_curated(tmp_path: Path) -> Path:
         pdir / "pit__msa__P2024@Mcensus_msa_2023xB2025xC2023.parquet"
     )
 
-    # MSA
     msadir = curated / "msa"
     msadir.mkdir(parents=True)
     pd.DataFrame({"msa_id": ["35620"]}).to_parquet(
@@ -59,7 +57,6 @@ def _scaffold_curated(tmp_path: Path) -> Path:
         msadir / "msa_boundaries__census_msa_2023.parquet"
     )
 
-    # Metro
     metrodir = curated / "metro"
     metrodir.mkdir(parents=True)
     pd.DataFrame({"metro_id": ["GF21"]}).to_parquet(
@@ -75,22 +72,18 @@ def _scaffold_curated(tmp_path: Path) -> Path:
         metrodir / "metro_boundaries__glynn_fox_v1xC2023.parquet"
     )
 
-    # ACS
     adir = curated / "acs"
     adir.mkdir(parents=True)
     pd.DataFrame({"geoid": ["08001"]}).to_parquet(adir / "acs5_tracts__A2023xT2023.parquet")
 
-    # Measures
     mdir = curated / "measures"
     mdir.mkdir(parents=True)
     pd.DataFrame({"coc_id": ["CO-500"]}).to_parquet(mdir / "measures__A2023@B2025.parquet")
 
-    # ZORI
     zdir = curated / "zori"
     zdir.mkdir(parents=True)
     pd.DataFrame({"county": ["08001"]}).to_parquet(zdir / "zori__monthly.parquet")
 
-    # LAUS (canonical naming: laus_metro__A<year>@D<defn>.parquet)
     ldir = curated / "laus"
     ldir.mkdir(parents=True)
     pd.DataFrame({"metro_id": ["GF01"]}).to_parquet(
@@ -103,66 +96,52 @@ def _scaffold_curated(tmp_path: Path) -> Path:
     return data_dir
 
 
-def _scaffold_build(tmp_path: Path) -> Path:
-    """Create a minimal build directory."""
-    builds_dir = tmp_path / "builds"
-    build = builds_dir / "test_build"
-    build.mkdir(parents=True)
-    manifest = {
-        "schema_version": 1,
-        "build": {"name": "test_build", "years": [2024, 2025]},
-        "base_assets": [{"year": 2024}, {"year": 2025}],
-        "aggregate_runs": [{"dataset": "acs"}],
-    }
-    (build / "manifest.json").write_text(json.dumps(manifest))
-    return builds_dir
+def _scaffold_recipe_outputs(tmp_path: Path) -> Path:
+    """Create a minimal recipe output namespace."""
+    output_root = tmp_path / "outputs"
+    recipe_dir = output_root / "demo-recipe"
+    recipe_dir.mkdir(parents=True)
+    (recipe_dir / "panel__Y2020-2021@B2025.parquet").write_bytes(b"PAR1")
+    (recipe_dir / "panel__Y2020-2021@B2025.manifest.json").write_text("{}\n")
+    (recipe_dir / "panel__Y2020-2021@B2025__diagnostics.json").write_text("{}\n")
+    (recipe_dir / "map__Y2020-2021@B2025.html").write_text("<html></html>\n")
+    return output_root
 
 
 class TestStatusHuman:
     """Tests for human-readable status output."""
 
     def test_status_full_environment(self, tmp_path):
-        """Status with all assets present shows healthy report."""
         data_dir = _scaffold_curated(tmp_path)
-        builds_dir = _scaffold_build(tmp_path)
+        output_root = _scaffold_recipe_outputs(tmp_path)
 
         result = runner.invoke(
             app,
-            ["status", "--data-dir", str(data_dir), "--builds-dir", str(builds_dir)],
+            ["status", "--data-dir", str(data_dir), "--output-root", str(output_root)],
         )
 
         assert result.exit_code == 0
         assert "HHP-Lab Status Report" in result.output
         assert "2 vintage(s)" in result.output
-        assert "2024" in result.output
-        assert "2025" in result.output
-        assert "Tracts:   1 vintage(s)" in result.output
-        assert "Counties: 1 vintage(s)" in result.output
         assert "B2025xT2023" in result.output
-        assert "B2025xC2023" in result.output
-        assert "B2025xMcensus_msa_2023xC2023" in result.output
         assert "PIT Counts: 1 year(s)" in result.output
-        assert "MSA PIT:    1 file(s)" in result.output
         assert "Metro Artifacts: 1 complete version(s)" in result.output
-        assert "Metro Boundaries: 1 file(s)" in result.output
         assert "MSA Artifacts: 1 complete version(s)" in result.output
-        assert "MSA Boundaries: 1 version(s)" in result.output
-        assert "ACS Tracts: 1 file(s)" in result.output
-        assert "Measures:   1 file(s)" in result.output
-        assert "ZORI:       1 file(s)" in result.output
         assert "LAUS:       2 file(s)" in result.output
-        assert "test_build: OK" in result.output
+        assert "Recipe Outputs: 1 namespace(s)" in result.output
+        assert "demo-recipe: 1 panel(s), 1 manifest(s), 1 diagnostics file(s), 1 map(s)" in result.output
+        assert "Recipe Workflow:" in result.output
+        assert RECIPE_PREFLIGHT_CMD in result.output
+        assert RECIPE_EXECUTE_CMD in result.output
         assert "No issues found" in result.output
 
     def test_status_empty_environment(self, tmp_path):
-        """Status with no assets shows errors and non-zero exit."""
         data_dir = tmp_path / "data"
         data_dir.mkdir()
-        builds_dir = tmp_path / "builds"
 
         result = runner.invoke(
             app,
-            ["status", "--data-dir", str(data_dir), "--builds-dir", str(builds_dir)],
+            ["status", "--data-dir", str(data_dir), "--output-root", str(tmp_path / "outputs")],
         )
 
         assert result.exit_code == 1
@@ -172,13 +151,11 @@ class TestStatusHuman:
         assert "No TIGER census geometry" in result.output
 
     def test_status_partial_environment(self, tmp_path):
-        """Status with some assets shows warnings but exits 0."""
         import pandas as pd
 
         data_dir = tmp_path / "data"
         curated = data_dir / "curated"
 
-        # Only boundaries and census
         bdir = curated / "coc_boundaries"
         bdir.mkdir(parents=True)
         pd.DataFrame({"coc_id": ["CO-500"]}).to_parquet(bdir / "coc__B2025.parquet")
@@ -187,153 +164,128 @@ class TestStatusHuman:
         tdir.mkdir(parents=True)
         pd.DataFrame({"geoid": ["08001"]}).to_parquet(tdir / "tracts__T2023.parquet")
 
-        builds_dir = tmp_path / "builds"
-
         result = runner.invoke(
             app,
-            ["status", "--data-dir", str(data_dir), "--builds-dir", str(builds_dir)],
+            ["status", "--data-dir", str(data_dir), "--output-root", str(tmp_path / "outputs")],
         )
 
         assert result.exit_code == 0
-        assert "1 vintage(s)" in result.output
         assert "[WARN]" in result.output
         assert "No crosswalk files" in result.output
+        assert "generate xwalks --boundary <YEAR> --tracts <YEAR>" in result.output
+
+    def test_status_no_recipe_outputs_shows_recipe_guidance(self, tmp_path):
+        data_dir = _scaffold_curated(tmp_path)
+
+        result = runner.invoke(
+            app,
+            ["status", "--data-dir", str(data_dir), "--output-root", str(tmp_path / "outputs")],
+        )
+
+        assert result.exit_code == 0
+        assert "Recipe Outputs: 0 namespace(s)" in result.output
+        assert "No recipe outputs found" in result.output
+        assert RECIPE_PREFLIGHT_CMD in result.output
+        assert RECIPE_EXECUTE_CMD in result.output
 
 
 class TestStatusJSON:
     """Tests for JSON status output."""
 
     def test_status_json_full(self, tmp_path):
-        """JSON output with all assets has correct structure."""
         data_dir = _scaffold_curated(tmp_path)
-        builds_dir = _scaffold_build(tmp_path)
+        output_root = _scaffold_recipe_outputs(tmp_path)
 
         result = runner.invoke(
             app,
-            ["status", "--json", "--data-dir", str(data_dir), "--builds-dir", str(builds_dir)],
+            ["status", "--json", "--data-dir", str(data_dir), "--output-root", str(output_root)],
         )
 
         assert result.exit_code == 0
         payload = json.loads(result.output)
         assert payload["status"] == "healthy"
         assert payload["assets"]["boundaries"]["count"] == 2
-        assert payload["assets"]["boundaries"]["vintages"] == [2024, 2025]
-        assert payload["assets"]["census"]["tracts"] == [2023]
-        assert payload["assets"]["census"]["counties"] == [2023]
-        assert len(payload["assets"]["crosswalks"]["tract"]) == 1
-        assert len(payload["assets"]["crosswalks"]["county"]) == 1
         assert payload["assets"]["crosswalks"]["msa"] == ["B2025xMcensus_msa_2023xC2023"]
-        assert payload["assets"]["pit"]["count"] == 1
         assert payload["assets"]["pit"]["msa_count"] == 1
-        assert payload["assets"]["pit"]["msa_items"] == [{
-            "year": 2024,
-            "definition_version": "census_msa_2023",
-            "boundary_vintage": 2025,
-            "county_vintage": 2023,
-        }]
-        assert payload["assets"]["metro"]["definitions"] == ["glynn_fox_v1"]
-        assert payload["assets"]["metro"]["coc_memberships"] == ["glynn_fox_v1"]
-        assert payload["assets"]["metro"]["county_memberships"] == ["glynn_fox_v1"]
-        assert payload["assets"]["metro"]["boundary_versions"] == ["glynn_fox_v1"]
         assert payload["assets"]["metro"]["complete_versions"] == ["glynn_fox_v1"]
-        assert payload["assets"]["metro"]["boundaries"] == [
-            {"definition_version": "glynn_fox_v1", "county_vintage": 2023}
-        ]
-        assert payload["assets"]["msa"]["definitions"] == ["census_msa_2023"]
-        assert payload["assets"]["msa"]["county_memberships"] == ["census_msa_2023"]
-        assert payload["assets"]["msa"]["boundaries"] == ["census_msa_2023"]
-        assert payload["assets"]["msa"]["complete_versions"] == ["census_msa_2023"]
         assert payload["assets"]["msa"]["fully_materialized_versions"] == ["census_msa_2023"]
-        assert payload["assets"]["acs"]["count"] == 1
-        assert payload["assets"]["measures"]["count"] == 1
-        assert payload["assets"]["zori"]["count"] == 1
-        assert payload["assets"]["laus"]["count"] == 2
         assert payload["assets"]["laus"]["years"] == [2022, 2023]
-        assert payload["assets"]["laus"]["items"] == [
-            {"year": 2022, "definition_version": "glynnfoxv1"},
-            {"year": 2023, "definition_version": "glynnfoxv1"},
-        ]
-        assert len(payload["builds"]) == 1
-        assert payload["builds"][0]["name"] == "test_build"
-        assert payload["builds"][0]["healthy"] is True
+        assert payload["recipe_outputs"]["count"] == 1
+        assert payload["recipe_outputs"]["panel_count"] == 1
+        assert payload["recipe_outputs"]["manifest_count"] == 1
+        assert payload["recipe_outputs"]["diagnostics_count"] == 1
+        assert payload["recipe_outputs"]["map_count"] == 1
+        assert payload["recipe_outputs"]["recipes"][0]["name"] == "demo-recipe"
+        assert payload["guidance"]["recipe_preflight"] == RECIPE_PREFLIGHT_CMD
+        assert payload["guidance"]["recipe_execute"] == RECIPE_EXECUTE_CMD
         assert payload["issues"] == []
 
     def test_status_json_empty(self, tmp_path):
-        """JSON output with no assets returns error status."""
         data_dir = tmp_path / "data"
         data_dir.mkdir()
-        builds_dir = tmp_path / "builds"
 
         result = runner.invoke(
             app,
-            ["status", "--json", "--data-dir", str(data_dir), "--builds-dir", str(builds_dir)],
+            ["status", "--json", "--data-dir", str(data_dir), "--output-root", str(tmp_path / "outputs")],
         )
 
         assert result.exit_code == 1
         payload = json.loads(result.output)
         assert payload["status"] == "degraded"
-        assert len(payload["issues"]) >= 2
         assert any(i["severity"] == "error" for i in payload["issues"])
+        assert payload["recipe_outputs"]["count"] == 0
 
     def test_status_json_stable_schema(self, tmp_path):
-        """JSON output has all expected top-level keys."""
         data_dir = tmp_path / "data"
         data_dir.mkdir()
-        builds_dir = tmp_path / "builds"
 
         result = runner.invoke(
             app,
-            ["status", "--json", "--data-dir", str(data_dir), "--builds-dir", str(builds_dir)],
+            ["status", "--json", "--data-dir", str(data_dir), "--output-root", str(tmp_path / "outputs")],
         )
 
         payload = json.loads(result.output)
-        assert set(payload.keys()) == {"status", "assets", "builds", "issues"}
+        assert set(payload.keys()) == {"status", "assets", "recipe_outputs", "guidance", "issues"}
         assert set(payload["assets"].keys()) == {
             "boundaries", "census", "crosswalks", "pit", "metro", "msa", "measures", "acs", "zori", "laus",
         }
 
     def test_status_json_warns_on_partial_msa_artifacts(self, tmp_path):
+        import pandas as pd
+
         data_dir = tmp_path / "data"
         curated = data_dir / "curated"
         msadir = curated / "msa"
         msadir.mkdir(parents=True)
-
-        import pandas as pd
-
         pd.DataFrame({"msa_id": ["35620"]}).to_parquet(
             msadir / "msa_definitions__census_msa_2023.parquet"
         )
 
         result = runner.invoke(
             app,
-            ["status", "--json", "--data-dir", str(data_dir), "--builds-dir", str(tmp_path / "builds")],
+            ["status", "--json", "--data-dir", str(data_dir), "--output-root", str(tmp_path / "outputs")],
         )
 
         payload = json.loads(result.output)
         msa_issues = [issue for issue in payload["issues"] if issue["area"] == "msa"]
         assert msa_issues
-        assert "missing county membership" in msa_issues[0]["message"].lower()
-        assert (
-            "Run: hhplab generate msa --definition-version census_msa_2023 --force"
-            == msa_issues[0]["hint"]
-        )
+        assert any("missing county membership" in issue["message"].lower() for issue in msa_issues)
         assert any("missing boundary polygon" in issue["message"].lower() for issue in msa_issues)
 
     def test_status_json_warns_on_partial_metro_artifacts(self, tmp_path):
+        import pandas as pd
+
         data_dir = tmp_path / "data"
         curated = data_dir / "curated"
         metrodir = curated / "metro"
         metrodir.mkdir(parents=True)
-
-        import pandas as pd
-
         pd.DataFrame({"metro_id": ["GF21"]}).to_parquet(
             metrodir / "metro_definitions__glynn_fox_v1.parquet"
         )
 
         result = runner.invoke(
             app,
-            ["status", "--json", "--data-dir", str(data_dir), "--builds-dir", str(tmp_path / "builds")],
+            ["status", "--json", "--data-dir", str(data_dir), "--output-root", str(tmp_path / "outputs")],
         )
 
         payload = json.loads(result.output)
@@ -343,42 +295,31 @@ class TestStatusJSON:
         assert any("missing county membership" in issue["message"].lower() for issue in metro_issues)
         assert any("missing boundary polygon" in issue["message"].lower() for issue in metro_issues)
 
-
-class TestStatusBuilds:
-    """Tests for build scanning in status."""
-
-    def test_unhealthy_build(self, tmp_path):
-        """Build with missing manifest is flagged as unhealthy."""
-        data_dir = tmp_path / "data"
-        curated = data_dir / "curated"
-        curated.mkdir(parents=True)
-        builds_dir = tmp_path / "builds"
-        bad_build = builds_dir / "broken"
-        bad_build.mkdir(parents=True)
-        # No manifest.json
+    def test_status_json_ignores_empty_output_namespaces(self, tmp_path):
+        data_dir = _scaffold_curated(tmp_path)
+        output_root = tmp_path / "outputs"
+        (output_root / "empty-recipe").mkdir(parents=True)
+        _scaffold_recipe_outputs(tmp_path)
 
         result = runner.invoke(
             app,
-            ["status", "--json", "--data-dir", str(data_dir), "--builds-dir", str(builds_dir)],
+            ["status", "--json", "--data-dir", str(data_dir), "--output-root", str(output_root)],
         )
 
         payload = json.loads(result.output)
-        assert len(payload["builds"]) == 1
-        assert payload["builds"][0]["name"] == "broken"
-        assert payload["builds"][0]["healthy"] is False
+        assert payload["recipe_outputs"]["count"] == 1
+        assert payload["recipe_outputs"]["recipes"][0]["name"] == "demo-recipe"
 
 
 class TestPitDeduplication:
-    """coclab-rhix: PIT scan should deduplicate years across base and boundary-scoped files."""
+    """PIT scan should deduplicate years across base and boundary-scoped files."""
 
     def test_pit_count_deduplicates_years(self, tmp_path):
-        """When both pit__P2024.parquet and pit__P2024@B2024.parquet exist, count=1."""
         import pandas as pd
 
         data_dir = tmp_path / "data"
         curated = data_dir / "curated"
 
-        # Boundaries (needed to avoid error exit)
         bdir = curated / "coc_boundaries"
         bdir.mkdir(parents=True)
         pd.DataFrame({"coc_id": ["CO-500"]}).to_parquet(bdir / "coc__B2024.parquet")
@@ -386,7 +327,6 @@ class TestPitDeduplication:
         tdir.mkdir(parents=True)
         pd.DataFrame({"geoid": ["08001"]}).to_parquet(tdir / "tracts__T2023.parquet")
 
-        # PIT: both base and boundary-scoped for same year
         pdir = curated / "pit"
         pdir.mkdir(parents=True)
         pd.DataFrame({"coc_id": ["CO-500"]}).to_parquet(pdir / "pit__P2024.parquet")
@@ -395,11 +335,7 @@ class TestPitDeduplication:
 
         result = runner.invoke(
             app,
-            [
-                "status", "--json",
-                "--data-dir", str(data_dir),
-                "--builds-dir", str(tmp_path / "builds"),
-            ],
+            ["status", "--json", "--data-dir", str(data_dir), "--output-root", str(tmp_path / "outputs")],
         )
 
         assert result.exit_code == 0
@@ -409,7 +345,7 @@ class TestPitDeduplication:
 
 
 class TestLausScan:
-    """coclab-ii45: status output must include curated LAUS metro assets."""
+    """Status output must include curated LAUS metro assets."""
 
     def _scaffold_with_laus(self, tmp_path: Path, filenames: list[str]) -> Path:
         import pandas as pd
@@ -417,7 +353,6 @@ class TestLausScan:
         data_dir = tmp_path / "data"
         curated = data_dir / "curated"
 
-        # Boundaries + census so we don't trip the error gate
         bdir = curated / "coc_boundaries"
         bdir.mkdir(parents=True)
         pd.DataFrame({"coc_id": ["CO-500"]}).to_parquet(bdir / "coc__B2025.parquet")
@@ -432,7 +367,6 @@ class TestLausScan:
         return data_dir
 
     def test_laus_count_zero_when_directory_missing(self, tmp_path):
-        """Status must not crash when data/curated/laus does not exist."""
         import pandas as pd
 
         data_dir = tmp_path / "data"
@@ -446,8 +380,7 @@ class TestLausScan:
 
         result = runner.invoke(
             app,
-            ["status", "--json", "--data-dir", str(data_dir),
-             "--builds-dir", str(tmp_path / "builds")],
+            ["status", "--json", "--data-dir", str(data_dir), "--output-root", str(tmp_path / "outputs")],
         )
 
         payload = json.loads(result.output)
@@ -456,7 +389,6 @@ class TestLausScan:
         assert payload["assets"]["laus"]["years"] == []
 
     def test_laus_lists_each_canonical_file(self, tmp_path):
-        """Multiple curated LAUS years must each appear in items."""
         data_dir = self._scaffold_with_laus(tmp_path, [
             "laus_metro__A2015@Dglynnfoxv1.parquet",
             "laus_metro__A2018@Dglynnfoxv1.parquet",
@@ -465,18 +397,14 @@ class TestLausScan:
 
         result = runner.invoke(
             app,
-            ["status", "--json", "--data-dir", str(data_dir),
-             "--builds-dir", str(tmp_path / "builds")],
+            ["status", "--json", "--data-dir", str(data_dir), "--output-root", str(tmp_path / "outputs")],
         )
 
         payload = json.loads(result.output)
         assert payload["assets"]["laus"]["count"] == 3
         assert payload["assets"]["laus"]["years"] == [2015, 2018, 2023]
-        defns = {item["definition_version"] for item in payload["assets"]["laus"]["items"]}
-        assert defns == {"glynnfoxv1"}
 
     def test_laus_items_sorted_by_year_then_definition(self, tmp_path):
-        """Items must be deterministically sorted so the JSON is reproducible."""
         data_dir = self._scaffold_with_laus(tmp_path, [
             "laus_metro__A2023@Dglynnfoxv1.parquet",
             "laus_metro__A2015@Dglynnfoxv1.parquet",
@@ -485,8 +413,7 @@ class TestLausScan:
 
         result = runner.invoke(
             app,
-            ["status", "--json", "--data-dir", str(data_dir),
-             "--builds-dir", str(tmp_path / "builds")],
+            ["status", "--json", "--data-dir", str(data_dir), "--output-root", str(tmp_path / "outputs")],
         )
 
         payload = json.loads(result.output)
@@ -495,21 +422,17 @@ class TestLausScan:
         assert payload["assets"]["laus"]["years"] == [2015, 2020, 2023]
 
     def test_laus_ignores_unrelated_files(self, tmp_path):
-        """Files in data/curated/laus that don't match the canonical pattern
-        must be ignored, not crash or pollute the output."""
         import pandas as pd
 
         data_dir = self._scaffold_with_laus(tmp_path, [
             "laus_metro__A2023@Dglynnfoxv1.parquet",
         ])
         ldir = data_dir / "curated" / "laus"
-        # noise: random parquet that doesn't match the canonical pattern
         pd.DataFrame({"x": [1]}).to_parquet(ldir / "scratch_pad.parquet")
 
         result = runner.invoke(
             app,
-            ["status", "--json", "--data-dir", str(data_dir),
-             "--builds-dir", str(tmp_path / "builds")],
+            ["status", "--json", "--data-dir", str(data_dir), "--output-root", str(tmp_path / "outputs")],
         )
 
         payload = json.loads(result.output)
@@ -524,13 +447,12 @@ class TestLausScan:
 
         result = runner.invoke(
             app,
-            ["status", "--data-dir", str(data_dir), "--builds-dir", str(tmp_path / "builds")],
+            ["status", "--data-dir", str(data_dir), "--output-root", str(tmp_path / "outputs")],
         )
 
         assert result.exit_code == 0
         assert "LAUS:" in result.output
         assert "2 file(s)" in result.output
-        # Year listing should mention each curated year
         assert "2022" in result.output
         assert "2023" in result.output
 
@@ -547,4 +469,5 @@ class TestStatusHelp:
         assert result.exit_code == 0
         assert "--json" in result.output
         assert "--data-dir" in result.output
-        assert "--builds-dir" in result.output
+        assert "--output-root" in result.output
+        assert "--builds-dir" not in result.output

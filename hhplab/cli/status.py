@@ -8,11 +8,7 @@ from typing import Annotated
 
 import typer
 
-from hhplab.builds import (
-    DEFAULT_BUILDS_DIR,
-    list_builds,
-    read_build_manifest,
-)
+from hhplab.config import load_config
 
 
 def _count_parquet(directory: Path, pattern: str = "*.parquet") -> int:
@@ -275,25 +271,50 @@ def _scan_laus(curated: Path) -> dict:
     return {"count": len(items), "items": items, "years": sorted(years_set)}
 
 
-def _scan_builds(builds_dir: Path) -> list[dict]:
-    """Scan optional named builds and their manifests."""
-    results: list[dict] = []
-    for build_path in list_builds(builds_dir):
-        entry: dict = {"name": build_path.name, "path": str(build_path)}
-        try:
-            manifest = read_build_manifest(build_path)
-            build_info = manifest.get("build", {})
-            entry["years"] = build_info.get("years", [])
-            entry["base_assets"] = len(manifest.get("base_assets", []))
-            entry["aggregate_runs"] = len(manifest.get("aggregate_runs", []))
-            entry["healthy"] = True
-        except (FileNotFoundError, json.JSONDecodeError):
-            entry["years"] = []
-            entry["base_assets"] = 0
-            entry["aggregate_runs"] = 0
-            entry["healthy"] = False
-        results.append(entry)
-    return results
+def _scan_recipe_outputs(output_root: Path) -> dict:
+    """Scan recipe-built outputs under the configured output root."""
+    recipes: list[dict] = []
+    panel_count = 0
+    manifest_count = 0
+    diagnostics_count = 0
+    map_count = 0
+
+    if output_root.exists():
+        for recipe_dir in sorted(path for path in output_root.iterdir() if path.is_dir()):
+            panel_files = sorted(p.name for p in recipe_dir.glob("panel__*.parquet"))
+            manifest_files = sorted(p.name for p in recipe_dir.glob("*.manifest.json"))
+            diagnostics_files = sorted(
+                p.name for p in recipe_dir.glob("*__diagnostics.json")
+            )
+            map_files = sorted(p.name for p in recipe_dir.glob("map__*.html"))
+
+            if not any((panel_files, manifest_files, diagnostics_files, map_files)):
+                continue
+
+            panel_count += len(panel_files)
+            manifest_count += len(manifest_files)
+            diagnostics_count += len(diagnostics_files)
+            map_count += len(map_files)
+            recipes.append(
+                {
+                    "name": recipe_dir.name,
+                    "path": str(recipe_dir),
+                    "panel_files": panel_files,
+                    "manifest_files": manifest_files,
+                    "diagnostics_files": diagnostics_files,
+                    "map_files": map_files,
+                }
+            )
+
+    return {
+        "root": str(output_root),
+        "count": len(recipes),
+        "panel_count": panel_count,
+        "manifest_count": manifest_count,
+        "diagnostics_count": diagnostics_count,
+        "map_count": map_count,
+        "recipes": recipes,
+    }
 
 
 def _check_prerequisites(assets: dict) -> list[dict]:
@@ -323,7 +344,7 @@ def _check_prerequisites(assets: dict) -> list[dict]:
             "severity": "warning",
             "area": "crosswalks",
             "message": "No crosswalk files found.",
-            "hint": "Run: hhplab generate xwalks --boundary <YEAR> --census <YEAR>",
+            "hint": "Run: hhplab generate xwalks --boundary <YEAR> --tracts <YEAR>",
         })
 
     if assets["pit"]["count"] == 0:
@@ -463,20 +484,20 @@ def status_cmd(
         Path,
         typer.Option(
             "--data-dir",
-            help="Root data directory to scan.",
+            help="Asset store root directory to scan for curated assets.",
         ),
     ] = Path("data"),
-    builds_dir: Annotated[
-        Path,
+    output_root: Annotated[
+        Path | None,
         typer.Option(
-            "--builds-dir",
-            help="Builds directory to scan.",
+            "--output-root",
+            help="Recipe output root directory to scan.",
         ),
-    ] = DEFAULT_BUILDS_DIR,
+    ] = None,
 ) -> None:
     """One-shot environment readiness report.
 
-    Scans curated assets, optional named-build inventories, and common
+    Scans curated assets, recipe output namespaces, and common
     prerequisites to provide a consolidated view of environment health.
     Returns non-zero exit code when required prerequisites are missing.
 
@@ -489,6 +510,12 @@ def status_cmd(
         hhplab status --data-dir /path/to/data
     """
     curated = data_dir / "curated"
+    storage_cfg = load_config(
+        asset_store_root=data_dir,
+        output_root=output_root,
+        project_root=Path.cwd(),
+    )
+    resolved_output_root = storage_cfg.output_root
 
     assets = {
         "boundaries": _scan_boundaries(curated),
@@ -502,8 +529,12 @@ def status_cmd(
         "zori": _scan_zori(curated),
         "laus": _scan_laus(curated),
     }
+    recipe_outputs = _scan_recipe_outputs(resolved_output_root)
+    guidance = {
+        "recipe_preflight": "hhplab build recipe-preflight --recipe <file> --json",
+        "recipe_execute": "hhplab build recipe --recipe <file> --json",
+    }
 
-    builds = _scan_builds(builds_dir)
     issues = _check_prerequisites(assets)
     has_errors = any(i["severity"] == "error" for i in issues)
     health = "degraded" if has_errors else ("healthy" if not issues else "ok")
@@ -512,7 +543,8 @@ def status_cmd(
         payload = {
             "status": health,
             "assets": assets,
-            "builds": builds,
+            "recipe_outputs": recipe_outputs,
+            "guidance": guidance,
             "issues": issues,
         }
         typer.echo(json.dumps(payload, indent=2))
@@ -597,15 +629,25 @@ def status_cmd(
     laus = assets["laus"]
     typer.echo(f"LAUS:       {laus['count']} file(s)  {_fmt_years(laus['years'])}")
 
-    # Builds
-    typer.echo(f"\nNamed builds (optional): {len(builds)}")
-    for bld in builds:
-        health_str = "OK" if bld["healthy"] else "UNHEALTHY"
-        years_str = f"years={bld['years']}" if bld["years"] else "no years"
+    # Recipe outputs
+    typer.echo(
+        f"\nRecipe Outputs: {recipe_outputs['count']} namespace(s)  root={recipe_outputs['root']}"
+    )
+    if recipe_outputs["recipes"]:
+        for entry in recipe_outputs["recipes"]:
+            typer.echo(
+                f"  {entry['name']}: "
+                f"{len(entry['panel_files'])} panel(s), "
+                f"{len(entry['manifest_files'])} manifest(s), "
+                f"{len(entry['diagnostics_files'])} diagnostics file(s), "
+                f"{len(entry['map_files'])} map(s)"
+            )
+    else:
         typer.echo(
-            f"  {bld['name']}: {health_str}, {years_str}, "
-            f"{bld['base_assets']} base asset(s), "
-            f"{bld['aggregate_runs']} aggregate run(s)"
+            "  No recipe outputs found. "
+            "Use 'hhplab build recipe-preflight --recipe <file> --json' "
+            "to inspect a recipe, then "
+            "'hhplab build recipe --recipe <file> --json' to materialize outputs."
         )
 
     # Issues
@@ -617,6 +659,10 @@ def status_cmd(
             typer.echo(f"         {issue['hint']}")
     else:
         typer.echo("\nNo issues found.")
+
+    typer.echo("\nRecipe Workflow:")
+    typer.echo(f"  Preflight: {guidance['recipe_preflight']}")
+    typer.echo(f"  Execute:   {guidance['recipe_execute']}")
 
     if has_errors:
         raise typer.Exit(1)
