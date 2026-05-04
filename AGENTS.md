@@ -27,24 +27,24 @@ Use `$BR` (or just the resolved command) for all beads operations below. Prefer 
 | Close issue | `br close <id>` | `bd close <id> --reason="Completed"` |
 | Sync to disk | `br sync --flush-only` | `bd sync` |
 
-## CoC-Lab Agent-Friendly CLI
+## HHP-Lab Agent-Friendly CLI
 
-Prefer these CoC-Lab runtime features when automating:
+Prefer these HHP-Lab runtime features when automating:
 
 - Use machine-readable output whenever available (`--json`) to avoid parsing human text.
-- Run non-interactively for CI/agents: pass `--non-interactive` or set `COCLAB_NON_INTERACTIVE=1`.
-- Use `coclab agents` for built-in geography/year matching rules and operational guidance.
+- Run non-interactively for CI/agents: pass `--non-interactive` or set `HHPLAB_NON_INTERACTIVE=1`.
+- Use `hhplab agents` for built-in geography/year matching rules and operational guidance.
 - Preflight environment and prerequisites with:
-  - `coclab status --json`
+  - `hhplab status --json`
 - Validate curated naming/layout policy before and after writes:
-  - `coclab validate curated-layout`
+  - `hhplab validate curated-layout`
 - For curated filename migrations, default to dry-run first:
-  - `coclab migrate curated-layout`
-  - `coclab migrate curated-layout --apply`
+  - `hhplab migrate curated-layout`
+  - `hhplab migrate curated-layout --apply`
 - For recipe workflows, validate/plan before execute:
-  - `coclab build recipe-preflight --recipe <file> --json`
-  - `coclab build recipe --recipe <file> --json`
-  - Use `coclab build recipe-plan --recipe <file> --json` when you need the resolved task graph while authoring/debugging a recipe
+  - `hhplab build recipe-preflight --recipe <file> --json`
+  - `hhplab build recipe --recipe <file> --json`
+  - Use `hhplab build recipe-plan --recipe <file> --json` when you need the resolved task graph while authoring/debugging a recipe
 
 ## Code Style: Human and Agent Readable
 
@@ -59,8 +59,8 @@ All code generated for this project must be easily usable by both humans and AI 
 
 ### CLI and output
 - **Always provide `--json`.** Every CLI command that produces output should support a `--json` flag emitting structured, machine-parseable JSON. Agents should never need to scrape human-formatted tables or prose to extract results.
-- **Actionable error messages.** Errors should state what went wrong AND what to do about it (e.g., "No ACS measures found — run `coclab aggregate acs` first"). An agent that encounters an error should be able to act on it without searching the codebase.
-- **Deterministic, parseable file names.** Output artifacts should use the canonical naming from `coclab/naming.py` so agents can discover and reference them programmatically without globbing.
+- **Actionable error messages.** Errors should state what went wrong AND what to do about it (e.g., "No ACS measures found — run `hhplab aggregate acs` first"). An agent that encounters an error should be able to act on it without searching the codebase.
+- **Deterministic, parseable file names.** Output artifacts should use the canonical naming from `hhplab/naming.py` so agents can discover and reference them programmatically without globbing.
 
 ### Schemas and data contracts
 - **Canonical column lists as code.** Output schemas (e.g., `PANEL_COLUMNS`, `ZORI_COLUMNS`) must be defined as module-level constants. When a schema changes, update the constant — never add columns silently.
