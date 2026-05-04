@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import geopandas as gpd
@@ -34,9 +35,18 @@ COC_MSA_CROSSWALK_COLUMNS: tuple[str, ...] = (
     "intersecting_county_fips",
 )
 
+logger = logging.getLogger(__name__)
+
 
 def _empty_crosswalk() -> pd.DataFrame:
     return pd.DataFrame(columns=list(COC_MSA_CROSSWALK_COLUMNS))
+
+
+def _empty_crosswalk_with_warning(message: str) -> pd.DataFrame:
+    crosswalk = _empty_crosswalk()
+    crosswalk.attrs["warning"] = message
+    logger.warning(message)
+    return crosswalk
 
 
 def _standardize_county_geometry_columns(county_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -90,6 +100,32 @@ def _validate_membership_counties(
     )
 
 
+def _format_county_preview(counties: pd.Series, *, limit: int = 5) -> str:
+    values = sorted({value for value in counties.astype(str)})
+    preview = values[:limit]
+    suffix = ", ..." if len(values) > limit else ""
+    return ", ".join(preview) + suffix if preview else "(none)"
+
+
+def _format_expected_msa_preview(
+    msa_county_membership: pd.DataFrame,
+    *,
+    limit: int = 5,
+) -> str:
+    membership = msa_county_membership.copy()
+    membership["msa_id"] = membership["msa_id"].astype(str)
+    membership["county_fips"] = membership["county_fips"].astype(str)
+    msa_pairs = (
+        membership.groupby("msa_id")["county_fips"]
+        .agg(lambda s: ",".join(sorted(set(s))))
+        .sort_index()
+        .items()
+    )
+    preview = [f"{msa_id}=[{counties}]" for msa_id, counties in list(msa_pairs)[:limit]]
+    suffix = ", ..." if len(preview) == limit and len(membership["msa_id"].unique()) > limit else ""
+    return "; ".join(preview) + suffix if preview else "(none)"
+
+
 def build_coc_msa_crosswalk(
     coc_gdf: gpd.GeoDataFrame,
     county_gdf: gpd.GeoDataFrame,
@@ -122,7 +158,12 @@ def build_coc_msa_crosswalk(
     ).rename(columns={"geo_area": "coc_area"})
 
     if county_crosswalk.empty:
-        return _empty_crosswalk()
+        return _empty_crosswalk_with_warning(
+            "No CoC-to-county intersections were found while building the CoC-to-MSA "
+            f"crosswalk for boundary_vintage={boundary_vintage}, county_vintage={county_vintage}, "
+            f"definition_version={definition_version}. This usually indicates a geometry mismatch "
+            "or CRS issue between CoC boundaries and county geometries."
+        )
 
     membership = msa_county_membership[
         ["msa_id", "cbsa_code", "county_fips"]
@@ -131,7 +172,13 @@ def build_coc_msa_crosswalk(
 
     joined = county_crosswalk.merge(membership, on="county_fips", how="inner")
     if joined.empty:
-        return _empty_crosswalk()
+        tried_counties = _format_county_preview(county_crosswalk["county_fips"])
+        expected_msa_counties = _format_expected_msa_preview(membership)
+        return _empty_crosswalk_with_warning(
+            "CoC-to-county intersections were found, but none matched the MSA county membership "
+            f"artifact for definition_version={definition_version}. Tried county_fips: {tried_counties}. "
+            f"MSA counties by msa_id: {expected_msa_counties}."
+        )
 
     grouped = (
         joined.groupby(["coc_id", "msa_id", "cbsa_code"], as_index=False)

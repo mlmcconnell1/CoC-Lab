@@ -158,3 +158,65 @@ def test_missing_membership_county_raises_actionable_error():
             county_vintage="2023",
             definition_version="census_msa_2023",
         )
+
+
+def test_empty_intersection_emits_warning_and_marks_result(caplog: pytest.LogCaptureFixture):
+    with caplog.at_level("WARNING"):
+        crosswalk = build_coc_msa_crosswalk(
+            gpd.GeoDataFrame(
+                {"coc_id": ["CO-999"]},
+                geometry=[box(100, 100, 110, 110)],
+                crs=ALBERS_EQUAL_AREA_CRS,
+            ),
+            _county_gdf(),
+            _msa_membership_df(),
+            boundary_vintage="2025",
+            county_vintage="2023",
+            definition_version="census_msa_2023",
+        )
+
+    assert crosswalk.empty
+    assert "No CoC-to-county intersections were found" in crosswalk.attrs["warning"]
+    assert "geometry mismatch or CRS issue" in crosswalk.attrs["warning"]
+    assert "No CoC-to-county intersections were found" in caplog.text
+
+
+def test_empty_membership_join_emits_warning_and_marks_result(caplog: pytest.LogCaptureFixture):
+    coc_gdf = gpd.GeoDataFrame(
+        {"coc_id": ["CO-100", "CO-200"]},
+        geometry=[box(0, 0, 10, 10), box(10, 0, 20, 10)],
+        crs=ALBERS_EQUAL_AREA_CRS,
+    )
+    county_gdf = gpd.GeoDataFrame(
+        {"GEOID": ["36061", "29510", "01001"]},
+        geometry=[
+            box(0, 0, 10, 10),
+            box(10, 0, 20, 10),
+            box(30, 0, 40, 10),
+        ],
+        crs=ALBERS_EQUAL_AREA_CRS,
+    )
+    membership = pd.DataFrame(
+        {
+            "msa_id": ["99999"],
+            "cbsa_code": ["99999"],
+            "county_fips": ["01001"],
+            "definition_version": ["census_msa_2023"],
+        }
+    )
+
+    with caplog.at_level("WARNING"):
+        crosswalk = build_coc_msa_crosswalk(
+            coc_gdf,
+            county_gdf,
+            membership,
+            boundary_vintage="2025",
+            county_vintage="2023",
+            definition_version="census_msa_2023",
+        )
+
+    assert crosswalk.empty
+    assert "none matched the MSA county membership artifact" in crosswalk.attrs["warning"]
+    assert "Tried county_fips: 29510, 36061." in crosswalk.attrs["warning"]
+    assert "MSA counties by msa_id: 99999=[01001]." in crosswalk.attrs["warning"]
+    assert "none matched the MSA county membership artifact" in caplog.text

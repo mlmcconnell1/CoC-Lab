@@ -197,6 +197,9 @@ def generate_msa_xwalk(
         "max_unallocated_share": max_unallocated,
         "artifact": str(written_path),
     }
+    warning = crosswalk.attrs.get("warning")
+    if warning:
+        payload["warning"] = str(warning)
     if json_output:
         typer.echo(json.dumps(payload))
         return
@@ -207,3 +210,5 @@ def generate_msa_xwalk(
         f"{payload['coc_count']} CoCs across {payload['msa_count']} MSAs; "
         f"{partial_allocations} CoCs have unallocated non-MSA area."
     )
+    if warning:
+        typer.echo(f"  Warning: {warning}")

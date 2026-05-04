@@ -129,3 +129,131 @@ def test_generate_msa_xwalk_missing_membership_is_actionable(monkeypatch, tmp_pa
     payload = json.loads(result.stdout)
     assert payload["status"] == "error"
     assert "Run: hhplab generate msa --definition-version census_msa_2023" in payload["error"]
+
+
+def test_generate_msa_xwalk_json_surfaces_empty_intersection_warning(
+    monkeypatch,
+    tmp_path: Path,
+):
+    boundaries_dir = tmp_path / "data" / "curated" / "coc_boundaries"
+    tiger_dir = tmp_path / "data" / "curated" / "tiger"
+    msa_dir = tmp_path / "data" / "curated" / "msa"
+    boundaries_dir.mkdir(parents=True, exist_ok=True)
+    tiger_dir.mkdir(parents=True, exist_ok=True)
+    msa_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.chdir(tmp_path)
+
+    gpd.GeoDataFrame(
+        {"coc_id": ["CO-100"]},
+        geometry=[box(100, 100, 110, 110)],
+        crs="EPSG:4326",
+    ).to_parquet(boundaries_dir / "coc__B2025.parquet")
+    gpd.GeoDataFrame(
+        {"GEOID": ["36061"]},
+        geometry=[box(0, 0, 10, 10)],
+        crs="EPSG:4326",
+    ).to_parquet(tiger_dir / "counties__C2023.parquet")
+    pd.DataFrame(
+        {
+            "msa_id": ["35620"],
+            "cbsa_code": ["35620"],
+            "county_fips": ["36061"],
+            "definition_version": ["census_msa_2023"],
+        }
+    ).to_parquet(msa_dir / "msa_county_membership__census_msa_2023.parquet")
+
+    monkeypatch.setattr(
+        "hhplab.cli.generate_msa_xwalk.list_boundaries",
+        lambda: [
+            RegistryEntry(
+                boundary_vintage="2025",
+                source="hud_exchange",
+                ingested_at=pd.Timestamp("2026-04-30T00:00:00Z").to_pydatetime(),
+                path=boundaries_dir / "coc__B2025.parquet",
+                feature_count=1,
+                hash_of_file="abc",
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        "hhplab.cli.generate_msa_xwalk.latest_vintage",
+        lambda: "2025",
+    )
+
+    result = runner.invoke(
+        app,
+        ["generate", "msa-xwalk", "--boundary", "2025", "--counties", "2023", "--json"],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "ok"
+    assert payload["rows"] == 0
+    assert "warning" in payload
+    assert "No CoC-to-county intersections were found" in payload["warning"]
+
+
+def test_generate_msa_xwalk_json_surfaces_empty_membership_join_warning(
+    monkeypatch,
+    tmp_path: Path,
+):
+    boundaries_dir = tmp_path / "data" / "curated" / "coc_boundaries"
+    tiger_dir = tmp_path / "data" / "curated" / "tiger"
+    msa_dir = tmp_path / "data" / "curated" / "msa"
+    boundaries_dir.mkdir(parents=True, exist_ok=True)
+    tiger_dir.mkdir(parents=True, exist_ok=True)
+    msa_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.chdir(tmp_path)
+
+    gpd.GeoDataFrame(
+        {"coc_id": ["CO-100"]},
+        geometry=[box(0, 0, 10, 10)],
+        crs="EPSG:4326",
+    ).to_parquet(boundaries_dir / "coc__B2025.parquet")
+    gpd.GeoDataFrame(
+        {"GEOID": ["36061", "01001"]},
+        geometry=[box(0, 0, 10, 10), box(20, 0, 30, 10)],
+        crs="EPSG:4326",
+    ).to_parquet(tiger_dir / "counties__C2023.parquet")
+    pd.DataFrame(
+        {
+            "msa_id": ["99999"],
+            "cbsa_code": ["99999"],
+            "county_fips": ["01001"],
+            "definition_version": ["census_msa_2023"],
+        }
+    ).to_parquet(msa_dir / "msa_county_membership__census_msa_2023.parquet")
+
+    monkeypatch.setattr(
+        "hhplab.cli.generate_msa_xwalk.list_boundaries",
+        lambda: [
+            RegistryEntry(
+                boundary_vintage="2025",
+                source="hud_exchange",
+                ingested_at=pd.Timestamp("2026-04-30T00:00:00Z").to_pydatetime(),
+                path=boundaries_dir / "coc__B2025.parquet",
+                feature_count=1,
+                hash_of_file="abc",
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        "hhplab.cli.generate_msa_xwalk.latest_vintage",
+        lambda: "2025",
+    )
+
+    result = runner.invoke(
+        app,
+        ["generate", "msa-xwalk", "--boundary", "2025", "--counties", "2023", "--json"],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "ok"
+    assert payload["rows"] == 0
+    assert "warning" in payload
+    assert "none matched the MSA county membership artifact" in payload["warning"]
+    assert "Tried county_fips: 36061." in payload["warning"]
+    assert "MSA counties by msa_id: 99999=[01001]." in payload["warning"]
