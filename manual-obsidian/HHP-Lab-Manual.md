@@ -35,5 +35,6 @@
 - Environment preflight: [[04-CLI-Reference#environment-preflight-agent-safe]]
 - Build scaffold: [[04-CLI-Reference#build-scaffolding]]
 - Recipe execution: [[04-CLI-Reference#recipe-execution-recommended]]
+- Source availability: [[07-Data-Model#source-availability-catalog]]
 - Bundle export: [[04-CLI-Reference#bundle-export]]
 - Recommended end-to-end workflow: [[09-Workflows#recommended-workflow-recipe-driven-build]]

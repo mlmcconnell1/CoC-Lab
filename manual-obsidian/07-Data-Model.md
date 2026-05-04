@@ -5,6 +5,24 @@ default layout. Replace `data/raw/...`, `data/curated/...`, and
 `outputs/<recipe-name>/...` with the configured `asset_store_root` and
 `output_root` when your environment uses custom storage roots.
 
+## Source Availability Catalog
+
+This catalog is the front door for deciding what information HHP-Lab can use
+from each supported source. Detailed schemas remain in the sections below, and
+the CLI can inspect local curated artifacts with
+`hhplab list curated --json` for exact row counts, columns, and file sizes.
+
+| Provider | Product | Native geometry | Years | Available information | Primary derived outputs | Notes |
+|----------|---------|-----------------|-------|-----------------------|-------------------------|-------|
+| HUD | CoC boundaries | CoC polygons | Varies by boundary vintage | CoC ID, CoC name, state, boundary geometry, source URL/reference, ingest timestamp, geometry hash | CoC boundary GeoParquet, boundary registry, maps, CoC crosswalk inputs | Used as the default analysis geography surface. |
+| HUD | PIT counts | CoC | 2007-ongoing | `pit_total`, `pit_sheltered`, `pit_unsheltered`, PIT year, source/provenance fields, notes | CoC PIT by year, PIT vintages, metro PIT rollups, CoC/metro panels | PIT is January point-in-time count data. |
+| Census | TIGER counties | county polygons | Decennial/current vintages used by recipes | county FIPS, county name/state, geometry, vintage/provenance | county boundaries, CoC-county crosswalks, metro county membership joins | County-native sources such as PEP and ZORI use this geometry for aggregation. |
+| Census | TIGER/NHGIS tracts | tract polygons | Decennial tract eras | tract GEOID, tract vintage, geometry, provenance | tract boundaries, CoC-tract crosswalks, tract relationship bridges | ACS and tract crosswalks must match the correct decennial tract era. |
+| Census | ACS 5-year | tract | 2009-ongoing | `total_population`, `adult_population`, `population_below_poverty`, `median_household_income`, `median_gross_rent`, `moe_total_population`, ACS vintage | CoC ACS measures, metro ACS measures, county weights for ZORI, panel demographic columns | ACS 5-year vintages are end years for five-year collection windows. |
+| Census | ACS 1-year | CBSA/metro | Available where population thresholds are met | `unemployment_rate_acs1`, ACS1 vintage, metro definition version | metro-native ACS1 artifact, optional metro panel unemployment column | Only used for metro targets via `panel_policy.acs1`. |
+| Census | PEP | county | 2010-ongoing | annual `population`, county FIPS/name/state, reference date, PEP vintage/provenance | CoC PEP population, metro PEP population, optional panel `population` measure | PEP reference dates are July 1 annual estimates; recipes can use temporal filters to align to January when needed. |
+| Zillow | ZORI | county or ZIP, normalized to county for standard panels | 2015-ongoing | monthly `zori`, region name/state, source URL, raw hash, metric/provenance fields | normalized ZORI, CoC ZORI, metro ZORI, yearly collapsed ZORI, panel rent columns | Standard panel alignment uses January observations to match PIT timing. |
+
 ## Analysis Geography Model
 
 HHP-Lab supports multiple analysis geographies—the unit of observation in derived outputs. The abstraction separates *analysis geography* (what you want to measure) from *source geometry* (how input data is natively organized).
@@ -208,6 +226,74 @@ erDiagram
 | `source_ref` | string | URL or dataset reference |
 | `ingested_at` | datetime | UTC timestamp of ingestion |
 | `notes` | string | Data quirks or caveats (nullable) |
+
+## PEP Population Schemas
+
+PEP (Population Estimates Program) data is ingested from Census county files
+and normalized to annual county population estimates before aggregation.
+
+### County PEP Schema
+
+```mermaid
+erDiagram
+    PEP_COUNTY {
+        string county_fips PK "5-character county FIPS"
+        string state_fips "2-character state FIPS"
+        string county_name "County name"
+        string state_name "State name"
+        int year PK "Estimate year"
+        date reference_date "July 1 of estimate year"
+        int population "County population estimate"
+    }
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `county_fips` | string | 5-character county FIPS code |
+| `state_fips` | string | 2-character state FIPS code |
+| `county_name` | string | County name from Census |
+| `state_name` | string | State name from Census |
+| `year` | int | Estimate year |
+| `reference_date` | date | July 1 reference date for the annual estimate |
+| `population` | int | County population estimate |
+
+### CoC PEP Schema
+
+CoC PEP aggregates county population to CoC boundaries through the
+CoC-county crosswalk.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `coc_id` | string | CoC identifier |
+| `year` | int | Estimate year |
+| `reference_date` | date | July 1 reference date for the annual estimate |
+| `population` | float | Weighted CoC population estimate |
+| `coverage_ratio` | float | Covered crosswalk weight for the CoC-year |
+| `county_count` | int | Number of contributing counties |
+| `max_county_contribution` | float | Largest single-county contribution share |
+| `boundary_vintage` | string | CoC boundary vintage used |
+| `county_vintage` | string | TIGER county vintage used |
+| `weighting_method` | string | Usually `area_share`; `equal` is supported for diagnostics |
+
+### Metro PEP Schema
+
+Metro PEP sums member county population through the metro county membership
+table. Single-county metros are identity passthroughs; multi-county metros
+sum all member counties.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `metro_id` | string | Metro identifier |
+| `year` | int | Estimate year |
+| `reference_date` | date | July 1 reference date for the annual estimate |
+| `population` | float | Metro population estimate |
+| `coverage_ratio` | float | Fraction of member-county weight covered |
+| `county_count` | int | Number of contributing counties |
+| `max_county_contribution` | float | Largest single-county contribution share |
+| `county_expected` | int | Number of counties expected for the metro |
+| `missing_counties` | string | Comma-separated missing county FIPS values, when any |
+| `definition_version` | string | Metro definition version |
+| `weighting_method` | string | Usually `area_share`; `equal` is supported for diagnostics |
 
 ## Panel Schema
 
