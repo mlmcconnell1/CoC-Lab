@@ -232,7 +232,7 @@ When `panel_policy.acs1.include` is true on a metro target, the executor adds `u
 ```yaml
 targets:
   - id: metro_panel
-    geometry: { type: metro, source: glynn_fox_v1 }
+    geometry: { type: metro, source: census_msa_2023 }
     outputs: [panel]
     panel_policy:
       acs1:

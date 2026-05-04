@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import re
 from typing import Any
 
@@ -13,6 +14,7 @@ from hhplab.acs.ingest.metro_acs1 import (
     fetch_acs1_cbsa_data,
     ingest_metro_acs1,
 )
+from hhplab.cli.ingest_acs1_metro import ingest_acs1_metro as ingest_acs1_metro_cli
 from hhplab.acs.variables_acs1 import (
     ACS1_METRO_OUTPUT_COLUMNS,
     ACS1_UNAVAILABLE_VINTAGES,
@@ -249,6 +251,12 @@ class TestCbsaToMetroMapping:
 
         assert list(df["metro_id"]) == ["19740", "31080", "35620"]
         assert list(df["cbsa_code"]) == ["19740", "31080", "35620"]
+
+    def test_ingest_defaults_to_canonical_metro_universe(self):
+        assert (
+            inspect.signature(ingest_acs1_metro_cli).parameters["definition_version"].default
+            == CANONICAL_UNIVERSE_DEFINITION_VERSION
+        )
 
 
 class TestUnemploymentRateCalculation:

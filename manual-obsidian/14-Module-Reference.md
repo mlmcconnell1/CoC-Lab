@@ -49,7 +49,7 @@ This chapter is an orientation map of active modules in the current codebase.
 - `hhplab/rents/`: ZORI ingest, weighting, aggregation, diagnostics
 - `hhplab/panel/`: panel diagnostics and assembly internals
 - `hhplab/metro/`: metro analysis geography module
-  - `hhplab/metro/definitions.py`: Glynn/Fox metro definitions (25 metros, membership tables)
+  - `hhplab/metro/definitions.py`: canonical metro-universe definitions plus the Glynn/Fox subset profile
   - `hhplab/metro/pit.py`: PIT aggregation from CoC to metro via CoC membership
   - `hhplab/metro/acs.py`: ACS aggregation from tracts to metro via county membership
   - `hhplab/metro/pep.py`: PEP aggregation from counties to metro via county membership

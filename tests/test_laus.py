@@ -17,6 +17,7 @@ Codes 07/08 are NOT available for metro-area series (national/state only).
 
 from __future__ import annotations
 
+import inspect
 import json
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,7 @@ from hhplab.bls import (
     build_all_series_ids,
     build_laus_series_id,
 )
+from hhplab.cli.ingest_laus_metro import ingest_laus_metro as ingest_laus_metro_cli
 from hhplab.ingest.bls_laus import (
     BlsQuotaExhausted,
     _build_metro_series_map,
@@ -209,6 +211,12 @@ class TestMetroSeriesMap:
         mapping = _build_metro_series_map(CANONICAL_UNIVERSE_DEFINITION_VERSION)
         assert set(mapping) == {"31080", "35620"}
         assert mapping["31080"]["unemployment_rate"] == "LAUMT063108000000003"
+
+    def test_laus_defaults_to_canonical_metro_universe(self):
+        assert (
+            inspect.signature(ingest_laus_metro_cli).parameters["definition_version"].default
+            == CANONICAL_UNIVERSE_DEFINITION_VERSION
+        )
 
 
 # ---------------------------------------------------------------------------

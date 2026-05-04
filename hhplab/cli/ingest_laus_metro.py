@@ -7,6 +7,8 @@ from typing import Annotated
 
 import typer
 
+from hhplab.metro.definitions import CANONICAL_UNIVERSE_DEFINITION_VERSION
+
 
 def ingest_laus_metro(
     year: Annotated[
@@ -38,7 +40,7 @@ def ingest_laus_metro(
             "-d",
             help="Metro definition version.",
         ),
-    ] = "glynn_fox_v1",
+    ] = CANONICAL_UNIVERSE_DEFINITION_VERSION,
     api_key: Annotated[
         str | None,
         typer.Option(
@@ -54,12 +56,13 @@ def ingest_laus_metro(
         ),
     ] = False,
 ) -> None:
-    """Ingest BLS LAUS annual-average labor-market data for Glynn/Fox metros.
+    """Ingest BLS LAUS annual-average labor-market data for metros.
 
     Fetches Local Area Unemployment Statistics (LAUS) from the BLS Public
-    API v2 for the 25 Glynn/Fox metropolitan areas, writes a curated
-    Parquet file with unemployment rate, unemployed count, employed count,
-    and civilian labor force for the requested year(s).
+    API v2 for the canonical Census metro universe by default, or for an
+    explicit subset profile such as Glynn/Fox when requested. Writes a curated
+    Parquet file with unemployment rate, unemployed count, employed count, and
+    civilian labor force for the requested year(s).
 
     BLS LAUS annual averages are typically released in February or March
     following the reference year.

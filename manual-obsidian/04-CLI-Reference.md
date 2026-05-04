@@ -186,7 +186,7 @@ hhplab ingest pep --series auto
 
 Boundary ingestion uses a multi-source fallback chain: national boundary file first, then legacy NatlTerrDC URL, then per-state shapefiles. This makes historical vintage ingestion more reliable.
 
-ACS1 metro ingestion (`acs1-metro`) fetches ACS 1-year B23025 employment data at CBSA geography, maps CBSAs to Glynn/Fox metro IDs, and computes `unemployment_rate_acs1`. Options: `--vintage`, `--definition-version`, `--api-key`, `--json`.
+ACS1 metro ingestion (`acs1-metro`) fetches ACS 1-year B23025 employment data at CBSA geography, keeps canonical CBSA IDs for the full metro universe by default, and can materialize subset-profile outputs such as Glynn/Fox when `--definition-version` requests one. Options: `--vintage`, `--definition-version`, `--api-key`, `--json`.
 
 Useful PEP options:
 - `--start` / `--end` to trim the emitted year range

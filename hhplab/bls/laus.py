@@ -1,8 +1,7 @@
-"""BLS Local Area Unemployment Statistics (LAUS) series mapping for Glynn/Fox metros.
+"""BLS Local Area Unemployment Statistics (LAUS) helpers for metro targets.
 
-Provides the authoritative mapping from Glynn/Fox metro IDs to BLS LAUS
-metropolitan statistical area series identifiers for annual labor-market
-measures.
+Provides the series-ID construction rules used for canonical CBSA metro-universe
+rows and for subset-profile metros that resolve onto those same CBSAs.
 
 BLS LAUS Series ID format (20 characters)
 ------------------------------------------

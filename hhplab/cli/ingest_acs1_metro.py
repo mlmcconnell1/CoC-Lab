@@ -7,6 +7,8 @@ from typing import Annotated
 
 import typer
 
+from hhplab.metro.definitions import CANONICAL_UNIVERSE_DEFINITION_VERSION
+
 
 def ingest_acs1_metro(
     vintage: Annotated[
@@ -24,7 +26,7 @@ def ingest_acs1_metro(
             "-d",
             help="Metro definition version.",
         ),
-    ] = "glynn_fox_v1",
+    ] = CANONICAL_UNIVERSE_DEFINITION_VERSION,
     api_key: Annotated[
         str | None,
         typer.Option(
@@ -43,12 +45,14 @@ def ingest_acs1_metro(
     """Ingest ACS 1-year detailed-table data at CBSA geography for metros.
 
     Fetches the curated ACS 1-year metro table set from the Census Bureau API
-    at metropolitan/micropolitan statistical area geography, maps CBSAs to
-    Glynn/Fox metro IDs, computes unemployment rates, and writes a curated
-    Parquet file.
+    at metropolitan/micropolitan statistical area geography, keeps canonical
+    CBSA IDs when targeting the full metro universe, or resolves an explicit
+    subset profile such as Glynn/Fox when requested, computes unemployment
+    rates, and writes a curated Parquet file.
 
     ACS 1-year data is available only for geographies with population >= 65,000.
-    All 25 Glynn/Fox metros meet this threshold.
+    Many CBSAs in the canonical universe qualify; the Glynn/Fox subset does as
+    well.
 
     Examples:
 

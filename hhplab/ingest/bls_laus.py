@@ -1,8 +1,8 @@
 """BLS LAUS yearly metro ingest.
 
-Fetches annual-average Local Area Unemployment Statistics (LAUS) data for
-the 25 Glynn/Fox metropolitan areas from the BLS Public API v2, and writes
-a curated Parquet file with provenance metadata.
+Fetches annual-average Local Area Unemployment Statistics (LAUS) data for the
+canonical Census metro universe by default, or for an explicit subset profile
+such as Glynn/Fox, and writes a curated Parquet file with provenance metadata.
 
 The BLS LAUS API returns monthly values plus an annual average ("M13") when
 ``annualaverage: true`` is requested.  This module extracts only the annual
@@ -16,9 +16,10 @@ Usage
 
 Output schema
 -------------
-- metro_id (str): Glynn/Fox metro identifier (e.g., "GF01")
+- metro_id (str): canonical CBSA code for the full universe, or profile metro
+  identifier for subset outputs (for example "35620" or "GF01")
 - metro_name (str): Metro area name
-- definition_version (str): e.g., "glynn_fox_v1"
+- definition_version (str): e.g., "census_msa_2023" or "glynn_fox_v1"
 - year (int): Reference year for the annual-average data
 - cbsa_code (str): 5-digit CBSA code for traceability
 - labor_force (Int64): Civilian labor force count
@@ -181,7 +182,7 @@ def _load_metro_targets(
 
 
 def _build_metro_series_map(
-    definition_version: str = "glynn_fox_v1",
+    definition_version: str = GLYNN_FOX_DEFINITION_VERSION,
     *,
     base_dir: Path | None = None,
 ) -> dict[str, dict[str, str]]:
@@ -314,11 +315,11 @@ def fetch_laus_annual_averages(
 
 def ingest_laus_metro(
     year: int,
-    definition_version: str = "glynn_fox_v1",
+    definition_version: str = GLYNN_FOX_DEFINITION_VERSION,
     project_root: Path | None = None,
     api_key: str | None = None,
 ) -> Path:
-    """Fetch BLS LAUS annual-average data for Glynn/Fox metros and write curated Parquet.
+    """Fetch BLS LAUS annual-average data for metro targets and write curated Parquet.
 
     Parameters
     ----------
@@ -326,7 +327,7 @@ def ingest_laus_metro(
         Reference year (e.g., 2023).  BLS LAUS annual averages are
         typically released a few months after the reference year ends.
     definition_version : str
-        Metro definition version (default: "glynn_fox_v1").
+        Metro definition version (default: legacy Glynn/Fox subset profile).
     project_root : Path, optional
         Project root for output path resolution. Defaults to current directory.
     api_key : str, optional

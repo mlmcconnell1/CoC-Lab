@@ -1,8 +1,9 @@
 """ACS 1-year metro-native data fetcher.
 
 Fetches ACS 1-year detailed-table data from the Census Bureau API at CBSA
-(metropolitan statistical area) geography, maps CBSAs to Glynn/Fox metro IDs,
-and computes derived unemployment rates.
+(metropolitan statistical area) geography, joins onto the canonical metro
+universe or an explicit subset profile, and computes derived unemployment
+rates.
 
 Unlike the ACS 5-year tract pipeline, ACS 1-year data is available directly at
 CBSA geography -- no crosswalk or tract aggregation is needed.
@@ -15,9 +16,10 @@ Usage
 
 Output Schema
 -------------
-- metro_id (str): Glynn/Fox metro identifier (e.g., "GF01")
+- metro_id (str): canonical CBSA code for the full universe, or profile metro
+  identifier for subset outputs (for example "35620" or "GF01")
 - metro_name (str): Metro area name
-- definition_version (str): e.g., "glynn_fox_v1"
+- definition_version (str): e.g., "census_msa_2023" or "glynn_fox_v1"
 - acs1_vintage (str): e.g., "2023"
 - cbsa_code (str): Census CBSA code for traceability
 - pop_16_plus (Int64): Population 16 years and over (B23025_001E)
@@ -263,22 +265,23 @@ def fetch_acs1_cbsa_data(
 
 def ingest_metro_acs1(
     vintage: int,
-    definition_version: str = "glynn_fox_v1",
+    definition_version: str = GLYNN_FOX_DEFINITION_VERSION,
     project_root: Path | None = None,
     api_key: str | None = None,
 ) -> Path:
     """Fetch ACS 1-year detailed-table data at CBSA geography and map to metros.
 
-    Fetches requested ACS 1-year detailed tables for all CBSAs, maps them to
-    Glynn/Fox metro IDs, derives unemployment rate, and writes a curated
-    Parquet file with provenance metadata.
+    Fetches requested ACS 1-year detailed tables for all CBSAs, joins them to
+    the canonical metro universe or an explicit subset profile, derives
+    unemployment rate, and writes a curated Parquet file with provenance
+    metadata.
 
     Parameters
     ----------
     vintage : int
         ACS 1-year vintage year (e.g., 2023).
     definition_version : str
-        Metro definition version (default: "glynn_fox_v1").
+        Metro definition version (default: legacy Glynn/Fox subset profile).
     project_root : Path, optional
         Project root for output path resolution. Defaults to current directory.
     api_key : str, optional

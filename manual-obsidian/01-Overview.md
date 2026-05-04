@@ -5,7 +5,7 @@ HHP-Lab is a data engineering and reproducibility toolkit for building **analysi
 Its core design choice is deliberate:
 
 - **Default hub geography:** CoC boundaries by vintage (`B{year}`)
-- **Alternate analysis geography:** Metro areas via researcher-defined membership rules (e.g., Glynn/Fox metros with `D{version}`)
+- **Alternate analysis geography:** Metro areas via the canonical Census CBSA universe, with optional subset profiles such as Glynn/Fox
 - **Spoke datasets:** tract- and county-native inputs (ACS, ZORI, PEP) mapped into the target analysis geography via crosswalks or membership tables
 - **Execution style:** declarative YAML recipes over the global curated store
 
@@ -32,7 +32,7 @@ The recipe system separates:
 Vintages are explicit in file names, metadata, and docs. The system avoids hiding lag or mismatch decisions.
 
 ### 4. Analysis-geography-centered inference
-The project defaults to CoC-level inference but supports metro areas as an alternate analysis geography. County-native and tract-native inputs are transformed into the target analysis frame (CoC or metro), not vice versa. See [[07-Data-Model#analysis-geography-model]] for the abstraction.
+The project defaults to CoC-level inference but supports metro areas as an alternate analysis geography. Metro now means the canonical Census CBSA universe unless a subset profile is explicitly requested. County-native and tract-native inputs are transformed into the target analysis frame (CoC or metro), not vice versa. See [[07-Data-Model#analysis-geography-model]] for the abstraction.
 
 ## Key Surfaces
 

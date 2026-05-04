@@ -1,14 +1,16 @@
-"""Authoritative Glynn/Fox metro definition data.
+"""Authoritative metro-universe and Glynn/Fox subset-definition data.
 
-This module encodes the 25 metropolitan analysis units from Table 1 of:
+This module encodes both:
+
+- the canonical Census CBSA/MSA metro universe, derived from curated MSA
+  definitions; and
+- the 25 Glynn/Fox metropolitan analysis units from Table 1 of:
 
     Glynn, C. and Fox, E.B. (2019). "Dynamics of Homelessness in Urban
     America." *Annals of Applied Statistics*, 13(1), 573-605.
 
-The metro_id scheme uses zero-padded indices matching the paper's
-ordering (``GF01`` through ``GF25``).
-
-Definition version: ``glynn_fox_v1``
+For the historical subset profile, the ``profile_metro_id`` scheme uses
+zero-padded indices matching the paper's ordering (``GF01`` through ``GF25``).
 
 Membership types
 ----------------

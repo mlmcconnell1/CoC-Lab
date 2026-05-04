@@ -12,8 +12,8 @@ HHP-Lab supports multiple analysis geographies—the unit of observation in deri
 | Property | CoC | Metro |
 |----------|-----|-------|
 | `geo_type` | `"coc"` | `"metro"` |
-| `geo_id` | CoC code (e.g., `CO-500`) | Metro ID (e.g., `GF01`) |
-| Version key | `boundary_vintage` (e.g., `"2025"`) | `definition_version` (e.g., `"glynn_fox_v1"`) |
+| `geo_id` | CoC code (e.g., `CO-500`) | Canonical CBSA code by default (e.g., `35620`), or profile metro ID for explicit subset outputs (e.g., `GF01`) |
+| Version key | `boundary_vintage` (e.g., `"2025"`) | `definition_version` (e.g., `"census_msa_2023"` or `"glynn_fox_v1"`) |
 | Identity source | HUD boundary polygons | Researcher membership rules |
 | PIT aggregation | Native (identity) | Summed over member CoCs |
 | ACS aggregation | Tract crosswalk | County-membership tract crosswalk |
@@ -268,17 +268,48 @@ When ZORI is enabled, the panel appends:
 
 ## Metro Definition Schemas
 
-Metro areas are synthetic analysis units defined by researcher membership rules. The Glynn/Fox metros (25 units) are encoded as three curated tables stored under `data/curated/metro/`.
+Metro areas use a two-layer contract:
+
+- the canonical Census metro universe, keyed by CBSA code and definition version
+- optional subset profiles such as Glynn/Fox layered over that universe
+
+The legacy Glynn/Fox membership tables remain available for compatibility and audit workflows.
+
+### Canonical Metro Universe
+
+```mermaid
+erDiagram
+    METRO_UNIVERSE {
+        string metro_id PK "5-digit CBSA code, e.g. 35620"
+        string cbsa_code "same as metro_id"
+        string metro_name "e.g., New York-Newark-Jersey City, NY-NJ-PA"
+        string area_type "e.g., Metropolitan Statistical Area"
+        string definition_version "e.g., census_msa_2023"
+    }
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `metro_id` | string | Canonical 5-digit CBSA code |
+| `cbsa_code` | string | Same value as `metro_id` |
+| `metro_name` | string | Canonical Census metro name |
+| `area_type` | string | Census area type |
+| `definition_version` | string | Canonical universe version |
+
+### Metro Subset Profile
 
 ### Metro Definitions
 
 ```mermaid
 erDiagram
     METRO_DEFINITIONS {
-        string metro_id PK "e.g., GF01"
-        string metro_name "e.g., New York, NY"
+        string metro_id PK "canonical CBSA code, e.g. 35620"
+        string metro_name "canonical metro name"
+        string profile_metro_id "e.g., GF01"
+        string profile_metro_name "e.g., New York, NY"
         string membership_type "single, multi_coc, multi_county, multi_coc_multi_county"
-        string definition_version "e.g., glynn_fox_v1"
+        string profile_definition_version "e.g., glynn_fox_v1"
+        string metro_definition_version "e.g., census_msa_2023"
         string source "Academic paper reference"
         string source_ref "Full citation"
     }
@@ -286,10 +317,13 @@ erDiagram
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `metro_id` | string | Zero-padded identifier (e.g., `GF01` through `GF25`) |
-| `metro_name` | string | Human-readable metro name |
+| `metro_id` | string | Canonical 5-digit CBSA code |
+| `metro_name` | string | Canonical metro name |
+| `profile_metro_id` | string | Subset-specific identifier (e.g., `GF01` through `GF25`) |
+| `profile_metro_name` | string | Human-readable subset label |
 | `membership_type` | string | Aggregation rule: `single`, `multi_coc`, `multi_county`, or `multi_coc_multi_county` |
-| `definition_version` | string | Version identifier (e.g., `glynn_fox_v1`) |
+| `profile_definition_version` | string | Subset profile version |
+| `metro_definition_version` | string | Canonical universe version the profile is attached to |
 | `source` | string | Source attribution |
 | `source_ref` | string | Full citation or URL |
 
@@ -299,9 +333,9 @@ Maps each metro to its constituent CoCs for PIT aggregation:
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `metro_id` | string | Metro identifier |
+| `metro_id` | string | Canonical metro identifier |
 | `coc_id` | string | Member CoC code (e.g., `CA-600`) |
-| `definition_version` | string | Definition version |
+| `definition_version` | string | Compatibility definition version for the legacy Glynn/Fox tables |
 
 ### Metro County Membership
 
@@ -309,9 +343,9 @@ Maps each metro to its constituent counties for PEP, ZORI, and ACS aggregation:
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `metro_id` | string | Metro identifier |
+| `metro_id` | string | Canonical metro identifier |
 | `county_fips` | string | 5-digit county FIPS code |
-| `definition_version` | string | Definition version |
+| `definition_version` | string | Compatibility definition version for the legacy Glynn/Fox tables |
 
 ### Membership Types
 
@@ -328,7 +362,7 @@ Analysis-ready metro×year panels combining PIT counts with ACS measures:
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `metro_id` | string | Metro identifier (e.g., `GF01`) |
+| `metro_id` | string | Canonical CBSA code by default, or profile metro ID for subset outputs |
 | `geo_type` | string | Always `"metro"` |
 | `geo_id` | string | Same as `metro_id` |
 | `year` | int | Panel year |
@@ -358,11 +392,11 @@ When ACS 1-year data is included (`panel_policy.acs1.include: true`), metro pane
 
 ## ACS 1-Year Metro Schema
 
-ACS 1-year data is ingested at CBSA geography and mapped to Glynn/Fox metro IDs. Stored under `data/curated/acs/`.
+ACS 1-year data is ingested at CBSA geography and stored against the canonical metro universe by default. Subset-profile outputs such as Glynn/Fox are derived by requesting the corresponding `definition_version`. Stored under `data/curated/acs/`.
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `metro_id` | string | Metro identifier (e.g., `GF01`) |
+| `metro_id` | string | Canonical CBSA code by default, or profile metro ID for subset outputs |
 | `geo_type` | string | Always `"metro"` |
 | `geo_id` | string | Same as `metro_id` |
 | `unemployment_rate_acs1` | float | Unemployment rate from ACS 1-year B23025 |
@@ -371,15 +405,17 @@ ACS 1-year data is ingested at CBSA geography and mapped to Glynn/Fox metro IDs.
 
 Storage: `data/curated/acs/acs1__metro__A{vintage}@D{version}.parquet`
 
-ACS 1-year estimates are only available for geographies with population >= 65,000. All 25 Glynn/Fox metros qualify.
+ACS 1-year estimates are only available for geographies with population >= 65,000. Subset profiles such as Glynn/Fox inherit eligibility from their underlying CBSAs.
 
 ## Metro Derived Dataset Storage
 
 | File | Path Pattern | Description |
 |------|--------------|-------------|
-| Metro definitions | `data/curated/metro/metro_definitions__glynn_fox_v1.parquet` | Metro identity and membership type |
-| Metro CoC membership | `data/curated/metro/metro_coc_membership__glynn_fox_v1.parquet` | Metro→CoC mapping |
-| Metro county membership | `data/curated/metro/metro_county_membership__glynn_fox_v1.parquet` | Metro→county mapping |
+| Metro universe | `data/curated/metro/metro_universe__census_msa_2023.parquet` | Canonical CBSA metro identity table |
+| Metro subset membership | `data/curated/metro/metro_subset_membership__glynn_fox_v1xMcensus_msa_2023.parquet` | Glynn/Fox subset profile over the canonical universe |
+| Metro definitions | `data/curated/metro/metro_definitions__glynn_fox_v1.parquet` | Legacy compatibility identity and membership type table |
+| Metro CoC membership | `data/curated/metro/metro_coc_membership__glynn_fox_v1.parquet` | Legacy compatibility metro→CoC mapping |
+| Metro county membership | `data/curated/metro/metro_county_membership__glynn_fox_v1.parquet` | Legacy compatibility metro→county mapping |
 | Metro PIT | `data/curated/pit/pit__metro__P{year}@D{version}.parquet` | Metro-level PIT counts |
 | Metro measures | `data/curated/measures/measures__metro__A{acs}@D{version}xT{tract}.parquet` | Metro ACS measures |
 | Metro PEP | `data/curated/pep/pep__metro__D{version}xC{county}__w{weight}__{start}_{end}.parquet` | Metro population estimates |
