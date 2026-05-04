@@ -55,6 +55,12 @@ CROSSWALK_ROWS = [
     },
 ]
 
+PIT_YEAR_COLUMN_CASES = [
+    pytest.param("year", False, id="year"),
+    pytest.param("pit_year", False, id="pit-year"),
+    pytest.param("year", True, id="year-and-pit-year"),
+]
+
 
 @pytest.fixture
 def msa_crosswalk() -> pd.DataFrame:
@@ -103,6 +109,40 @@ class TestAggregatePitToMsa:
 
         assert ny_2021["pit_total"] == pytest.approx(170.0)
         assert stl_2021["pit_total"] == pytest.approx(100.0)
+
+    @pytest.mark.parametrize(
+        ("year_col", "include_pit_year_alias"),
+        PIT_YEAR_COLUMN_CASES,
+    )
+    def test_year_column_normalization_edge_cases(
+        self,
+        coc_pit: pd.DataFrame,
+        msa_crosswalk: pd.DataFrame,
+        year_col: str,
+        include_pit_year_alias: bool,
+    ):
+        pit = coc_pit.rename(columns={"pit_year": year_col})
+        if include_pit_year_alias:
+            pit["pit_year"] = 1999
+
+        result = aggregate_pit_to_msa(pit, msa_crosswalk)
+        ny_2021 = result[(result["msa_id"] == "35620") & (result["year"] == 2021)].iloc[0]
+
+        assert set(result["year"]) == {2020, 2021}
+        assert ny_2021["pit_total"] == pytest.approx(170.0)
+
+    def test_missing_year_column_raises_actionable_error(
+        self,
+        coc_pit: pd.DataFrame,
+        msa_crosswalk: pd.DataFrame,
+    ):
+        pit = coc_pit.drop(columns=["pit_year"])
+
+        with pytest.raises(
+            ValueError,
+            match="PIT data must have 'year' or 'pit_year' column",
+        ):
+            aggregate_pit_to_msa(pit, msa_crosswalk)
 
     def test_missing_coc_reduces_coverage(self, msa_crosswalk: pd.DataFrame):
         partial_pit = pd.DataFrame(
