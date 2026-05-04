@@ -3,6 +3,8 @@
 from pathlib import Path
 
 from hhplab.naming import (
+    acs1_county_filename,
+    acs1_county_path,
     acs1_metro_filename,
     acs1_metro_path,
     metro_measures_acs1_filename,
@@ -45,6 +47,21 @@ class TestAcs1MetroPath:
     def test_subdirectory_is_acs(self):
         result = acs1_metro_path(2023, "glynn_fox_v1")
         assert result.parent == Path("data/curated/acs")
+
+
+class TestAcs1CountyFilename:
+    def test_basic(self):
+        assert acs1_county_filename(2023) == "acs1_county__A2023.parquet"
+
+
+class TestAcs1CountyPath:
+    def test_default_base(self):
+        result = acs1_county_path(2023)
+        assert result == Path("data/curated/acs/acs1_county__A2023.parquet")
+
+    def test_custom_base(self):
+        result = acs1_county_path(2023, base_dir="/tmp/project/data")
+        assert result == Path("/tmp/project/data/curated/acs/acs1_county__A2023.parquet")
 
 
 class TestMetroMeasuresAcs1Filename:

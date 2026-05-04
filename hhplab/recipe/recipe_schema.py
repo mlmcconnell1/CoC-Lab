@@ -28,12 +28,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from hhplab.recipe.schema_common import (
     GeometryRef,
-    VintageSetRule,
     VintageSetSpec,
     YearSpec,
     expand_year_spec,
 )
-
 
 # -----------------------------
 # File set (time-banded dataset paths)

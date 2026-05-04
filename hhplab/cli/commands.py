@@ -20,6 +20,7 @@ from hhplab.cli.generate_metro import generate_metro, generate_metro_universe
 from hhplab.cli.generate_metro_boundaries import generate_metro_boundaries
 from hhplab.cli.generate_msa import generate_msa
 from hhplab.cli.generate_msa_xwalk import generate_msa_xwalk
+from hhplab.cli.ingest_acs1_county import ingest_acs1_county
 from hhplab.cli.ingest_acs1_metro import ingest_acs1_metro
 from hhplab.cli.ingest_acs_population import ingest_acs_population
 from hhplab.cli.ingest_census import ingest_tiger
@@ -84,6 +85,7 @@ def register_commands(
     app.add_typer(migrate_app, name="migrate")
 
     ingest_app.command("acs1-metro")(ingest_acs1_metro)
+    ingest_app.command("acs1-county")(ingest_acs1_county)
     ingest_app.command("laus-metro")(ingest_laus_metro)
     ingest_app.command("acs5-tract")(ingest_acs_population)
     ingest_app.command("boundaries")(ingest_boundaries)

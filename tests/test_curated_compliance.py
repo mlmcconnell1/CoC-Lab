@@ -126,6 +126,7 @@ class TestCanonicalFilenamesAccepted:
             ("xwalks", "xwalk__B2025xC2023.parquet"),
             ("acs", "acs5_tracts__A2023xT2023.parquet"),
             ("acs", "acs1_metro__A2023@Dglynnfoxv1.parquet"),
+            ("acs", "acs1_county__A2023.parquet"),
             ("acs", "county_weights__A2023__wrenter.parquet"),
             ("measures", "measures__A2023@B2025xT2023.parquet"),
             ("measures", "measures__A2023@B2025.parquet"),

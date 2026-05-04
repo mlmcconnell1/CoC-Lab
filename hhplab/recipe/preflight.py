@@ -414,6 +414,23 @@ def _dataset_remediation(ds_id: str, ds, *, years: list[int] | None = None) -> R
                 command=None,
             )
 
+    if provider == "census" and product == "acs1":
+        native_type = getattr(ds.native_geometry, "type", None)
+        if native_type == "county":
+            return Remediation(
+                hint=(
+                    f"Ingest county-native Census ACS 1-year data for dataset "
+                    f"'{ds_id}'. County ACS1 is sparse by Census publication "
+                    "threshold; non-threshold counties are absent by design."
+                ),
+                command="hhplab ingest acs1-county --vintage <year>",
+            )
+        if native_type == "metro":
+            return Remediation(
+                hint=f"Ingest metro-native Census ACS 1-year data for dataset '{ds_id}'.",
+                command="hhplab ingest acs1-metro --vintage <year>",
+            )
+
     return Remediation(
         hint=(f"Ingest {provider}/{product} data for dataset '{ds_id}'."),
         command=f"hhplab ingest {product}" if product else None,

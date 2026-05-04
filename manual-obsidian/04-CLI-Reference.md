@@ -179,6 +179,7 @@ hhplab ingest boundaries --source hud_exchange --vintage 2025
 hhplab ingest tiger --year 2023 --type all
 hhplab ingest acs5-tract --acs 2019-2023 --tracts 2023
 hhplab ingest acs1-metro --vintage 2023
+hhplab ingest acs1-county --vintage 2023
 hhplab ingest pit-vintage --vintage 2024
 hhplab ingest zori --geography county
 hhplab ingest pep --series auto
@@ -187,6 +188,8 @@ hhplab ingest pep --series auto
 Boundary ingestion uses a multi-source fallback chain: national boundary file first, then legacy NatlTerrDC URL, then per-state shapefiles. This makes historical vintage ingestion more reliable.
 
 ACS1 metro ingestion (`acs1-metro`) fetches ACS 1-year detailed-table data at CBSA geography, keeps canonical CBSA IDs for the full metro universe by default, and can materialize subset-profile outputs such as Glynn/Fox when `--definition-version` requests one. The curated artifact includes B23025 employment counts and `unemployment_rate_acs1`, plus current ACS1 income-distribution, housing-cost, utility-cost, tenure, housing-stock, and household-size measures. Options: `--vintage`, `--definition-version`, `--api-key`, `--json`.
+
+ACS1 county ingestion (`acs1-county`) fetches the same ACS 1-year detailed-table set at county geography and writes `data/curated/acs/acs1_county__A{vintage}.parquet`. Census only publishes ACS1 for qualifying counties, so non-threshold counties are absent by design. Options: `--vintage`, `--api-key`, `--json`.
 
 Useful PEP options:
 - `--start` / `--end` to trim the emitted year range

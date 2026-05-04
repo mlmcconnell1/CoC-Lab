@@ -10,7 +10,8 @@ This chapter is an orientation map of active modules in the current codebase.
 - `hhplab/cli/status.py`: one-shot environment readiness report (`hhplab status`)
 - `hhplab/cli/list_curated.py`: curated dataset discovery with metadata (row counts, columns, sizes)
 - `hhplab/cli/list_*.py`: dataset discovery commands with optional JSON output
-- `hhplab/cli/ingest_acs1_metro.py`: ACS 1-year CBSA-level metro unemployment ingestion
+- `hhplab/cli/ingest_acs1_metro.py`: ACS 1-year CBSA-level metro ingestion
+- `hhplab/cli/ingest_acs1_county.py`: ACS 1-year county-level ingestion
 - `hhplab/cli/diagnostics_cli.py` and `hhplab/cli/panel_diagnostics_cli.py`: diagnostics commands with optional JSON output
 - `hhplab/cli/recipe.py`: recipe execution/provenance/export commands
 - `hhplab/cli/migrate_curated.py`: curated data migration utilities
@@ -44,7 +45,7 @@ This chapter is an orientation map of active modules in the current codebase.
 - `hhplab/census/ingest/`: TIGER and tract-relationship ingestion
 - `hhplab/xwalks/`: tract and county crosswalk construction
 - `hhplab/measures/`: compatibility facade for legacy ACS aggregation imports plus reusable crosswalk/measure diagnostics
-- `hhplab/acs/`: ACS ingest, translation, and source-owned aggregation support (including `ingest/metro_acs1.py` for ACS 1-year CBSA data, `variables_acs1.py` for ACS1 detailed-table definitions)
+- `hhplab/acs/`: ACS ingest, translation, and source-owned aggregation support (including `ingest/metro_acs1.py` and `ingest/county_acs1.py` for ACS 1-year native data, `variables_acs1.py` for ACS1 detailed-table definitions)
 - `hhplab/pit/`: PIT ingest, registry, QA
 - `hhplab/pep/`: PEP ingest, aggregation, and diagnostics
 - `hhplab/rents/`: ZORI ingest, weighting, aggregation, diagnostics

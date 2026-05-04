@@ -85,6 +85,53 @@ def _acs1_recipe_dict() -> dict:
     }
 
 
+def _county_acs1_recipe_dict() -> dict:
+    data = _acs1_recipe_dict()
+    data["targets"] = [
+        {"id": "county_panel", "geometry": {"type": "county", "source": "census_api"}},
+    ]
+    data["datasets"] = {
+        "acs1_county": {
+            "provider": "census",
+            "product": "acs1",
+            "version": 1,
+            "native_geometry": {
+                "type": "county",
+                "source": "census_api",
+            },
+            "years": {"years": [2023]},
+            "year_column": "acs1_vintage",
+            "geo_column": "county_fips",
+            "path": "data/curated/acs/acs1_county__A2023.parquet",
+        },
+    }
+    data["pipelines"] = [
+        {
+            "id": "main",
+            "target": "county_panel",
+            "steps": [
+                {
+                    "resample": {
+                        "dataset": "acs1_county",
+                        "to_geometry": {"type": "county", "source": "census_api"},
+                        "method": "identity",
+                        "measures": {
+                            "unemployment_rate_acs1": {"aggregation": "mean"},
+                        },
+                    },
+                },
+                {
+                    "join": {
+                        "datasets": ["acs1_county"],
+                        "join_on": ["geo_id", "year"],
+                    },
+                },
+            ],
+        },
+    ]
+    return data
+
+
 def _make_acs1_parquet(path: Path) -> None:
     """Write a minimal ACS1 metro parquet file for testing."""
     df = pd.DataFrame(
@@ -98,6 +145,29 @@ def _make_acs1_parquet(path: Path) -> None:
             "pop_16_plus": [16000000, 10500000],
             "civilian_labor_force": [10000000, 6800000],
             "unemployed_count": [500000, 340000],
+            "data_source": ["census_acs1", "census_acs1"],
+            "source_ref": [
+                "https://api.census.gov/data/2023/acs/acs1",
+                "https://api.census.gov/data/2023/acs/acs1",
+            ],
+            "ingested_at": [pd.Timestamp.now(), pd.Timestamp.now()],
+        }
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(path)
+
+
+def _make_county_acs1_parquet(path: Path) -> None:
+    df = pd.DataFrame(
+        {
+            "county_fips": ["06037", "36047"],
+            "geo_id": ["06037", "36047"],
+            "unemployment_rate_acs1": [0.05, 0.06],
+            "acs1_vintage": [2023, 2023],
+            "state": ["06", "36"],
+            "county": ["037", "047"],
+            "county_name": ["Los Angeles County, California", "Kings County, New York"],
+            "NAME": ["Los Angeles County, California", "Kings County, New York"],
             "data_source": ["census_acs1", "census_acs1"],
             "source_ref": [
                 "https://api.census.gov/data/2023/acs/acs1",
@@ -432,6 +502,35 @@ class TestPreflightACS1:
         assert len(report.pipelines) == 1
         assert report.pipelines[0].plan is not None
         assert report.pipelines[0].task_count > 0
+
+    def test_county_acs1_preflight_clean(self, tmp_path: Path):
+        """County ACS1 identity resampling validates with a materialized artifact."""
+        data = _county_acs1_recipe_dict()
+        recipe = load_recipe(data)
+
+        artifact_path = tmp_path / "data" / "curated" / "acs" / "acs1_county__A2023.parquet"
+        _make_county_acs1_parquet(artifact_path)
+
+        report = run_preflight(recipe, project_root=tmp_path)
+
+        assert report.is_ready, [f.message for f in report.blocking_findings()]
+
+    def test_county_acs1_missing_artifact_remediation_names_cli(self, tmp_path: Path):
+        """Missing county ACS1 artifacts point agents at the county ingest command."""
+        data = _county_acs1_recipe_dict()
+        recipe = load_recipe(data)
+
+        report = run_preflight(recipe, project_root=tmp_path)
+
+        missing = [
+            f
+            for f in report.findings
+            if f.kind == FindingKind.MISSING_DATASET and f.dataset_id == "acs1_county"
+        ]
+        assert len(missing) == 1
+        assert missing[0].remediation is not None
+        assert missing[0].remediation.command == "hhplab ingest acs1-county --vintage <year>"
+        assert "threshold" in missing[0].remediation.hint
 
 
 # ===========================================================================

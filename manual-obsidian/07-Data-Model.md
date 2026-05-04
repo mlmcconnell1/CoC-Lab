@@ -19,7 +19,7 @@ the CLI can inspect local curated artifacts with
 | Census | TIGER counties | county polygons | Decennial/current vintages used by recipes | county FIPS, county name/state, geometry, vintage/provenance | county boundaries, CoC-county crosswalks, metro county membership joins | County-native sources such as PEP and ZORI use this geometry for aggregation. |
 | Census | TIGER/NHGIS tracts | tract polygons | Decennial tract eras | tract GEOID, tract vintage, geometry, provenance | tract boundaries, CoC-tract crosswalks, tract relationship bridges | ACS and tract crosswalks must match the correct decennial tract era. |
 | Census | ACS 5-year | tract | 2009-ongoing | `total_population`, `adult_population`, `population_below_poverty`, `median_household_income`, `median_gross_rent`, `moe_total_population`, ACS vintage | CoC ACS measures, metro ACS measures, county weights for ZORI, panel demographic columns | ACS 5-year vintages are end years for five-year collection windows. |
-| Census | ACS 1-year | CBSA/metro | 2012-ongoing except 2020; available where ACS1 population thresholds are met | CBSA employment counts and `unemployment_rate_acs1`; income distribution; rent and owner-cost measures; rent/owner-cost burden bins; tenure-by-income; utility costs; heating fuel; gross rent by bedrooms; structure age; units-in-structure; household size; ACS1 vintage; metro definition version | metro-native ACS1 artifact, optional metro panel ACS1 measures | Only used for metro targets via `panel_policy.acs1`; utility-cost tables begin in 2021 and are null-backed in earlier supported vintages. |
+| Census | ACS 1-year | CBSA/metro or county | 2012-ongoing except 2020; available where ACS1 population thresholds are met | CBSA or county employment counts and `unemployment_rate_acs1`; income distribution; rent and owner-cost measures; rent/owner-cost burden bins; tenure-by-income; utility costs; heating fuel; gross rent by bedrooms; structure age; units-in-structure; household size; ACS1 vintage; metro definition version for metro artifacts | metro-native ACS1 artifact, county-native ACS1 artifact, optional metro panel ACS1 measures | Utility-cost tables begin in 2021 and are null-backed in earlier supported vintages. County ACS1 artifacts contain only published threshold counties. |
 | Census | PEP | county | 2010-ongoing | annual `population`, county FIPS/name/state, reference date, PEP vintage/provenance | CoC PEP population, metro PEP population, optional panel `population` measure | PEP reference dates are July 1 annual estimates; recipes can use temporal filters to align to January when needed. |
 | Zillow | ZORI | county or ZIP, normalized to county for standard panels | 2015-ongoing | monthly `zori`, region name/state, source URL, raw hash, metric/provenance fields | normalized ZORI, CoC ZORI, metro ZORI, yearly collapsed ZORI, panel rent columns | Standard panel alignment uses January observations to match PIT timing. |
 
@@ -500,11 +500,11 @@ ACS 1-year data is ingested at CBSA geography and stored against the canonical m
 | `source_ref` | string | Census API endpoint and fetched table set |
 | `ingested_at` | datetime | UTC ingest timestamp |
 
-The canonical output schema currently has 187 columns: 5 identity/version columns, 179 ACS1 measure columns, and 3 provenance columns. The requested ACS1 tables are B23025, B19080, B19081, B19082, B25064, B25088, B25089, B25070, B25091, B25119, B25118, B25132, B25133, B25134, B25040, B25068, B25035, B25024, and B25010. Utility-cost tables B25132, B25133, and B25134 are available beginning with ACS1 vintage 2021; earlier supported vintages keep those columns as nulls for schema stability.
+The canonical metro output schema currently has 187 columns: 5 identity/version columns, 179 ACS1 measure columns, and 3 provenance columns. The canonical county output uses county identity columns (`state`, `county`, `county_fips`, `geo_id`, `county_name`, `NAME`), `acs1_vintage`, the same 179 ACS1 measure columns, and provenance columns. The requested ACS1 tables are B23025, B19080, B19081, B19082, B25064, B25088, B25089, B25070, B25091, B25119, B25118, B25132, B25133, B25134, B25040, B25068, B25035, B25024, and B25010. Utility-cost tables B25132, B25133, and B25134 are available beginning with ACS1 vintage 2021; earlier supported vintages keep those columns as nulls for schema stability.
 
-Storage: `data/curated/acs/acs1_metro__A{vintage}@D{version}.parquet`
+Storage: `data/curated/acs/acs1_metro__A{vintage}@D{version}.parquet` and `data/curated/acs/acs1_county__A{vintage}.parquet`
 
-ACS 1-year estimates are only available for geographies with population >= 65,000. Subset profiles such as Glynn/Fox inherit eligibility from their underlying CBSAs.
+ACS 1-year estimates are only available for geographies with population >= 65,000. Subset profiles such as Glynn/Fox inherit eligibility from their underlying CBSAs. County ACS1 does not manufacture rows for counties that Census omits.
 
 ## Metro Derived Dataset Storage
 
@@ -522,6 +522,7 @@ ACS 1-year estimates are only available for geographies with population >= 65,00
 | Metro ZORI yearly | `data/curated/zori/zori_yearly__metro__A{acs}@D{version}xC{county}__w{weight}__m{method}.parquet` | Metro yearly-collapsed rent index |
 | Metro panels | `outputs/<recipe-name>/panel__metro__Y{start}-{end}@D{version}.parquet` | Metro analysis panels |
 | Metro ACS1 | `data/curated/acs/acs1_metro__A{vintage}@D{version}.parquet` | Metro-native ACS 1-year measures |
+| County ACS1 | `data/curated/acs/acs1_county__A{vintage}.parquet` | County-native ACS 1-year measures |
 
 ## Normalized ZORI Schema
 

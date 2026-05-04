@@ -939,6 +939,30 @@ def acs1_metro_path(
     return base_dir / "curated" / "acs" / acs1_metro_filename(acs1_vintage, definition_version)
 
 
+def acs1_county_filename(acs1_vintage: int) -> str:
+    """Generate filename for curated ACS 1-year county-level ingest artifact.
+
+    Args:
+        acs1_vintage: ACS 1-year vintage end year (e.g., 2023)
+
+    Returns:
+        Filename like 'acs1_county__A2023.parquet'
+    """
+    return f"acs1_county__A{acs1_vintage}.parquet"
+
+
+def acs1_county_path(
+    acs1_vintage: int,
+    base_dir: Path | str | None = None,
+) -> Path:
+    """Get canonical path for ACS 1-year county ingest artifact."""
+    if base_dir is None:
+        base_dir = Path("data")
+    else:
+        base_dir = Path(base_dir)
+    return base_dir / "curated" / "acs" / acs1_county_filename(acs1_vintage)
+
+
 def metro_measures_acs1_filename(
     acs1_vintage: int,
     definition_version: str,

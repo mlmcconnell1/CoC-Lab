@@ -25,6 +25,7 @@ hhplab ingest boundaries --source hud_exchange --vintage 2025
 hhplab ingest tiger --year 2023 --type all
 hhplab ingest acs5-tract --acs 2019-2023 --tracts 2023
 hhplab ingest acs1-metro --vintage 2023          # optional: metro-native ACS1 measures
+hhplab ingest acs1-county --vintage 2023         # optional: county-native ACS1 measures
 hhplab ingest pit-vintage --vintage 2024
 hhplab ingest zori --geography county
 hhplab ingest pep --series auto

@@ -1,6 +1,6 @@
-"""ACS 1-year variable definitions for metro-native ACS ingest.
+"""ACS 1-year variable definitions for native ACS ingest.
 
-Single source of truth for ACS 1-year variables fetched at CBSA geography.
+Single source of truth for ACS 1-year variables fetched at native geography.
 These are separate from the ACS 5-year tract-level variables in
 ``variables.py`` because ACS 1-year is a different Census product with
 different geographic availability and temporal resolution.
@@ -363,6 +363,22 @@ ACS1_METRO_OUTPUT_COLUMNS: list[str] = [
     "acs1_vintage",
     "cbsa_code",
     *ACS1_METRO_MEASURE_COLUMNS,
+    "data_source",
+    "source_ref",
+    "ingested_at",
+]
+
+ACS1_COUNTY_MEASURE_COLUMNS: list[str] = ACS1_METRO_MEASURE_COLUMNS
+
+ACS1_COUNTY_OUTPUT_COLUMNS: list[str] = [
+    "state",
+    "county",
+    "county_fips",
+    "geo_id",
+    "county_name",
+    "NAME",
+    "acs1_vintage",
+    *ACS1_COUNTY_MEASURE_COLUMNS,
     "data_source",
     "source_ref",
     "ingested_at",

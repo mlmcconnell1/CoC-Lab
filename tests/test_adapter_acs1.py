@@ -31,6 +31,11 @@ class TestValidateCensusAcs1:
         diags = _validate_census_acs1(spec)
         assert diags == []
 
+    def test_valid_county_with_source(self):
+        spec = _make_acs1_spec(geo_type="county", geo_source="census_api")
+        diags = _validate_census_acs1(spec)
+        assert diags == []
+
     def test_wrong_version_produces_error(self):
         spec = _make_acs1_spec(version=2)
         diags = _validate_census_acs1(spec)
@@ -48,10 +53,13 @@ class TestValidateCensusAcs1:
         assert not any(d.level == "error" for d in diags)
 
     def test_tract_geometry_without_path_errors(self):
-        """Tract-level ACS1 without a path should error (must use metro natively)."""
+        """Tract-level ACS1 without a path should error."""
         spec = _make_acs1_spec(geo_type="tract")
         diags = _validate_census_acs1(spec)
-        assert any(d.level == "error" and "metro" in d.message for d in diags)
+        assert any(
+            d.level == "error" and "metro" in d.message and "county" in d.message
+            for d in diags
+        )
 
     def test_unknown_params_produce_warning(self):
         spec = _make_acs1_spec(
@@ -82,5 +90,12 @@ class TestAcs1Registration:
         reg = DatasetAdapterRegistry()
         register_dataset_defaults(reg)
         spec = _make_acs1_spec(geo_type="metro", geo_source="census_api")
+        diags = reg.validate(spec)
+        assert diags == []
+
+    def test_acs1_adapter_accepts_county_spec(self):
+        reg = DatasetAdapterRegistry()
+        register_dataset_defaults(reg)
+        spec = _make_acs1_spec(geo_type="county", geo_source="census_api")
         diags = reg.validate(spec)
         assert diags == []

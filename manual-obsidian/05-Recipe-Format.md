@@ -229,6 +229,8 @@ When `panel_policy.zori` is present, the executor canonicalizes the aggregated Z
 
 When `panel_policy.acs1.include` is true on a metro target, the executor preserves requested ACS1 metro-native measure columns, adds `acs1_vintage_used`, and sets `acs_products_used` to `"acs5,acs1"`. Existing example recipes request `unemployment_rate_acs1`, but the ACS1 ingest artifact also contains additional income, housing-cost, utility-cost, tenure, housing-stock, and household-size measures.
 
+Recipe datasets with `provider: census`, `product: acs1`, and `native_geometry.type: county` may point at county-native ACS1 artifacts such as `data/curated/acs/acs1_county__A2023.parquet`. Use `year_column: acs1_vintage` and `geo_column: county_fips` or `geo_id`; recipes must account for Census ACS1 threshold sparsity because omitted counties are not present in the artifact.
+
 ```yaml
 targets:
   - id: metro_panel
