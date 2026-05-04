@@ -78,6 +78,7 @@ def generate_msa_xwalk(
     import json
 
     from hhplab.msa.crosswalk import (
+        ALLOCATION_SHARE_TOLERANCE,
         build_coc_msa_crosswalk,
         save_coc_msa_crosswalk,
         summarize_coc_msa_allocation,
@@ -179,7 +180,9 @@ def generate_msa_xwalk(
         definition_version=definition_version,
     )
     allocation_summary = summarize_coc_msa_allocation(crosswalk)
-    partial_allocations = int((allocation_summary["allocation_share_sum"] < 0.999999).sum())
+    partial_allocations = int(
+        (allocation_summary["allocation_share_sum"] < 1.0 - ALLOCATION_SHARE_TOLERANCE).sum()
+    )
     max_unallocated = (
         float(allocation_summary["unallocated_share"].max())
         if not allocation_summary.empty

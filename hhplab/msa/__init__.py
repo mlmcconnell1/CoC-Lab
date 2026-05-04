@@ -8,6 +8,7 @@ from hhplab.msa.boundaries import (
     write_msa_boundaries,
 )
 from hhplab.msa.crosswalk import (
+    ALLOCATION_SHARE_TOLERANCE,
     COC_MSA_CROSSWALK_COLUMNS,
     build_coc_msa_crosswalk,
     read_coc_msa_crosswalk,
@@ -39,6 +40,7 @@ from hhplab.msa.validate import (
 )
 
 __all__ = [
+    "ALLOCATION_SHARE_TOLERANCE",
     "COC_MSA_CROSSWALK_COLUMNS",
     "DEFINITION_VERSION",
     "DELINEATION_FILE_YEAR",

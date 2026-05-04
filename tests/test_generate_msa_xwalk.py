@@ -11,6 +11,7 @@ from shapely.geometry import box
 from typer.testing import CliRunner
 
 from hhplab.cli.main import app
+from hhplab.msa.crosswalk import ALLOCATION_SHARE_TOLERANCE
 from hhplab.registry.schema import RegistryEntry
 
 runner = CliRunner()
@@ -85,6 +86,67 @@ def test_generate_msa_xwalk_json(monkeypatch, tmp_path: Path):
     assert payload["artifact"].endswith(
         "msa_coc_xwalk__B2025xMcensus_msa_2023xC2023.parquet"
     )
+
+
+def test_generate_msa_xwalk_uses_shared_partial_allocation_tolerance(
+    monkeypatch,
+    tmp_path: Path,
+):
+    _write_test_inputs(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "hhplab.cli.generate_msa_xwalk.list_boundaries",
+        lambda: [
+            RegistryEntry(
+                boundary_vintage="2025",
+                source="hud_exchange",
+                ingested_at=pd.Timestamp("2026-04-30T00:00:00Z").to_pydatetime(),
+                path=tmp_path / "data" / "curated" / "coc_boundaries" / "coc__B2025.parquet",
+                feature_count=1,
+                hash_of_file="abc",
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        "hhplab.cli.generate_msa_xwalk.latest_vintage",
+        lambda: "2025",
+    )
+    monkeypatch.setattr(
+        "hhplab.msa.crosswalk.build_coc_msa_crosswalk",
+        lambda *args, **kwargs: pd.DataFrame(
+            {
+                "coc_id": ["CO-100"],
+                "msa_id": ["35620"],
+                "allocation_share": [1.0],
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        "hhplab.msa.crosswalk.summarize_coc_msa_allocation",
+        lambda crosswalk: pd.DataFrame(
+            {
+                "coc_id": ["CO-100", "CO-200"],
+                "allocation_share_sum": [
+                    1.0 - (ALLOCATION_SHARE_TOLERANCE / 2.0),
+                    1.0 - (ALLOCATION_SHARE_TOLERANCE * 2.0),
+                ],
+                "unallocated_share": [
+                    ALLOCATION_SHARE_TOLERANCE / 2.0,
+                    ALLOCATION_SHARE_TOLERANCE * 2.0,
+                ],
+            }
+        ),
+    )
+
+    result = runner.invoke(
+        app,
+        ["generate", "msa-xwalk", "--boundary", "2025", "--counties", "2023", "--json", "--force"],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["partially_allocated_cocs"] == 1
 
 
 def test_generate_msa_xwalk_missing_membership_is_actionable(monkeypatch, tmp_path: Path):

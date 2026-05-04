@@ -35,6 +35,9 @@ COC_MSA_CROSSWALK_COLUMNS: tuple[str, ...] = (
     "intersecting_county_fips",
 )
 
+#: Numerical tolerance for validating CoC-to-MSA allocation shares and totals.
+ALLOCATION_SHARE_TOLERANCE = 1e-6
+
 logger = logging.getLogger(__name__)
 
 
@@ -126,6 +129,47 @@ def _format_expected_msa_preview(
     return "; ".join(preview) + suffix if preview else "(none)"
 
 
+def _validate_allocation_shares(crosswalk: pd.DataFrame) -> None:
+    """Raise when any allocation share falls materially outside [0.0, 1.0]."""
+    invalid = crosswalk[
+        (crosswalk["allocation_share"] < -ALLOCATION_SHARE_TOLERANCE)
+        | (crosswalk["allocation_share"] > 1.0 + ALLOCATION_SHARE_TOLERANCE)
+    ].copy()
+    if invalid.empty:
+        return
+
+    invalid["coc_id"] = invalid["coc_id"].astype(str)
+    invalid["msa_id"] = invalid["msa_id"].astype(str)
+    examples = ", ".join(
+        f"{row.coc_id}->{row.msa_id}={row.allocation_share:.9f}"
+        for row in invalid.itertuples(index=False)
+    )
+    raise ValueError(
+        "Computed allocation_share outside the allowed range [0.0, 1.0] "
+        f"with tolerance {ALLOCATION_SHARE_TOLERANCE:g}. Offending rows: {examples}"
+    )
+
+
+def _validate_allocation_totals(summary: pd.DataFrame) -> None:
+    """Raise when per-CoC allocation totals fall materially outside [0.0, 1.0]."""
+    invalid = summary[
+        (summary["allocation_share_sum"] < -ALLOCATION_SHARE_TOLERANCE)
+        | (summary["allocation_share_sum"] > 1.0 + ALLOCATION_SHARE_TOLERANCE)
+    ].copy()
+    if invalid.empty:
+        return
+
+    invalid["coc_id"] = invalid["coc_id"].astype(str)
+    examples = ", ".join(
+        f"{row.coc_id}={row.allocation_share_sum:.9f}"
+        for row in invalid.itertuples(index=False)
+    )
+    raise ValueError(
+        "Computed allocation_share_sum outside the allowed range [0.0, 1.0] "
+        f"with tolerance {ALLOCATION_SHARE_TOLERANCE:g}. Offending CoCs: {examples}"
+    )
+
+
 def build_coc_msa_crosswalk(
     coc_gdf: gpd.GeoDataFrame,
     county_gdf: gpd.GeoDataFrame,
@@ -202,6 +246,7 @@ def build_coc_msa_crosswalk(
     grouped["share_column"] = "allocation_share"
     grouped["share_denominator"] = "coc_area"
     grouped["allocation_share"] = grouped["intersection_area"] / grouped["coc_area"]
+    _validate_allocation_shares(grouped)
 
     return grouped.loc[:, COC_MSA_CROSSWALK_COLUMNS]
 
@@ -216,7 +261,8 @@ def summarize_coc_msa_allocation(crosswalk: pd.DataFrame) -> pd.DataFrame:
         .sum()
         .rename(columns={"allocation_share": "allocation_share_sum"})
     )
-    summary["unallocated_share"] = 1.0 - summary["allocation_share_sum"]
+    _validate_allocation_totals(summary)
+    summary["unallocated_share"] = (1.0 - summary["allocation_share_sum"]).clip(lower=0.0)
     return summary.sort_values("coc_id").reset_index(drop=True)
 
 

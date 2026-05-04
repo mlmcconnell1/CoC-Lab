@@ -8,6 +8,7 @@ import pytest
 from shapely.geometry import box
 
 from hhplab.msa.crosswalk import (
+    ALLOCATION_SHARE_TOLERANCE,
     COC_MSA_CROSSWALK_COLUMNS,
     build_coc_msa_crosswalk,
     summarize_coc_msa_allocation,
@@ -139,6 +140,56 @@ def test_allocation_summary_flags_unallocated_share(coc_msa_crosswalk: pd.DataFr
     for coc_id, expected_unallocated in EXPECTED_UNALLOCATED_SHARE.items():
         row = summary[summary["coc_id"] == coc_id].iloc[0]
         assert row["unallocated_share"] == pytest.approx(expected_unallocated)
+
+
+def test_invalid_allocation_share_raises_clear_error(monkeypatch: pytest.MonkeyPatch):
+    invalid_county_crosswalk = pd.DataFrame(
+        {
+            "coc_id": ["CO-999"],
+            "boundary_vintage": ["2025"],
+            "county_fips": ["36061"],
+            "area_share": [1.0],
+            "intersection_area": [110.0],
+            "county_area": [110.0],
+            "coc_area": [100.0],
+        }
+    )
+
+    monkeypatch.setattr(
+        "hhplab.msa.crosswalk.build_county_crosswalk",
+        lambda *args, **kwargs: invalid_county_crosswalk,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"Computed allocation_share outside the allowed range .* "
+            r"Offending rows: CO-999->35620=1\.100000000"
+        ),
+    ):
+        build_coc_msa_crosswalk(
+            _coc_gdf(),
+            _county_gdf(),
+            _msa_membership_df().iloc[[0]].copy(),
+            boundary_vintage="2025",
+            county_vintage="2023",
+            definition_version="census_msa_2023",
+        )
+
+
+def test_allocation_summary_rejects_total_above_one_plus_tolerance():
+    crosswalk = pd.DataFrame(
+        {
+            "coc_id": ["CO-999"],
+            "allocation_share": [1.0 + (ALLOCATION_SHARE_TOLERANCE * 2)],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"Computed allocation_share_sum outside the allowed range .* Offending CoCs: CO-999=",
+    ):
+        summarize_coc_msa_allocation(crosswalk)
 
 
 def test_missing_membership_county_raises_actionable_error():
