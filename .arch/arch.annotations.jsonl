@@ -178,3 +178,7 @@
 {"id":"el:file-pit-metro-py-3tjqn3hm1fvp","summary":"Metro-level PIT aggregation from CoC-native PIT counts.","ai":{"architectural_layer":"domain","confidence":0.95}}
 {"id":"el:file-zori-aggregate-py-pza1yfg927py","summary":"ZORI aggregation from county to CoC geography with weighting, coverage, yearly collapse, and provenance-aware artifact writing.","ai":{"architectural_layer":"domain","confidence":0.95}}
 {"id":"el:file-zori-metro-py-eymt8c976x24","summary":"Metro-level ZORI aggregation from county-native inputs and yearly ZORI panels.","ai":{"architectural_layer":"domain","confidence":0.95}}
+{"id":"el:file-agents-py-y93swhgapnfw","summary":"Agent-reference CLI command module that prints HHP-Lab automation and geography matching guidance.","ai":{"architectural_layer":"cli","confidence":0.9}}
+{"id":"el:file-boundaries-py-619ym82wwpc1","summary":"Boundary-focused Typer command implementations for HUD CoC boundary ingest, boundary registry listing and validation, registry entry deletion, and boundary map display.","ai":{"architectural_layer":"cli","confidence":0.9}}
+{"id":"el:file-commands-py-h3pmrxwxpft5","summary":"Central Typer command registrar that wires root command groups to focused CLI command implementation modules.","ai":{"architectural_layer":"cli","confidence":0.9}}
+{"id":"el:file-source-status-py-7kh5979zdrb5","summary":"Source-registry status CLI command for JSON and human-readable reporting of tracked external source ingests and upstream hash changes.","ai":{"architectural_layer":"cli","confidence":0.9}}
