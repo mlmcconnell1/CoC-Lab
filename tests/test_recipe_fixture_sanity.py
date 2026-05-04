@@ -248,6 +248,8 @@ MSA_DEFINITION_ROWS: tuple[dict[str, object], ...] = (
 
 RECIPE_MSA_PANEL_COLUMNS: tuple[str, ...] = (
     "msa_id",
+    "msa_name",
+    "cbsa_code",
     "geo_type",
     "geo_id",
     "year",
@@ -371,6 +373,8 @@ def _write_fixture_assets(project_root: Path) -> None:
 @dataclass(frozen=True)
 class MsaPanelTruthRow:
     msa_id: str
+    msa_name: str
+    cbsa_code: str
     year: int
     pit_total: float
     pit_sheltered: float
@@ -388,10 +392,6 @@ class MsaPanelTruthRow:
 
 
 def _expected_msa_panel_truth_table() -> tuple[MsaPanelTruthRow, ...]:
-    pit_by_key = {
-        (str(row["coc_id"]), int(row["pit_year"])): row
-        for row in MSA_PIT_ROWS
-    }
     acs_by_year = {
         2020: {str(row["tract_geoid"]): row for row in MSA_ACS_2010_ROWS},
         2021: {str(row["tract_geoid"]): row for row in MSA_ACS_2020_ROWS},
@@ -400,10 +400,16 @@ def _expected_msa_panel_truth_table() -> tuple[MsaPanelTruthRow, ...]:
         (str(row["county_fips"]), int(row["year"])): row
         for row in MSA_PEP_ROWS
     }
+    definitions_by_msa = {
+        str(row["msa_id"]): row
+        for row in MSA_DEFINITION_ROWS
+    }
 
     return (
         MsaPanelTruthRow(
             msa_id="11111",
+            msa_name=str(definitions_by_msa["11111"]["msa_name"]),
+            cbsa_code=str(definitions_by_msa["11111"]["cbsa_code"]),
             year=2020,
             pit_total=50.0,
             pit_sheltered=30.0,
@@ -427,6 +433,8 @@ def _expected_msa_panel_truth_table() -> tuple[MsaPanelTruthRow, ...]:
         ),
         MsaPanelTruthRow(
             msa_id="22222",
+            msa_name=str(definitions_by_msa["22222"]["msa_name"]),
+            cbsa_code=str(definitions_by_msa["22222"]["cbsa_code"]),
             year=2020,
             pit_total=130.0,
             pit_sheltered=80.0,
@@ -450,6 +458,8 @@ def _expected_msa_panel_truth_table() -> tuple[MsaPanelTruthRow, ...]:
         ),
         MsaPanelTruthRow(
             msa_id="11111",
+            msa_name=str(definitions_by_msa["11111"]["msa_name"]),
+            cbsa_code=str(definitions_by_msa["11111"]["cbsa_code"]),
             year=2021,
             pit_total=60.0,
             pit_sheltered=35.0,
@@ -473,6 +483,8 @@ def _expected_msa_panel_truth_table() -> tuple[MsaPanelTruthRow, ...]:
         ),
         MsaPanelTruthRow(
             msa_id="22222",
+            msa_name=str(definitions_by_msa["22222"]["msa_name"]),
+            cbsa_code=str(definitions_by_msa["22222"]["cbsa_code"]),
             year=2021,
             pit_total=150.0,
             pit_sheltered=90.0,
@@ -675,6 +687,8 @@ def test_msa_panel_sanity_recipe_writes_expected_truth_table(
     ].iloc[0]
 
     assert row["msa_id"] == expected.msa_id
+    assert row["msa_name"] == expected.msa_name
+    assert row["cbsa_code"] == expected.cbsa_code
     assert row["geo_id"] == expected.msa_id
     assert row["pit_total"] == pytest.approx(expected.pit_total)
     assert row["pit_sheltered"] == pytest.approx(expected.pit_sheltered)

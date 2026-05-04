@@ -19,8 +19,8 @@ import pandas as pd
 import pyarrow.parquet as pq
 
 from hhplab.recipe.executor import execute_recipe
-from hhplab.recipe.loader import load_recipe
 from hhplab.recipe.executor_panel_policies import collect_conformance_flags
+from hhplab.recipe.loader import load_recipe
 
 # ---------------------------------------------------------------------------
 # ZORI recipe and fixture helpers
@@ -971,10 +971,14 @@ def _msa_recipe_dict() -> dict:
 
 def _setup_msa_recipe_fixtures(tmp_path: Path) -> None:
     """Create synthetic datasets and materialized MSA transforms."""
+    from hhplab.naming import msa_definitions_path
+
     data_dir = tmp_path / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     transform_dir = tmp_path / ".recipe_cache" / "transforms"
     transform_dir.mkdir(parents=True, exist_ok=True)
+    msa_dir = tmp_path / "data" / "curated" / "msa"
+    msa_dir.mkdir(parents=True, exist_ok=True)
 
     pd.DataFrame({
         "coc_id": ["COC1", "COC2", "COC1", "COC2"],
@@ -1021,6 +1025,17 @@ def _setup_msa_recipe_fixtures(tmp_path: Path) -> None:
         "definition_version": ["census_msa_2023", "census_msa_2023"],
     }).to_parquet(transform_dir / "county_to_msa__county_2025__census_msa_2023.parquet")
 
+    pd.DataFrame({
+        "msa_id": ["35620", "41180"],
+        "msa_name": [
+            "New York-Newark-Jersey City, NY-NJ-PA",
+            "St. Louis, MO-IL",
+        ],
+        "cbsa_code": ["35620", "41180"],
+        "area_type": ["Metropolitan Statistical Area", "Metropolitan Statistical Area"],
+        "definition_version": ["census_msa_2023", "census_msa_2023"],
+    }).to_parquet(msa_definitions_path("census_msa_2023", tmp_path / "data"))
+
 
 class TestMsaPanelParity:
     """Recipe-native MSA panel uses the standard first-class workflow."""
@@ -1037,6 +1052,8 @@ class TestMsaPanelParity:
         panel = pd.read_parquet(panel_path)
         expected = {
             "msa_id",
+            "msa_name",
+            "cbsa_code",
             "geo_type",
             "geo_id",
             "year",
@@ -1058,6 +1075,14 @@ class TestMsaPanelParity:
         assert "coc_id" not in panel.columns
         assert (panel["geo_type"] == "msa").all()
         assert (panel["definition_version_used"] == "census_msa_2023").all()
+        sorted_panel = panel.sort_values(["msa_id", "year"]).reset_index(drop=True)
+        assert list(sorted_panel["msa_name"]) == [
+            "New York-Newark-Jersey City, NY-NJ-PA",
+            "New York-Newark-Jersey City, NY-NJ-PA",
+            "St. Louis, MO-IL",
+            "St. Louis, MO-IL",
+        ]
+        assert list(sorted_panel["cbsa_code"]) == ["35620", "35620", "41180", "41180"]
 
     def test_msa_conformance_flags_include_acs_and_pep_measures(self, tmp_path: Path):
         recipe = load_recipe(_msa_recipe_dict())

@@ -83,6 +83,7 @@ METRO_PANEL_COLUMNS: list[str] = [
 
 MSA_PANEL_COLUMNS: list[str] = [
     "msa_id",
+    "msa_name",
     "cbsa_code",
     "geo_type",
     "geo_id",
@@ -157,6 +158,7 @@ _PANEL_DTYPE_SPEC: dict[str, str | type] = {
     "geo_id": "str",
     "geo_type": "str",
     "metro_name": "str",
+    "msa_name": "str",
     "cbsa_code": "str",
     # Temporal
     "year": "int",

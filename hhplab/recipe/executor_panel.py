@@ -53,9 +53,12 @@ def canonicalize_panel_for_target(
 ) -> pd.DataFrame:
     """Add target-geometry metadata columns expected by downstream tools."""
     result = panel.copy()
-    geo_type, boundary_vintage, definition_version, _profile_definition_version = _target_geometry_metadata(
-        target_geometry
-    )
+    (
+        geo_type,
+        boundary_vintage,
+        definition_version,
+        _profile_definition_version,
+    ) = _target_geometry_metadata(target_geometry)
     if "geo_id" in result.columns:
         result["geo_type"] = geo_type
         if geo_type == "coc" and "coc_id" not in result.columns:
@@ -233,6 +236,7 @@ _RECIPE_METRO_COLUMN_ORDER: list[str] = [
 
 _RECIPE_MSA_COLUMN_ORDER: list[str] = [
     "msa_id",
+    "msa_name",
     "cbsa_code",
     "geo_type",
     "geo_id",
@@ -396,7 +400,13 @@ def _add_recipe_metro_metadata(
         result["metro_name"] = result["metro_name_universe"]
     if "metro_id_x" in result.columns:
         result = result.rename(columns={"metro_id_x": "metro_id"})
-    result = result.drop(columns=[col for col in ("metro_id_y", "metro_name_universe") if col in result.columns])
+    result = result.drop(
+        columns=[
+            col
+            for col in ("metro_id_y", "metro_name_universe")
+            if col in result.columns
+        ]
+    )
 
     profile_definition_version = target_geometry.resolved_metro_subset_definition_version()
     if profile_definition_version is None:
@@ -428,6 +438,65 @@ def _add_recipe_metro_metadata(
     if "metro_id_x" in result.columns:
         result = result.rename(columns={"metro_id_x": "metro_id"})
     return result.drop(columns=[col for col in ("metro_id_y",) if col in result.columns])
+
+
+def _add_recipe_msa_metadata(
+    panel: pd.DataFrame,
+    *,
+    project_root,
+    target_geometry: GeometryRef,
+) -> pd.DataFrame:
+    """Backfill MSA names and CBSA codes from curated definitions."""
+    if panel.empty:
+        return panel
+    if "msa_id" not in panel.columns and "geo_id" not in panel.columns:
+        return panel
+    if target_geometry.source is None:
+        return panel
+
+    from hhplab.msa.io import read_msa_definitions
+
+    result = panel.copy()
+    geo_col = "msa_id" if "msa_id" in result.columns else "geo_id"
+    definitions = read_msa_definitions(
+        target_geometry.source,
+        base_dir=project_root / "data",
+    )
+    required = {"msa_id", "msa_name", "cbsa_code"}
+    if not required <= set(definitions.columns):
+        return result
+
+    lookup = (
+        definitions[["msa_id", "msa_name", "cbsa_code"]]
+        .assign(msa_id=lambda df: df["msa_id"].astype(str))
+        .drop_duplicates(subset=["msa_id"], keep="last")
+        .rename(
+            columns={
+                "msa_name": "msa_name_definition",
+                "cbsa_code": "cbsa_code_definition",
+            }
+        )
+    )
+    result = result.merge(lookup, left_on=geo_col, right_on="msa_id", how="left")
+    if "msa_id_x" in result.columns:
+        result = result.rename(columns={"msa_id_x": "msa_id"})
+
+    if "msa_name" in result.columns:
+        result["msa_name"] = result["msa_name"].fillna(result["msa_name_definition"])
+    else:
+        result["msa_name"] = result["msa_name_definition"]
+    if "cbsa_code" in result.columns:
+        result["cbsa_code"] = result["cbsa_code"].fillna(result["cbsa_code_definition"])
+    else:
+        result["cbsa_code"] = result["cbsa_code_definition"]
+
+    return result.drop(
+        columns=[
+            col
+            for col in ("msa_id_y", "msa_name_definition", "cbsa_code_definition")
+            if col in result.columns
+        ]
+    )
 
 
 def _resolve_single_product_value(
@@ -557,9 +626,12 @@ def assemble_panel(
             error=str(exc),
         )
 
-    target_geo_type, boundary_vintage, definition_version, _profile_definition_version = _target_geometry_metadata(
-        target.geometry,
-    )
+    (
+        target_geo_type,
+        boundary_vintage,
+        definition_version,
+        _profile_definition_version,
+    ) = _target_geometry_metadata(target.geometry)
 
     # Resolve panel policy for source label and ZORI inclusion.
     policy: PanelPolicy | None = getattr(target, "panel_policy", None)
@@ -597,6 +669,12 @@ def assemble_panel(
         )
     elif target_geo_type == "metro":
         panel = _add_recipe_metro_metadata(
+            panel,
+            project_root=ctx.project_root,
+            target_geometry=target.geometry,
+        )
+    elif target_geo_type == "msa":
+        panel = _add_recipe_msa_metadata(
             panel,
             project_root=ctx.project_root,
             target_geometry=target.geometry,
