@@ -11,12 +11,15 @@ from pathlib import Path
 
 import pytest
 import yaml
+from typer.testing import CliRunner
 
+from hhplab.cli.main import app
 from hhplab.recipe.loader import load_recipe
 from hhplab.recipe.planner import resolve_plan
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXAMPLES_DIR = REPO_ROOT / "recipes" / "examples"
+runner = CliRunner()
 
 
 @dataclass(frozen=True)
@@ -145,8 +148,38 @@ AUTO_TRANSFORM_EXPECTATIONS: tuple[tuple[str, str, str, dict[int, str]], ...] = 
 )
 
 
+@dataclass(frozen=True)
+class MapRecipeCase:
+    path: str
+    pipeline_id: str
+    recipe_name: str
+    target_id: str
+
+
+MAP_RECIPE_CASES: tuple[MapRecipeCase, ...] = (
+    MapRecipeCase(
+        path="recipes/florida-cocs-orlando-msa-map-2025.yaml",
+        pipeline_id="florida_overlay_map_pipeline",
+        recipe_name="florida_cocs_orlando_msa_map_2025",
+        target_id="florida_overlay_map",
+    ),
+    MapRecipeCase(
+        path="recipes/colorado-cocs-denver-msa-map-2025.yaml",
+        pipeline_id="colorado_overlay_map_pipeline",
+        recipe_name="colorado_cocs_denver_msa_map_2025",
+        target_id="colorado_overlay_map",
+    ),
+)
+
+
 def _load_example(relative_path: str):
     path = EXAMPLES_DIR / relative_path
+    with path.open(encoding="utf-8") as handle:
+        return load_recipe(yaml.safe_load(handle))
+
+
+def _load_repo_recipe(relative_path: str):
+    path = REPO_ROOT / relative_path
     with path.open(encoding="utf-8") as handle:
         return load_recipe(yaml.safe_load(handle))
 
@@ -182,3 +215,62 @@ def test_example_recipe_auto_transform_selection(
 
     for year, transform_id in expected_by_year.items():
         assert transform_by_year[year] == transform_id
+
+
+@pytest.mark.parametrize("case", MAP_RECIPE_CASES, ids=lambda case: Path(case.path).name)
+def test_map_recipe_loads_and_resolves_without_datasets(case: MapRecipeCase):
+    recipe = _load_repo_recipe(case.path)
+    plan = resolve_plan(recipe, case.pipeline_id)
+
+    assert recipe.name == case.recipe_name
+    assert recipe.targets[0].id == case.target_id
+    assert recipe.targets[0].outputs == ["map"]
+    assert recipe.datasets == {}
+    assert plan.materialize_tasks == []
+    assert plan.resample_tasks == []
+    assert plan.join_tasks == []
+
+
+@pytest.mark.parametrize("case", MAP_RECIPE_CASES, ids=lambda case: Path(case.path).name)
+def test_map_recipe_build_executes_map_only_pipeline(
+    case: MapRecipeCase,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def _fake_render_recipe_map(target, *, project_root: Path, out_html: Path) -> Path:
+        del target, project_root
+        out_html.parent.mkdir(parents=True, exist_ok=True)
+        out_html.write_text("<html>map</html>", encoding="utf-8")
+        return out_html
+
+    monkeypatch.chdir(REPO_ROOT)
+    monkeypatch.setattr(
+        "hhplab.viz.map_folium.render_recipe_map",
+        _fake_render_recipe_map,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "build",
+            "recipe",
+            "--recipe",
+            case.path,
+            "--output-root",
+            str(tmp_path / "outputs"),
+            "--json",
+        ],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 0
+    payload = yaml.safe_load(result.stdout)
+    assert payload["status"] == "ok"
+    assert payload["pipelines"][0]["pipeline_id"] == case.pipeline_id
+    assert payload["pipelines"][0]["success"] is True
+    assert [step["step_kind"] for step in payload["pipelines"][0]["steps"]] == ["persist_map"]
+    map_path = Path(payload["artifacts"]["map_path"])
+    assert map_path.is_absolute()
+    assert map_path.exists()
+    assert map_path.parent.name == case.recipe_name
+    assert map_path.name == "map__Y2025-2025@B2025.html"
