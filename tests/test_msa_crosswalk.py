@@ -11,8 +11,11 @@ from hhplab.msa.crosswalk import (
     ALLOCATION_SHARE_TOLERANCE,
     COC_MSA_CROSSWALK_COLUMNS,
     build_coc_msa_crosswalk,
+    read_coc_msa_crosswalk,
+    save_coc_msa_crosswalk,
     summarize_coc_msa_allocation,
 )
+from hhplab.provenance import read_provenance
 from hhplab.xwalks.county import ALBERS_EQUAL_AREA_CRS
 
 COUNTY_GEOMETRY_ROWS = [
@@ -140,6 +143,58 @@ def test_allocation_summary_flags_unallocated_share(coc_msa_crosswalk: pd.DataFr
     for coc_id, expected_unallocated in EXPECTED_UNALLOCATED_SHARE.items():
         row = summary[summary["coc_id"] == coc_id].iloc[0]
         assert row["unallocated_share"] == pytest.approx(expected_unallocated)
+
+
+def test_save_read_roundtrip_preserves_schema_and_provenance(
+    coc_msa_crosswalk: pd.DataFrame,
+    tmp_path,
+):
+    output_dir = tmp_path / "curated" / "xwalks"
+    written = save_coc_msa_crosswalk(
+        coc_msa_crosswalk,
+        boundary_vintage="2025",
+        county_vintage="2023",
+        definition_version="census_msa_2023",
+        output_dir=output_dir,
+    )
+
+    roundtrip = read_coc_msa_crosswalk(
+        "2025",
+        "census_msa_2023",
+        "2023",
+        base_dir=tmp_path,
+    )
+
+    assert list(roundtrip.columns) == list(COC_MSA_CROSSWALK_COLUMNS)
+    pd.testing.assert_frame_equal(roundtrip, coc_msa_crosswalk)
+
+    provenance = read_provenance(written)
+    assert provenance is not None
+    assert provenance.boundary_vintage == "2025"
+    assert provenance.county_vintage == "2023"
+    assert provenance.geo_type == "msa"
+    assert provenance.definition_version == "census_msa_2023"
+    assert provenance.weighting == "area"
+    assert provenance.extra["dataset_type"] == "coc_msa_crosswalk"
+    assert provenance.extra["share_column"] == "allocation_share"
+    assert provenance.extra["share_denominator"] == "coc_area"
+
+
+def test_read_coc_msa_crosswalk_missing_file_is_actionable(tmp_path):
+    with pytest.raises(
+        FileNotFoundError,
+        match=(
+            r"CoC-to-MSA crosswalk artifact not found .* "
+            r"Run: hhplab generate msa-xwalk --boundary 2025 "
+            r"--definition-version census_msa_2023 --counties 2023"
+        ),
+    ):
+        read_coc_msa_crosswalk(
+            "2025",
+            "census_msa_2023",
+            "2023",
+            base_dir=tmp_path,
+        )
 
 
 def test_invalid_allocation_share_raises_clear_error(monkeypatch: pytest.MonkeyPatch):

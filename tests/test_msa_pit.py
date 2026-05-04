@@ -5,7 +5,8 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from hhplab.pit import aggregate_pit_to_msa
+from hhplab.pit import aggregate_pit_to_msa, save_msa_pit
+from hhplab.provenance import read_provenance
 
 CROSSWALK_ROWS = [
     {
@@ -137,3 +138,65 @@ class TestAggregatePitToMsa:
         bad = pd.DataFrame({"coc_id": ["CO-100"], "msa_id": ["35620"]})
         with pytest.raises(ValueError, match="CoC-to-MSA crosswalk must have columns"):
             aggregate_pit_to_msa(coc_pit, bad)
+
+    @pytest.mark.parametrize(
+        ("column_name", "expected_dtype"),
+        [
+            ("pit_total", "Float64"),
+            ("pit_sheltered", "Float64"),
+            ("pit_unsheltered", "Float64"),
+            ("covered_coc_count", "int64"),
+            ("expected_coc_count", "int64"),
+            ("allocation_share_sum", "float64"),
+            ("expected_allocation_share_sum", "float64"),
+            ("allocation_coverage_ratio", "float64"),
+        ],
+        ids=[
+            "pit_total-Float64",
+            "pit_sheltered-Float64",
+            "pit_unsheltered-Float64",
+            "covered_coc_count-int64",
+            "expected_coc_count-int64",
+            "allocation_share_sum-float64",
+            "expected_allocation_share_sum-float64",
+            "allocation_coverage_ratio-float64",
+        ],
+    )
+    def test_output_dtypes(
+        self,
+        coc_pit: pd.DataFrame,
+        msa_crosswalk: pd.DataFrame,
+        column_name: str,
+        expected_dtype: str,
+    ):
+        result = aggregate_pit_to_msa(coc_pit, msa_crosswalk)
+        assert str(result[column_name].dtype) == expected_dtype
+
+
+def test_save_msa_pit_embeds_expected_provenance(
+    coc_pit: pd.DataFrame,
+    msa_crosswalk: pd.DataFrame,
+    tmp_path,
+):
+    result = aggregate_pit_to_msa(coc_pit, msa_crosswalk)
+    written = save_msa_pit(
+        result[result["year"] == 2020].reset_index(drop=True),
+        pit_year=2020,
+        definition_version="census_msa_2023",
+        boundary_vintage="2020",
+        county_vintage="2020",
+        output_dir=tmp_path,
+    )
+
+    provenance = read_provenance(written)
+    assert provenance is not None
+    assert provenance.boundary_vintage == "2020"
+    assert provenance.county_vintage == "2020"
+    assert provenance.geo_type == "msa"
+    assert provenance.definition_version == "census_msa_2023"
+    assert provenance.weighting == "area"
+    assert provenance.extra["dataset_type"] == "msa_pit"
+    assert provenance.extra["pit_year"] == 2020
+    assert provenance.extra["source_geometry"] == "coc"
+    assert provenance.extra["share_column"] == "allocation_share"
+    assert provenance.extra["allocation_method"] == "area"
