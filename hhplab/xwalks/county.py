@@ -6,15 +6,51 @@ The legacy ``build_coc_county_crosswalk`` name is preserved as a
 convenience wrapper.
 """
 
+import logging
 from pathlib import Path
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 
 from hhplab.paths import curated_dir
 
 # ESRI:102003 - USA Contiguous Albers Equal Area Conic
 ALBERS_EQUAL_AREA_CRS = "ESRI:102003"
+
+logger = logging.getLogger(__name__)
+
+
+def _valid_projected_geometry_mask(gdf: gpd.GeoDataFrame) -> pd.Series:
+    """Return True for non-empty projected geometries with finite bounds."""
+    bounds = gdf.geometry.bounds
+    finite_bounds = np.isfinite(bounds.to_numpy()).all(axis=1)
+    return (
+        gdf.geometry.notna()
+        & ~gdf.geometry.is_empty
+        & gdf.geometry.is_valid
+        & pd.Series(finite_bounds, index=gdf.index)
+    )
+
+
+def _drop_invalid_projected_geometries(
+    gdf: gpd.GeoDataFrame,
+    *,
+    label: str,
+) -> gpd.GeoDataFrame:
+    """Drop projected geometries that cannot safely participate in area math."""
+    valid_mask = _valid_projected_geometry_mask(gdf)
+    if valid_mask.all():
+        return gdf
+
+    dropped = int((~valid_mask).sum())
+    logger.warning(
+        "Dropped %d %s geometries after projection because they were empty, invalid, "
+        "or had non-finite coordinates.",
+        dropped,
+        label,
+    )
+    return gdf.loc[valid_mask].copy()
 
 
 def build_county_crosswalk(
@@ -62,6 +98,21 @@ def build_county_crosswalk(
     # Reproject to equal-area for accurate area calculation
     geo_proj = geo_gdf.to_crs(ALBERS_EQUAL_AREA_CRS)
     county_proj = county_gdf.to_crs(ALBERS_EQUAL_AREA_CRS)
+    geo_proj = _drop_invalid_projected_geometries(geo_proj, label="analysis")
+    county_proj = _drop_invalid_projected_geometries(county_proj, label="county")
+
+    if geo_proj.empty or county_proj.empty:
+        return pd.DataFrame(
+            columns=[
+                geo_id_col,
+                "boundary_vintage",
+                "county_fips",
+                "area_share",
+                "intersection_area",
+                "county_area",
+                "geo_area",
+            ]
+        )
 
     # Calculate geometry areas before overlay
     geo_proj = geo_proj.copy()

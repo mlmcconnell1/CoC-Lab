@@ -11,6 +11,7 @@ including:
 from __future__ import annotations
 
 from pathlib import Path
+import warnings
 
 import geopandas as gpd
 import pandas as pd
@@ -169,6 +170,28 @@ class TestCountyCrosswalkWithOverlap:
         county_08002 = xwalk[xwalk["county_fips"] == "08002"]
         assert len(county_08002) == 1
         assert county_08002["area_share"].iloc[0] == pytest.approx(0.5, rel=0.01)
+
+    def test_invalid_projected_geometry_is_dropped_without_runtime_warning(self):
+        coc_gdf = gpd.GeoDataFrame(
+            {
+                "coc_id": ["COC-001"],
+                "geometry": [box(100, 100, 110, 110)],
+            },
+            crs="EPSG:4326",
+        )
+        county_gdf = gpd.GeoDataFrame(
+            {
+                "GEOID": ["08001"],
+                "geometry": [box(-105, 39, -104, 40)],
+            },
+            crs="EPSG:4326",
+        )
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            xwalk = build_coc_county_crosswalk(coc_gdf, county_gdf, "2024")
+
+        assert xwalk.empty
 
 
 class TestCountyCrosswalkIntegration:

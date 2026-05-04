@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import warnings
 
 import geopandas as gpd
 import pandas as pd
@@ -242,11 +243,13 @@ def test_generate_msa_xwalk_json_surfaces_empty_intersection_warning(
         lambda: "2025",
     )
 
-    result = runner.invoke(
-        app,
-        ["generate", "msa-xwalk", "--boundary", "2025", "--counties", "2023", "--json"],
-        catch_exceptions=False,
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        result = runner.invoke(
+            app,
+            ["generate", "msa-xwalk", "--boundary", "2025", "--counties", "2023", "--json"],
+            catch_exceptions=False,
+        )
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
